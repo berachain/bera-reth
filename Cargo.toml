@@ -4,23 +4,23 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-reth = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-trie-db = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-evm = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-db = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-cli = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-tracing = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-reth-rpc = { git = "https://github.com/rezbera/reth", branch = "brip-0002-bera-spec" }
-alloy-eips = { git = "https://github.com/rezbera/alloy", branch = "BRIP-0002" }
-alloy-genesis = { git = "https://github.com/rezbera/alloy", branch = "BRIP-0002" }
+reth = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-trie-db = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-evm = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-db = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-cli = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-tracing = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-rpc = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+alloy-eips ="1.0.9"
+alloy-genesis = "1.0.9"
 alloy-consensus = "1.0.9"
 alloy-rpc-types = "1.0.9"
 derive_more = "2.0.1"
@@ -30,32 +30,32 @@ eyre = "0.6"
 jsonrpsee-core = "0.25.1"
 
 [patch.crates-io]
-alloy-consensus = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-eips = { git = "https://github.com/rezbera/alloy", branch = "BRIP-0002" }
-alloy-genesis = { git = "https://github.com/rezbera/alloy", branch = "BRIP-0002" }
-alloy-json-rpc = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-network = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-network-primitives = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-provider = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-pubsub = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-client = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-admin = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-anvil = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-beacon = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-debug = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-engine = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-eth = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-mev = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-trace = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-rpc-types-txpool = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-serde = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-signer = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-signer-local = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-transport = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-transport-http = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-transport-ipc = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-alloy-transport-ws = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-consensus = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-eips = { git = "https://github.com/rezbera/alloy", branch = "BRIP-0002" }
+#alloy-genesis = { git = "https://github.com/rezbera/alloy", branch = "BRIP-0002" }
+#alloy-json-rpc = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-network = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-network-primitives = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-provider = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-pubsub = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-client = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-admin = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-anvil = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-beacon = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-debug = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-engine = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-eth = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-mev = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-trace = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-rpc-types-txpool = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-serde = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-signer = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-signer-local = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-transport = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-transport-http = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-transport-ipc = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
+#alloy-transport-ws = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
 
 [net]
 git-fetch-with-cli = true

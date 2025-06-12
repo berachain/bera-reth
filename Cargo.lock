@@ -111,7 +111,8 @@ dependencies = [
 [[package]]
 name = "alloy-consensus"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad451f9a70c341d951bca4e811d74dbe1e193897acd17e9dbac1353698cc430b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -134,7 +135,8 @@ dependencies = [
 [[package]]
 name = "alloy-consensus-any"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "142daffb15d5be1a2b20d2cd540edbcef03037b55d4ff69dc06beb4d06286dba"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -202,7 +204,8 @@ dependencies = [
 [[package]]
 name = "alloy-eips"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3056872f6da48046913e76edb5ddced272861f6032f09461aea1a2497be5ae5d"
 dependencies = [
  "alloy-eip2124",
  "alloy-eip2930",
@@ -242,7 +245,8 @@ dependencies = [
 [[package]]
 name = "alloy-genesis"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c98fb40f07997529235cc474de814cd7bd9de561e101716289095696c0e4639d"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -280,11 +284,11 @@ dependencies = [
 [[package]]
 name = "alloy-json-rpc"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc08b31ebf9273839bd9a01f9333cbb7a3abb4e820c312ade349dd18bdc79581"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
- "http",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -294,7 +298,8 @@ dependencies = [
 [[package]]
 name = "alloy-network"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed117b08f0cc190312bf0c38c34cf4f0dabfb4ea8f330071c587cd7160a88cb2"
 dependencies = [
  "alloy-consensus",
  "alloy-consensus-any",
@@ -319,7 +324,8 @@ dependencies = [
 [[package]]
 name = "alloy-network-primitives"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7162ff7be8649c0c391f4e248d1273e85c62076703a1f3ec7daf76b283d886d"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -359,7 +365,8 @@ dependencies = [
 [[package]]
 name = "alloy-provider"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d84eba1fd8b6fe8b02f2acd5dd7033d0f179e304bd722d11e817db570d1fa6c4"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -400,7 +407,8 @@ dependencies = [
 [[package]]
 name = "alloy-pubsub"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8550f7306e0230fc835eb2ff4af0a96362db4b6fc3f25767d161e0ad0ac765bf"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -442,7 +450,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-client"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "518a699422a3eab800f3dac2130d8f2edba8e4fff267b27a9c7dc6a2b0d313ee"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -469,7 +478,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c000cab4ec26a4b3e29d144e999e1c539c2fa0abed871bf90311eb3466187ca8"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-engine",
@@ -481,7 +491,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-admin"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ebdc864f573645c5288370c208912b85b5cacc8025b700c50c2b74d06ab9830"
 dependencies = [
  "alloy-genesis",
  "alloy-primitives",
@@ -492,7 +503,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-anvil"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8abecc34549a208b5f91bc7f02df3205c36e2aa6586f1d9375c3382da1066b3b"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -503,7 +515,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-any"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "508b2fbe66d952089aa694e53802327798806498cd29ff88c75135770ecaabfc"
 dependencies = [
  "alloy-consensus-any",
  "alloy-rpc-types-eth",
@@ -513,7 +526,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-beacon"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "241aba7808bddc3ad1c6228e296a831f326f89118b1017012090709782a13334"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -530,7 +544,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-debug"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c832f2e851801093928dbb4b7bd83cd22270faf76b2e080646b806a285c8757"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -539,7 +554,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-engine"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab52691970553d84879d777419fa7b6a2e92e9fe8641f9324cc071008c2f656"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -558,7 +574,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-eth"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcaf7dff0fdd756a714d58014f4f8354a1706ebf9fa2cf73431e0aeec3c9431e"
 dependencies = [
  "alloy-consensus",
  "alloy-consensus-any",
@@ -577,7 +594,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-mev"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18bd1c5d7b9f3f1caeeaa1c082aa28ba7ce2d67127b12b2a9b462712c8f6e1c5"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -591,7 +609,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-trace"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e3507a04e868dd83219ad3cd6a8c58aefccb64d33f426b3934423a206343e84"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -604,7 +623,8 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types-txpool"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eec36272621c3ac82b47dd77f0508346687730b1c2e3e10d3715705c217c0a05"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -615,7 +635,8 @@ dependencies = [
 [[package]]
 name = "alloy-serde"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "730e8f2edf2fc224cabd1c25d090e1655fa6137b2e409f92e5eec735903f1507"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -625,7 +646,8 @@ dependencies = [
 [[package]]
 name = "alloy-signer"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b0d2428445ec13edc711909e023d7779618504c4800be055a5b940025dbafe3"
 dependencies = [
  "alloy-primitives",
  "async-trait",
@@ -639,7 +661,8 @@ dependencies = [
 [[package]]
 name = "alloy-signer-local"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e14fe6fedb7fe6e0dfae47fe020684f1d8e063274ef14bca387ddb7a6efa8ec1"
 dependencies = [
  "alloy-consensus",
  "alloy-network",
@@ -724,7 +747,8 @@ dependencies = [
 [[package]]
 name = "alloy-transport"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a712bdfeff42401a7dd9518f72f617574c36226a9b5414537fedc34350b73bf9"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -746,7 +770,8 @@ dependencies = [
 [[package]]
 name = "alloy-transport-http"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ea5a76d7f2572174a382aedf36875bedf60bcc41116c9f031cf08040703a2dc"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
@@ -760,7 +785,8 @@ dependencies = [
 [[package]]
 name = "alloy-transport-ipc"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "606af17a7e064d219746f6d2625676122c79d78bf73dfe746d6db9ecd7dbcb85"
 dependencies = [
  "alloy-json-rpc",
  "alloy-pubsub",
@@ -779,7 +805,8 @@ dependencies = [
 [[package]]
 name = "alloy-transport-ws"
 version = "1.0.9"
-source = "git+https://github.com/rezbera/alloy?branch=BRIP-0002#e98e27704c82c8bc373f8400ee3511fe288a04c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0c6f9b37cd8d44aab959613966cc9d4d7a9b429c575cec43b3e5b46ea109a79"
 dependencies = [
  "alloy-pubsub",
  "alloy-transport",
@@ -2511,7 +2538,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.0",
- "windows-sys 0.60.1",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3058,7 +3085,7 @@ dependencies = [
  "libc",
  "log",
  "rustversion",
- "windows 0.61.2",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -4283,7 +4310,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.53.1",
+ "windows-targets 0.53.2",
 ]
 
 [[package]]
@@ -5704,9 +5731,9 @@ checksum = "d3edd4d5d42c92f0a659926464d4cce56b562761267ecf0f469d85b7de384175"
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.12"
+version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "928fca9cf2aa042393a8325b9ead81d2f0df4cb12e1e24cef072922ccd99c5af"
+checksum = "0d04b7d0ee6b4a0207a0a7adb104d23ecb0b47d6beae7152d0fa34b692b29fd6"
 dependencies = [
  "bitflags 2.9.1",
 ]
@@ -5839,7 +5866,7 @@ checksum = "95325155c684b1c89f7765e30bc1c42e4a6da51ca513615660cb8a62ef9a88e3"
 [[package]]
 name = "reth"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-rpc-types",
  "aquamarine",
@@ -5885,7 +5912,7 @@ dependencies = [
 [[package]]
 name = "reth-basic-payload-builder"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -5909,7 +5936,7 @@ dependencies = [
 [[package]]
 name = "reth-chain-state"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -5938,7 +5965,7 @@ dependencies = [
 [[package]]
 name = "reth-chainspec"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -5958,7 +5985,7 @@ dependencies = [
 [[package]]
 name = "reth-cli"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-genesis",
  "clap",
@@ -5972,7 +5999,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-commands"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "ahash",
  "alloy-chains",
@@ -6043,7 +6070,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-runner"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "reth-tasks",
  "tokio",
@@ -6053,7 +6080,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-util"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -6071,7 +6098,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6089,7 +6116,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs-derive"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -6100,7 +6127,7 @@ dependencies = [
 [[package]]
 name = "reth-config"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "eyre",
  "humantime-serde",
@@ -6115,7 +6142,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -6128,7 +6155,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-common"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6140,7 +6167,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-debug-client"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6164,7 +6191,7 @@ dependencies = [
 [[package]]
 name = "reth-db"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "derive_more",
@@ -6188,7 +6215,7 @@ dependencies = [
 [[package]]
 name = "reth-db-api"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-genesis",
@@ -6213,7 +6240,7 @@ dependencies = [
 [[package]]
 name = "reth-db-common"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-genesis",
@@ -6242,7 +6269,7 @@ dependencies = [
 [[package]]
 name = "reth-db-models"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -6256,7 +6283,7 @@ dependencies = [
 [[package]]
 name = "reth-discv4"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -6282,7 +6309,7 @@ dependencies = [
 [[package]]
 name = "reth-discv5"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -6306,7 +6333,7 @@ dependencies = [
 [[package]]
 name = "reth-dns-discovery"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "data-encoding",
@@ -6330,7 +6357,7 @@ dependencies = [
 [[package]]
 name = "reth-downloaders"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6360,7 +6387,7 @@ dependencies = [
 [[package]]
 name = "reth-ecies"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "aes",
  "alloy-primitives",
@@ -6391,7 +6418,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-local"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -6413,7 +6440,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-primitives"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6438,7 +6465,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-service"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "futures",
  "pin-project",
@@ -6461,7 +6488,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-tree"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6508,7 +6535,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-util"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types-engine",
@@ -6535,7 +6562,7 @@ dependencies = [
 [[package]]
 name = "reth-era"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6551,7 +6578,7 @@ dependencies = [
 [[package]]
 name = "reth-era-downloader"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "bytes",
@@ -6566,7 +6593,7 @@ dependencies = [
 [[package]]
 name = "reth-era-utils"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "eyre",
@@ -6586,7 +6613,7 @@ dependencies = [
 [[package]]
 name = "reth-errors"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "reth-consensus",
  "reth-execution-errors",
@@ -6597,7 +6624,7 @@ dependencies = [
 [[package]]
 name = "reth-eth-wire"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-chains",
  "alloy-primitives",
@@ -6625,7 +6652,7 @@ dependencies = [
 [[package]]
 name = "reth-eth-wire-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -6646,7 +6673,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-cli"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6705,7 +6732,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-consensus"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6721,7 +6748,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-engine-primitives"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -6739,7 +6766,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-forks"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eip2124",
  "alloy-hardforks",
@@ -6752,7 +6779,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-payload-builder"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6779,7 +6806,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-primitives"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6796,7 +6823,7 @@ dependencies = [
 [[package]]
 name = "reth-etl"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "rayon",
  "reth-db-api",
@@ -6806,7 +6833,7 @@ dependencies = [
 [[package]]
 name = "reth-evm"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6829,7 +6856,7 @@ dependencies = [
 [[package]]
 name = "reth-evm-ethereum"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6848,7 +6875,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-errors"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-evm",
  "alloy-primitives",
@@ -6861,7 +6888,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6879,7 +6906,7 @@ dependencies = [
 [[package]]
 name = "reth-exex"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6917,7 +6944,7 @@ dependencies = [
 [[package]]
 name = "reth-exex-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -6931,7 +6958,7 @@ dependencies = [
 [[package]]
 name = "reth-fs-util"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "serde",
  "serde_json",
@@ -6941,7 +6968,7 @@ dependencies = [
 [[package]]
 name = "reth-invalid-block-hooks"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -6969,7 +6996,7 @@ dependencies = [
 [[package]]
 name = "reth-ipc"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "bytes",
  "futures",
@@ -6989,7 +7016,7 @@ dependencies = [
 [[package]]
 name = "reth-libmdbx"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "bitflags 2.9.1",
  "byteorder",
@@ -7006,7 +7033,7 @@ dependencies = [
 [[package]]
 name = "reth-mdbx-sys"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "bindgen",
  "cc",
@@ -7015,7 +7042,7 @@ dependencies = [
 [[package]]
 name = "reth-metrics"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "futures",
  "metrics",
@@ -7027,7 +7054,7 @@ dependencies = [
 [[package]]
 name = "reth-net-banlist"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
 ]
@@ -7035,7 +7062,7 @@ dependencies = [
 [[package]]
 name = "reth-net-nat"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "futures-util",
  "if-addrs",
@@ -7049,7 +7076,7 @@ dependencies = [
 [[package]]
 name = "reth-network"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7104,7 +7131,7 @@ dependencies = [
 [[package]]
 name = "reth-network-api"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-admin",
@@ -7127,7 +7154,7 @@ dependencies = [
 [[package]]
 name = "reth-network-p2p"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7149,7 +7176,7 @@ dependencies = [
 [[package]]
 name = "reth-network-peers"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -7164,7 +7191,7 @@ dependencies = [
 [[package]]
 name = "reth-network-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eip2124",
  "humantime-serde",
@@ -7178,7 +7205,7 @@ dependencies = [
 [[package]]
 name = "reth-nippy-jar"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "anyhow",
  "bincode",
@@ -7195,7 +7222,7 @@ dependencies = [
 [[package]]
 name = "reth-node-api"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-rpc-types-engine",
  "eyre",
@@ -7219,7 +7246,7 @@ dependencies = [
 [[package]]
 name = "reth-node-builder"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7283,7 +7310,7 @@ dependencies = [
 [[package]]
 name = "reth-node-core"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7334,7 +7361,7 @@ dependencies = [
 [[package]]
 name = "reth-node-ethereum"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-rpc-types-engine",
@@ -7370,7 +7397,7 @@ dependencies = [
 [[package]]
 name = "reth-node-events"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7394,7 +7421,7 @@ dependencies = [
 [[package]]
 name = "reth-node-metrics"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "eyre",
  "http",
@@ -7415,7 +7442,7 @@ dependencies = [
 [[package]]
 name = "reth-node-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "reth-chainspec",
  "reth-db-api",
@@ -7428,7 +7455,7 @@ dependencies = [
 [[package]]
 name = "reth-optimism-primitives"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7445,7 +7472,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-builder"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types",
@@ -7465,7 +7492,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-builder-primitives"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "pin-project",
  "reth-payload-primitives",
@@ -7477,7 +7504,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-primitives"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -7496,7 +7523,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-validator"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types-engine",
@@ -7506,7 +7533,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "once_cell",
@@ -7519,7 +7546,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives-traits"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7548,7 +7575,7 @@ dependencies = [
 [[package]]
 name = "reth-provider"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7590,7 +7617,7 @@ dependencies = [
 [[package]]
 name = "reth-prune"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7618,7 +7645,7 @@ dependencies = [
 [[package]]
 name = "reth-prune-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "derive_more",
@@ -7631,7 +7658,7 @@ dependencies = [
 [[package]]
 name = "reth-ress-protocol"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7650,7 +7677,7 @@ dependencies = [
 [[package]]
 name = "reth-ress-provider"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7677,7 +7704,7 @@ dependencies = [
 [[package]]
 name = "reth-revm"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "reth-primitives-traits",
@@ -7690,7 +7717,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -7766,7 +7793,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-api"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-genesis",
@@ -7794,7 +7821,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-builder"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-network",
  "alloy-provider",
@@ -7832,7 +7859,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-engine-api"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -7862,7 +7889,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-eth-api"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -7905,7 +7932,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-eth-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7947,7 +7974,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-layer"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-rpc-types-engine",
  "http",
@@ -7961,7 +7988,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-server-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -7977,7 +8004,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-types-compat"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-network",
@@ -7999,7 +8026,7 @@ dependencies = [
 [[package]]
 name = "reth-stages"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8045,7 +8072,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-api"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8072,7 +8099,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "bytes",
@@ -8085,7 +8112,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "parking_lot",
@@ -8105,7 +8132,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file-types"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "clap",
@@ -8117,7 +8144,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-api"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8141,7 +8168,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-errors"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8157,7 +8184,7 @@ dependencies = [
 [[package]]
 name = "reth-tasks"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -8175,7 +8202,7 @@ dependencies = [
 [[package]]
 name = "reth-tokio-util"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "tokio",
  "tokio-stream",
@@ -8185,7 +8212,7 @@ dependencies = [
 [[package]]
 name = "reth-tracing"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "clap",
  "eyre",
@@ -8200,7 +8227,7 @@ dependencies = [
 [[package]]
 name = "reth-transaction-pool"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8238,7 +8265,7 @@ dependencies = [
 [[package]]
 name = "reth-trie"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8262,7 +8289,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-common"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -8285,7 +8312,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-db"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "reth-db-api",
@@ -8298,7 +8325,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-parallel"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -8323,7 +8350,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-sparse"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -8341,7 +8368,7 @@ dependencies = [
 [[package]]
 name = "reth-zstd-compressors"
 version = "1.4.8"
-source = "git+https://github.com/rezbera/reth?branch=brip-0002-bera-spec#b31d74f940b0d3e0f4ba0cdb708e3ba933787909"
+source = "git+https://github.com/rezbera/reth?branch=make-reth-sdk-flexible#20ff19a654d722b742e7ebb013edee43afcadd8c"
 dependencies = [
  "zstd",
 ]
@@ -10534,9 +10561,9 @@ dependencies = [
 
 [[package]]
 name = "windows"
-version = "0.61.2"
+version = "0.61.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2b85ac982d24496e0b49912479da8a89c0ba7b1d8bf6de49df12af42e94b325"
+checksum = "9babd3a767a4c1aef6900409f85f5d53ce2544ccdfaa86dad48c91782c6d6893"
 dependencies = [
  "windows-collections",
  "windows-core 0.61.2",
@@ -10671,9 +10698,9 @@ dependencies = [
 
 [[package]]
 name = "windows-link"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3bfe459f85da17560875b8bf1423d6f113b7a87a5d942e7da0ac71be7c61f8b"
+checksum = "5e6ad25900d524eaabdbbb96d20b4311e1e7ae1699af4fb28c17ae66c80d798a"
 
 [[package]]
 name = "windows-numerics"
@@ -10769,11 +10796,11 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
-version = "0.60.1"
+version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b36e9ed89376c545e20cbf5a13c306b49106b21b9d1d4f9cb9a1cb6b1e9ee06a"
+checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
 dependencies = [
- "windows-targets 0.53.1",
+ "windows-targets 0.53.2",
 ]
 
 [[package]]
@@ -10824,9 +10851,9 @@ dependencies = [
 
 [[package]]
 name = "windows-targets"
-version = "0.53.1"
+version = "0.53.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30357ec391cde730f8fbfcdc29adc47518b06504528df977ab5af02ef23fdee9"
+checksum = "c66f69fcc9ce11da9966ddb31a40968cad001c5bedeb5c2b82ede4253ab48aef"
 dependencies = [
  "windows_aarch64_gnullvm 0.53.0",
  "windows_aarch64_msvc 0.53.0",
