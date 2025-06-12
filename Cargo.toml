@@ -11,6 +11,7 @@ reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "make-reth-s
 reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
 reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
 reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth-node-api = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
 reth-trie-db = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
 reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
 reth-evm = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
