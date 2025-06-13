@@ -16,6 +16,8 @@ use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use std::{fmt::Display, sync::Arc};
 use alloy_consensus::BlockHeader;
+use reth::revm::primitives::Address;
+use reth_evm::eth::spec::EthExecutorSpec;
 use tracing::info;
 
 /// Berachain chain spec
@@ -24,12 +26,7 @@ pub struct BerachainChainSpec {
     inner: ChainSpec,
 }
 
-impl BerachainChainSpec {
-    // TODO: Eventually remove this
-    pub fn inner(&self) -> ChainSpec {
-        self.inner.clone()
-    }
-}
+impl BerachainChainSpec {}
 
 impl EthChainSpec for BerachainChainSpec {
     type Header = Header;
@@ -87,14 +84,21 @@ impl EthChainSpec for BerachainChainSpec {
         Self: Sized,
         H: BlockHeader + BlockHeader,
     {
-        info!("calculating next_block_base_fee");
-        let res = parent
+        const MIN_BASE_FEE: u64 = 1_000_000_000;
+
+        let raw = parent
             .next_block_base_fee(self.base_fee_params_at_timestamp(parent.timestamp()))
-            .unwrap_or_default()
-            // Apply the minimum base fee. TODO: Make this a fork aware constant
-            .min(1_000_000_000);
-        info!("calculating next_block_base_fee: {}" ,  res.to_string());
-        res
+            .unwrap_or_default();
+
+        // enforce at least MIN_BASE_FEE
+        let fee = raw.max(MIN_BASE_FEE);
+
+        // log both values
+        info!(
+            "next_block_base_fee: raw = {}, enforcing minimum = {}, result = {}",
+            raw, MIN_BASE_FEE, fee
+        );
+        fee
     }
 }
 
@@ -131,6 +135,13 @@ impl BerachainHardforks for BerachainChainSpec {
         self.fork(fork)
     }
 }
+
+impl EthExecutorSpec for BerachainChainSpec {
+    fn deposit_contract_address(&self) -> Option<Address> {
+        self.inner.deposit_contract.map(|deposit_contract| deposit_contract.address)
+    }
+}
+
 
 /// Berachain chain specification parser.
 #[derive(Debug, Clone, Default)]
