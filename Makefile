@@ -31,8 +31,9 @@ ETH_GENESIS_PATH = ${BEACON_KIT}/.tmp/beacond/eth-genesis.json
 
 ## Start an ephemeral `bera-reth` node using the local `reth` binary (no Docker)
 start-bera-reth-local:
+	cargo build
 	$(call ask_reset_dir_func, $(ETH_DATA_DIR))
-	/Users/rezbera/Code/bera-reth/target/debug/bera-reth node \
+	./target/debug/bera-reth node \
 		--chain $(ETH_GENESIS_PATH) \
 		--http \
 		--http.addr "0.0.0.0" \
