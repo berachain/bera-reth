@@ -127,9 +127,7 @@ impl ChainSpecParser for BerachainChainSpecParser {
     const SUPPORTED_CHAINS: &'static [&'static str] = SUPPORTED_CHAINS;
 
     fn parse(s: &str) -> eyre::Result<Arc<Self::ChainSpec>> {
-        Ok(match s {
-            _ => Arc::new(parse_genesis(s)?.into()),
-        })
+        Ok(Arc::new(parse_genesis(s)?.into()))
     }
 }
 

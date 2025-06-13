@@ -62,7 +62,7 @@ impl BerachainNode {
         ComponentsBuilder::default()
             .node_types::<Node>()
             .pool(EthereumPoolBuilder::default())
-            .executor(BerachainExecutorBuilder::default())
+            .executor(BerachainExecutorBuilder)
             .payload(BasicPayloadServiceBuilder::default())
             .network(EthereumNetworkBuilder::default())
             .consensus(EthereumConsensusBuilder::default())
