@@ -1,11 +1,13 @@
 name: CI
 
-# Run on every push or PR to any branch
 on:
   push:
-    branches: [ "**" ]
+    branches:
+      - main
+    tags:
+      - "v*"
   pull_request:
-    branches: [ "**" ]
+  merge_group:
 
 jobs:
   fmt:
