@@ -2,28 +2,28 @@ pub mod cli;
 mod evm;
 mod rpc;
 
-use std::sync::Arc;
 use crate::chainspec::BerachainChainSpec;
 use crate::node::evm::BerachainExecutorBuilder;
-use crate::node::rpc::engine_api::{BerachainEngineApiBuilder, BerachainEngineValidatorBuilder};
+use crate::node::rpc::engine_api::BerachainEngineValidatorBuilder;
 use crate::node::rpc::BerachainApiBuilder;
 use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeAddOns, NodeTypes};
-use reth::primitives::EthPrimitives;
 use reth::revm::context::TxEnv;
-use reth::rpc::api::BlockSubmissionValidationApiServer;
 use reth::rpc::api::eth::FromEvmError;
+use reth::rpc::api::BlockSubmissionValidationApiServer;
 use reth::rpc::builder::config::RethRpcServerConfig;
 use reth::rpc::builder::RethRpcModule;
 use reth::rpc::eth::FullEthApiServer;
 use reth::rpc::server_types::eth::EthApiError;
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, NextBlockEnvAttributes};
+use reth_node_api::AddOnsContext;
 use reth_node_builder::components::{BasicPayloadServiceBuilder, ComponentsBuilder};
-use reth_node_builder::rpc::{RpcAddOns, RpcHandle};
+use reth_node_builder::rpc::{BasicEngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, RethRpcAddOns, RpcAddOns, RpcHandle};
 use reth_node_builder::{DebugNode, Node, NodeAdapter, NodeComponentsBuilder};
 use reth_node_ethereum::node::{EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder, EthereumPoolBuilder};
-use reth_node_ethereum::{EthEngineTypes, EthereumEngineValidator, EthereumNode};
+use reth_node_ethereum::{EthereumEngineValidator, EthereumNode};
 use reth_rpc::eth::EthApiFor;
 use reth_rpc::ValidationApi;
+use std::sync::Arc;
 
 /// Type configuration for a regular Berachain node.
 
@@ -67,7 +67,7 @@ pub struct BerachainAddOns<N: FullNodeComponents>
 where
     EthApiFor<N>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
 {
-    inner: RpcAddOns<N, BerachainApiBuilder, BerachainEngineValidatorBuilder, BerachainEngineApiBuilder>,
+    inner: RpcAddOns<N, BerachainApiBuilder, BerachainEngineValidatorBuilder, BasicEngineApiBuilder<BerachainEngineValidatorBuilder>>,
 }
 
 impl<N> NodeAddOns<N> for BerachainAddOns<N>
@@ -119,6 +119,48 @@ where
 {
     fn default() -> Self {
         Self { inner: Default::default() }
+    }
+}
+
+impl<N> RethRpcAddOns<N> for BerachainAddOns<N>
+where
+    N: FullNodeComponents<
+        Types: NodeTypes<
+            ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
+            StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
+            Storage = <BerachainNode as NodeTypes>::Storage,
+            Primitives = <BerachainNode as NodeTypes>::Primitives,
+            Payload = <BerachainNode as NodeTypes>::Payload,
+        >,
+        Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
+    >,
+    EthApiError: FromEvmError<N::Evm>,
+    EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
+{
+    type EthApi = EthApiFor<N>;
+
+    fn hooks_mut(&mut self) -> &mut reth_node_builder::rpc::RpcHooks<N, Self::EthApi> {
+        self.inner.hooks_mut()
+    }
+}
+
+impl<N> EngineValidatorAddOn<N> for BerachainAddOns<N>
+where
+    N: FullNodeComponents<
+        Types: NodeTypes<
+            ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
+            StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
+            Storage = <BerachainNode as NodeTypes>::Storage,
+            Primitives = <BerachainNode as NodeTypes>::Primitives,
+            Payload = <BerachainNode as NodeTypes>::Payload,
+        >,
+    >,
+    EthApiFor<N>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
+{
+    type Validator = EthereumEngineValidator;
+
+    async fn engine_validator(&self, ctx: &AddOnsContext<'_, N>) -> eyre::Result<Self::Validator> {
+        BerachainEngineValidatorBuilder::default().build(ctx).await
     }
 }
 
