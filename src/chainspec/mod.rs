@@ -142,7 +142,6 @@ impl EthExecutorSpec for BerachainChainSpec {
     }
 }
 
-
 /// Berachain chain specification parser.
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
