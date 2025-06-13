@@ -1,4 +1,4 @@
-use reth::chainspec::{hardfork, EthereumHardforks, ForkCondition};
+use reth::chainspec::{EthereumHardforks, ForkCondition, hardfork};
 
 hardfork!(
     /// The name of a berachain hardfork.

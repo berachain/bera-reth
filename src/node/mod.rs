@@ -2,27 +2,41 @@ pub mod cli;
 mod evm;
 mod rpc;
 
-use crate::chainspec::BerachainChainSpec;
-use crate::node::evm::BerachainExecutorBuilder;
-use crate::node::rpc::engine_api::BerachainEngineValidatorBuilder;
-use crate::node::rpc::BerachainApiBuilder;
-use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeAddOns, NodeTypes};
-use reth::revm::context::TxEnv;
-use reth::rpc::api::eth::FromEvmError;
-use reth::rpc::api::BlockSubmissionValidationApiServer;
-use reth::rpc::builder::config::RethRpcServerConfig;
-use reth::rpc::builder::RethRpcModule;
-use reth::rpc::eth::FullEthApiServer;
-use reth::rpc::server_types::eth::EthApiError;
+use crate::{
+    chainspec::BerachainChainSpec,
+    node::{
+        evm::BerachainExecutorBuilder,
+        rpc::{BerachainApiBuilder, engine_api::BerachainEngineValidatorBuilder},
+    },
+};
+use reth::{
+    api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeAddOns, NodeTypes},
+    revm::context::TxEnv,
+    rpc::{
+        api::{BlockSubmissionValidationApiServer, eth::FromEvmError},
+        builder::{RethRpcModule, config::RethRpcServerConfig},
+        eth::FullEthApiServer,
+        server_types::eth::EthApiError,
+    },
+};
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, NextBlockEnvAttributes};
 use reth_node_api::AddOnsContext;
-use reth_node_builder::components::{BasicPayloadServiceBuilder, ComponentsBuilder};
-use reth_node_builder::rpc::{BasicEngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, RethRpcAddOns, RpcAddOns, RpcHandle};
-use reth_node_builder::{DebugNode, Node, NodeAdapter, NodeComponentsBuilder};
-use reth_node_ethereum::node::{EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder, EthereumPoolBuilder};
-use reth_node_ethereum::{EthereumEngineValidator, EthereumNode};
-use reth_rpc::eth::EthApiFor;
-use reth_rpc::ValidationApi;
+use reth_node_builder::{
+    DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
+    components::{BasicPayloadServiceBuilder, ComponentsBuilder},
+    rpc::{
+        BasicEngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, RethRpcAddOns,
+        RpcAddOns, RpcHandle,
+    },
+};
+use reth_node_ethereum::{
+    EthereumEngineValidator, EthereumNode,
+    node::{
+        EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder,
+        EthereumPoolBuilder,
+    },
+};
+use reth_rpc::{ValidationApi, eth::EthApiFor};
 use std::sync::Arc;
 
 /// Type configuration for a regular Berachain node.
@@ -42,7 +56,9 @@ impl BerachainNode {
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
     >
-    where Node: FullNodeTypes<Types = Self>{
+    where
+        Node: FullNodeTypes<Types = Self>,
+    {
         ComponentsBuilder::default()
             .node_types::<Node>()
             .pool(EthereumPoolBuilder::default())
@@ -67,21 +83,26 @@ pub struct BerachainAddOns<N: FullNodeComponents>
 where
     EthApiFor<N>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
 {
-    inner: RpcAddOns<N, BerachainApiBuilder, BerachainEngineValidatorBuilder, BasicEngineApiBuilder<BerachainEngineValidatorBuilder>>,
+    inner: RpcAddOns<
+        N,
+        BerachainApiBuilder,
+        BerachainEngineValidatorBuilder,
+        BasicEngineApiBuilder<BerachainEngineValidatorBuilder>,
+    >,
 }
 
 impl<N> NodeAddOns<N> for BerachainAddOns<N>
 where
     N: FullNodeComponents<
-        Types: NodeTypes<
-            ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
-            StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
-            Storage = <BerachainNode as NodeTypes>::Storage,
-            Primitives = <BerachainNode as NodeTypes>::Primitives,
-            Payload = <BerachainNode as NodeTypes>::Payload,
+            Types: NodeTypes<
+                ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
+                StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
+                Storage = <BerachainNode as NodeTypes>::Storage,
+                Primitives = <BerachainNode as NodeTypes>::Primitives,
+                Payload = <BerachainNode as NodeTypes>::Payload,
+            >,
+            Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
         >,
-        Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
-    >,
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
@@ -125,15 +146,15 @@ where
 impl<N> RethRpcAddOns<N> for BerachainAddOns<N>
 where
     N: FullNodeComponents<
-        Types: NodeTypes<
-            ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
-            StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
-            Storage = <BerachainNode as NodeTypes>::Storage,
-            Primitives = <BerachainNode as NodeTypes>::Primitives,
-            Payload = <BerachainNode as NodeTypes>::Payload,
+            Types: NodeTypes<
+                ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
+                StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
+                Storage = <BerachainNode as NodeTypes>::Storage,
+                Primitives = <BerachainNode as NodeTypes>::Primitives,
+                Payload = <BerachainNode as NodeTypes>::Payload,
+            >,
+            Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
         >,
-        Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
-    >,
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
@@ -177,7 +198,7 @@ where
         EthereumConsensusBuilder,
     >;
     type AddOns = BerachainAddOns<
-        NodeAdapter<N,<Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>
+        NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
     >;
 
     fn components_builder(&self) -> Self::ComponentsBuilder {
@@ -189,8 +210,7 @@ where
     }
 }
 
-
-impl <N> DebugNode<N> for BerachainNode
+impl<N> DebugNode<N> for BerachainNode
 where
     N: FullNodeComponents<Types = Self>,
 {
@@ -200,5 +220,3 @@ where
         todo!()
     }
 }
-
-

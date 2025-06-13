@@ -1,25 +1,26 @@
-use reth_chainspec::EthChainSpec;
-use reth::version::{SHORT_VERSION,LONG_VERSION};
-use crate::chainspec::{BerachainChainSpec, BerachainChainSpecParser};
+use crate::{
+    chainspec::{BerachainChainSpec, BerachainChainSpecParser},
+    node::BerachainNode,
+};
 use clap::Parser;
-use reth::args::LogArgs;
-use reth::CliRunner;
+use reth::{
+    CliRunner,
+    args::LogArgs,
+    beacon_consensus::EthBeaconConsensus,
+    network::EthNetworkPrimitives,
+    prometheus_exporter::install_prometheus_recorder,
+    version::{LONG_VERSION, SHORT_VERSION},
+};
+use reth_chainspec::EthChainSpec;
 use reth_cli::chainspec::ChainSpecParser;
-use reth_cli_commands::node::NoArgs;
+use reth_cli_commands::{launcher::FnLauncher, node::NoArgs};
 use reth_db::DatabaseEnv;
 use reth_ethereum_cli::interface::Commands;
+use reth_evm_ethereum::EthEvmConfig;
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
 use reth_tracing::FileWorkerGuard;
-use std::fmt;
-use std::future::Future;
-use std::sync::Arc;
-use reth::beacon_consensus::EthBeaconConsensus;
-use reth::network::EthNetworkPrimitives;
-use reth::prometheus_exporter::install_prometheus_recorder;
-use reth_cli_commands::launcher::FnLauncher;
-use reth_evm_ethereum::EthEvmConfig;
+use std::{fmt, future::Future, sync::Arc};
 use tracing::info;
-use crate::node::BerachainNode;
 
 /// The main bera-reth cli interface.
 ///
@@ -49,7 +50,7 @@ where
     pub fn run<L, Fut>(self, launcher: L) -> eyre::Result<()>
     where
         L: FnOnce(WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, C::ChainSpec>>, Ext) -> Fut,
-        Fut: Future<Output=eyre::Result<()>>,
+        Fut: Future<Output = eyre::Result<()>>,
     {
         self.with_runner(CliRunner::try_default_runtime()?, launcher)
     }
@@ -57,7 +58,7 @@ where
     pub fn with_runner<L, Fut>(mut self, runner: CliRunner, launcher: L) -> eyre::Result<()>
     where
         L: FnOnce(WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, C::ChainSpec>>, Ext) -> Fut,
-        Fut: Future<Output=eyre::Result<()>>,
+        Fut: Future<Output = eyre::Result<()>>,
     {
         // Add network name if available to the logs dir
         if let Some(chain_spec) = self.command.chain_spec() {

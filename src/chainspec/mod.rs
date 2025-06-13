@@ -4,14 +4,17 @@ use crate::hardforks::{BerachainHardfork, BerachainHardforks};
 use alloy_eips::eip2124::{ForkFilter, ForkId, Head};
 use alloy_genesis::Genesis;
 use derive_more::{Constructor, Into};
-use reth::chainspec::{BaseFeeParams, Chain, EthereumHardfork, EthereumHardforks, ForkCondition, Hardfork};
-use reth::primitives::Header;
-use reth::revm::primitives::{B256, U256};
+use reth::{
+    chainspec::{
+        BaseFeeParams, Chain, EthereumHardfork, EthereumHardforks, ForkCondition, Hardfork,
+    },
+    primitives::Header,
+    revm::primitives::{B256, U256},
+};
 use reth_chainspec::{ChainSpec, DepositContract, EthChainSpec, Hardforks};
-use reth_cli::chainspec::{parse_genesis, ChainSpecParser};
+use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
-use std::fmt::Display;
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 /// Berachain chain spec
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq)]
@@ -90,7 +93,7 @@ impl Hardforks for BerachainChainSpec {
         self.inner.fork(fork)
     }
 
-    fn forks_iter(&self) -> impl Iterator<Item=(&dyn Hardfork, ForkCondition)> {
+    fn forks_iter(&self) -> impl Iterator<Item = (&dyn Hardfork, ForkCondition)> {
         self.inner.forks_iter()
     }
 

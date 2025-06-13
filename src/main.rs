@@ -2,14 +2,14 @@
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
+use bera_reth::{
+    chainspec::BerachainChainSpecParser,
+    node::{BerachainNode, cli::Cli},
+};
 use clap::Parser;
-use reth::{ress::install_ress_subprotocol};
-use reth::args::RessArgs;
-use reth_node_builder::{NodeHandle};
+use reth::{args::RessArgs, ress::install_ress_subprotocol};
+use reth_node_builder::NodeHandle;
 use tracing::info;
-use bera_reth::chainspec::BerachainChainSpecParser;
-use bera_reth::node::{BerachainNode};
-use bera_reth::node::cli::Cli;
 
 fn main() {
     reth_cli_util::sigsegv_handler::install();
@@ -21,7 +21,7 @@ fn main() {
 
     if let Err(err) =
         Cli::<BerachainChainSpecParser, RessArgs>::parse().run(async move |builder, ress_args| {
-            info!(target: "reth::cli", "Launching node (rez v1)");
+            info!(target: "reth::cli", "Launching Berachain node");
             let NodeHandle { node, node_exit_future } =
                 builder.node(BerachainNode::default()).launch_with_debug_capabilities().await?;
 
