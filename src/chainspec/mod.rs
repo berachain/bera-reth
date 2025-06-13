@@ -15,6 +15,7 @@ use reth_chainspec::{ChainSpec, DepositContract, EthChainSpec, Hardforks};
 use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use std::{fmt::Display, sync::Arc};
+use alloy_consensus::BlockHeader;
 
 /// Berachain chain spec
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq)]
@@ -42,7 +43,6 @@ impl EthChainSpec for BerachainChainSpec {
 
     fn base_fee_params_at_timestamp(&self, timestamp: u64) -> BaseFeeParams {
         self.inner.base_fee_params_at_timestamp(timestamp)
-        // self.base_fee_params
     }
 
     fn blob_params_at_timestamp(&self, timestamp: u64) -> Option<alloy_eips::eip7840::BlobParams> {
@@ -79,6 +79,14 @@ impl EthChainSpec for BerachainChainSpec {
 
     fn final_paris_total_difficulty(&self) -> Option<U256> {
         self.inner.final_paris_total_difficulty()
+    }
+
+    fn next_block_base_fee<H>(&self, parent: &H) -> u64
+    where
+        Self: Sized,
+        H: BlockHeader + BlockHeader,
+    {
+        todo!()
     }
 }
 

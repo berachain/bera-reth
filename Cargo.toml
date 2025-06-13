@@ -4,22 +4,22 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-reth = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-node-api = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-trie-db = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-evm = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-db = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-cli = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-tracing = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
-reth-rpc = { git = "https://github.com/rezbera/reth", branch = "make-reth-sdk-flexible" }
+reth = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-node-api = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-trie-db = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-evm = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-db = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-cli = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-tracing = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
+reth-rpc = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
 alloy-eips ="1.0.9"
 alloy-genesis = "1.0.9"
 alloy-consensus = "1.0.9"
