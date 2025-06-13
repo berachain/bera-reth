@@ -1,11 +1,19 @@
-# Berachain Rust Execution Client (bera-reth)
+<div align="center">
 
-![Logo](assets/bera-reth.png)
+<img src="assets/bera-reth.png" alt="Logo" width="250"/>
 
-[![CI](https://github.com/berachain/bera-reth/actions/workflows/ci.yml/badge.svg)](https://github.com/berachain/bera-reth/actions/workflows/ci.yml)  
-[![Status](https://img.shields.io/badge/status-in%20development-yellow.svg)](https://github.com/berachain/bera-reth)
+<p>
+  <a href="https://github.com/berachain/bera-reth/actions/workflows/ci.yml">
+    <img src="https://github.com/berachain/bera-reth/actions/workflows/ci.yml/badge.svg" alt="CI"/>
+  </a>
+  <a href="https://github.com/berachain/bera-reth">
+    <img src="https://img.shields.io/badge/status-in%20development-yellow.svg" alt="Status"/>
+  </a>
+</p>
 
-A Berachain Execution Client node powered by the [Reth SDK](https://github.com/paradigmxyz/reth). Provides a high-performance EVM implementation with full customization support.
+</div>
+
+# 🐻⛓️ Bera-Reth: A high-performance Rust Execution Client for Berachain, Powered by Reth SDK 🐻⛓️
 
 ---
 
