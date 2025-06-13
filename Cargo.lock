@@ -1396,6 +1396,7 @@ dependencies = [
  "reth-evm",
  "reth-evm-ethereum",
  "reth-network-peers",
+ "reth-node-api",
  "reth-node-builder",
  "reth-node-ethereum",
  "reth-rpc",
