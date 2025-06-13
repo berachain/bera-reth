@@ -29,6 +29,7 @@ clap = { version = "4.5.39", features = ["derive"] }
 tracing = "0.1.41"
 eyre = "0.6"
 jsonrpsee-core = "0.25.1"
+log = "0.4.27"
 
 [patch.crates-io]
 #alloy-consensus = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}

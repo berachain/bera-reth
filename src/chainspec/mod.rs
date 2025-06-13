@@ -16,6 +16,7 @@ use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use std::{fmt::Display, sync::Arc};
 use alloy_consensus::BlockHeader;
+use tracing::info;
 
 /// Berachain chain spec
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq)]
@@ -86,11 +87,14 @@ impl EthChainSpec for BerachainChainSpec {
         Self: Sized,
         H: BlockHeader + BlockHeader,
     {
-        parent
+        info!("calculating next_block_base_fee");
+        let res = parent
             .next_block_base_fee(self.base_fee_params_at_timestamp(parent.timestamp()))
             .unwrap_or_default()
             // Apply the minimum base fee. TODO: Make this a fork aware constant
-            .min(1_000_000_000)
+            .min(1_000_000_000);
+        info!("calculating next_block_base_fee: {}" ,  res.to_string());
+        res
     }
 }
 
