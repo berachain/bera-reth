@@ -1,24 +1,25 @@
-use crate::chainspec::{BerachainChainSpec, BerachainChainSpecParser};
-use crate::node::BerachainNode;
+use crate::{
+    chainspec::{BerachainChainSpec, BerachainChainSpecParser},
+    node::BerachainNode,
+};
 use clap::Parser;
-use reth::CliRunner;
-use reth::args::LogArgs;
-use reth::beacon_consensus::EthBeaconConsensus;
-use reth::network::EthNetworkPrimitives;
-use reth::prometheus_exporter::install_prometheus_recorder;
-use reth::version::{LONG_VERSION, SHORT_VERSION};
+use reth::{
+    CliRunner,
+    args::LogArgs,
+    beacon_consensus::EthBeaconConsensus,
+    network::EthNetworkPrimitives,
+    prometheus_exporter::install_prometheus_recorder,
+    version::{LONG_VERSION, SHORT_VERSION},
+};
 use reth_chainspec::EthChainSpec;
 use reth_cli::chainspec::ChainSpecParser;
-use reth_cli_commands::launcher::FnLauncher;
-use reth_cli_commands::node::NoArgs;
+use reth_cli_commands::{launcher::FnLauncher, node::NoArgs};
 use reth_db::DatabaseEnv;
 use reth_ethereum_cli::interface::Commands;
 use reth_evm_ethereum::EthEvmConfig;
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
 use reth_tracing::FileWorkerGuard;
-use std::fmt;
-use std::future::Future;
-use std::sync::Arc;
+use std::{fmt, future::Future, sync::Arc};
 use tracing::info;
 
 /// The main bera-reth cli interface.

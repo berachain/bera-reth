@@ -2,32 +2,41 @@ pub mod cli;
 mod evm;
 mod rpc;
 
-use crate::chainspec::BerachainChainSpec;
-use crate::node::evm::BerachainExecutorBuilder;
-use crate::node::rpc::BerachainApiBuilder;
-use crate::node::rpc::engine_api::BerachainEngineValidatorBuilder;
-use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeAddOns, NodeTypes};
-use reth::revm::context::TxEnv;
-use reth::rpc::api::BlockSubmissionValidationApiServer;
-use reth::rpc::api::eth::FromEvmError;
-use reth::rpc::builder::RethRpcModule;
-use reth::rpc::builder::config::RethRpcServerConfig;
-use reth::rpc::eth::FullEthApiServer;
-use reth::rpc::server_types::eth::EthApiError;
+use crate::{
+    chainspec::BerachainChainSpec,
+    node::{
+        evm::BerachainExecutorBuilder,
+        rpc::{BerachainApiBuilder, engine_api::BerachainEngineValidatorBuilder},
+    },
+};
+use reth::{
+    api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeAddOns, NodeTypes},
+    revm::context::TxEnv,
+    rpc::{
+        api::{BlockSubmissionValidationApiServer, eth::FromEvmError},
+        builder::{RethRpcModule, config::RethRpcServerConfig},
+        eth::FullEthApiServer,
+        server_types::eth::EthApiError,
+    },
+};
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, NextBlockEnvAttributes};
 use reth_node_api::AddOnsContext;
-use reth_node_builder::components::{BasicPayloadServiceBuilder, ComponentsBuilder};
-use reth_node_builder::rpc::{
-    BasicEngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, RethRpcAddOns, RpcAddOns,
-    RpcHandle,
+use reth_node_builder::{
+    DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
+    components::{BasicPayloadServiceBuilder, ComponentsBuilder},
+    rpc::{
+        BasicEngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, RethRpcAddOns,
+        RpcAddOns, RpcHandle,
+    },
 };
-use reth_node_builder::{DebugNode, Node, NodeAdapter, NodeComponentsBuilder};
-use reth_node_ethereum::node::{
-    EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder, EthereumPoolBuilder,
+use reth_node_ethereum::{
+    EthereumEngineValidator, EthereumNode,
+    node::{
+        EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder,
+        EthereumPoolBuilder,
+    },
 };
-use reth_node_ethereum::{EthereumEngineValidator, EthereumNode};
-use reth_rpc::ValidationApi;
-use reth_rpc::eth::EthApiFor;
+use reth_rpc::{ValidationApi, eth::EthApiFor};
 use std::sync::Arc;
 
 /// Type configuration for a regular Berachain node.

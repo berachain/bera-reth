@@ -1,5 +1,7 @@
-use reth::api::FullNodeComponents;
-use reth::rpc::eth::{EthApiFor, FullEthApiServer};
+use reth::{
+    api::FullNodeComponents,
+    rpc::eth::{EthApiFor, FullEthApiServer},
+};
 use reth_node_builder::rpc::{EthApiBuilder, EthApiCtx};
 
 pub mod engine_api;

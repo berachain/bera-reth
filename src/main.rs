@@ -2,12 +2,12 @@
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
-use bera_reth::chainspec::BerachainChainSpecParser;
-use bera_reth::node::BerachainNode;
-use bera_reth::node::cli::Cli;
+use bera_reth::{
+    chainspec::BerachainChainSpecParser,
+    node::{BerachainNode, cli::Cli},
+};
 use clap::Parser;
-use reth::args::RessArgs;
-use reth::ress::install_ress_subprotocol;
+use reth::{args::RessArgs, ress::install_ress_subprotocol};
 use reth_node_builder::NodeHandle;
 use tracing::info;
 

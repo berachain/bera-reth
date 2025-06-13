@@ -1,8 +1,7 @@
 use reth_node_builder::PayloadBuilderConfig;
 
 use crate::node::BerachainNode;
-use reth_node_builder::components::ExecutorBuilder;
-use reth_node_builder::{BuilderContext, FullNodeTypes};
+use reth_node_builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder};
 use reth_node_ethereum::EthEvmConfig;
 use std::sync::Arc;
 
