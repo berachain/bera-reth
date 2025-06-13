@@ -1,12 +1,7 @@
-use jsonrpsee_core::server::RpcModule;
 use std::sync::Arc;
 use reth::api::{AddOnsContext, FullNodeComponents, NodeTypes};
-use reth::primitives::EthPrimitives;
-use reth::rpc::api::IntoEngineApiRpcModule;
-use reth_chainspec::ChainSpec;
-use reth_node_builder::rpc::{EngineApiBuilder, EngineValidatorBuilder};
-use reth_node_ethereum::{EthEngineTypes, EthereumEngineValidator};
-use crate::chainspec::BerachainChainSpec;
+use reth_node_builder::rpc::EngineValidatorBuilder;
+use reth_node_ethereum::EthereumEngineValidator;
 use crate::node::BerachainNode;
 
 #[derive(Debug, Default, Clone)]
