@@ -13,7 +13,7 @@
 
 </div>
 
-# 🐻⛓️ Bera-Reth: A high-performance Rust Execution Client for Berachain, Powered by Reth SDK 🐻⛓️
+# 🐻⛓️ Bera-Reth: A high-performance Rust Execution Client for Berachain, powered by Reth SDK 🐻⛓️
 
 ---
 
