@@ -86,7 +86,11 @@ impl EthChainSpec for BerachainChainSpec {
         Self: Sized,
         H: BlockHeader + BlockHeader,
     {
-        todo!()
+        parent
+            .next_block_base_fee(self.base_fee_params_at_timestamp(parent.timestamp()))
+            .unwrap_or_default()
+            // Apply the minimum base fee. TODO: Make this a fork aware constant
+            .min(1_000_000_000)
     }
 }
 
