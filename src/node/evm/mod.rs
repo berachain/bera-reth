@@ -1,5 +1,4 @@
 use reth_node_builder::PayloadBuilderConfig;
-mod config;
 
 use crate::node::BerachainNode;
 use reth_node_builder::components::ExecutorBuilder;
@@ -11,7 +10,8 @@ use std::sync::Arc;
 pub struct BerachainExecutorBuilder;
 
 impl<Node> ExecutorBuilder<Node> for BerachainExecutorBuilder
-    where Node: FullNodeTypes<Types = BerachainNode>
+where
+    Node: FullNodeTypes<Types = BerachainNode>,
 {
     type EVM = EthEvmConfig;
     async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
