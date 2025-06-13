@@ -29,7 +29,6 @@ jobs:
   clippy:
     name: Clippy lint
     runs-on: ubuntu-latest
-    needs: fmt
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +44,6 @@ jobs:
   test:
     name: Run tests & audit
     runs-on: ubuntu-latest
-    needs: clippy
     steps:
       - uses: actions/checkout@v4
 
