@@ -90,14 +90,7 @@ impl EthChainSpec for BerachainChainSpec {
             .unwrap_or_default();
 
         // enforce at least MIN_BASE_FEE
-        let fee = raw.max(MIN_BASE_FEE);
-
-        // log both values
-        info!(
-            "next_block_base_fee: raw = {}, enforcing minimum = {}, result = {}",
-            raw, MIN_BASE_FEE, fee
-        );
-        fee
+        raw.max(MIN_BASE_FEE)
     }
 }
 
