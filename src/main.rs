@@ -4,7 +4,7 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 
 use bera_reth::{
     chainspec::BerachainChainSpecParser,
-    node::{BerachainNode, cli::Cli},
+    node::{cli::Cli, BerachainNode},
 };
 use clap::Parser;
 use reth::{args::RessArgs, ress::install_ress_subprotocol};

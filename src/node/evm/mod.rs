@@ -11,7 +11,7 @@ pub struct BerachainExecutorBuilder;
 
 impl<Node> ExecutorBuilder<Node> for BerachainExecutorBuilder
 where
-    Node: FullNodeTypes<Types = BerachainNode>,
+    Node: FullNodeTypes<Types=BerachainNode>,
 {
     type EVM = EthEvmConfig<BerachainChainSpec, EthEvmFactory>;
     async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
