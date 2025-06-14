@@ -1,6 +1,7 @@
 //! Berachain chain spec
 
 use crate::hardforks::{BerachainHardfork, BerachainHardforks};
+use alloy_consensus::BlockHeader;
 use alloy_eips::eip2124::{ForkFilter, ForkId, Head};
 use alloy_genesis::Genesis;
 use derive_more::{Constructor, Into};
@@ -9,11 +10,12 @@ use reth::{
         BaseFeeParams, Chain, EthereumHardfork, EthereumHardforks, ForkCondition, Hardfork,
     },
     primitives::Header,
-    revm::primitives::{B256, U256},
+    revm::primitives::{Address, B256, U256},
 };
 use reth_chainspec::{ChainSpec, DepositContract, EthChainSpec, Hardforks};
 use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
+use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
 /// Berachain chain spec
@@ -22,12 +24,7 @@ pub struct BerachainChainSpec {
     inner: ChainSpec,
 }
 
-impl BerachainChainSpec {
-    // TODO: Eventually remove this
-    pub fn inner(&self) -> ChainSpec {
-        self.inner.clone()
-    }
-}
+impl BerachainChainSpec {}
 
 impl EthChainSpec for BerachainChainSpec {
     type Header = Header;
@@ -42,7 +39,6 @@ impl EthChainSpec for BerachainChainSpec {
 
     fn base_fee_params_at_timestamp(&self, timestamp: u64) -> BaseFeeParams {
         self.inner.base_fee_params_at_timestamp(timestamp)
-        // self.base_fee_params
     }
 
     fn blob_params_at_timestamp(&self, timestamp: u64) -> Option<alloy_eips::eip7840::BlobParams> {
@@ -80,6 +76,21 @@ impl EthChainSpec for BerachainChainSpec {
     fn final_paris_total_difficulty(&self) -> Option<U256> {
         self.inner.final_paris_total_difficulty()
     }
+
+    fn next_block_base_fee<H>(&self, parent: &H) -> u64
+    where
+        Self: Sized,
+        H: BlockHeader + BlockHeader,
+    {
+        const MIN_BASE_FEE: u64 = 1_000_000_000;
+
+        let raw = parent
+            .next_block_base_fee(self.base_fee_params_at_timestamp(parent.timestamp()))
+            .unwrap_or_default();
+
+        // enforce at least MIN_BASE_FEE
+        raw.max(MIN_BASE_FEE)
+    }
 }
 
 impl EthereumHardforks for BerachainChainSpec {
@@ -113,6 +124,12 @@ impl Hardforks for BerachainChainSpec {
 impl BerachainHardforks for BerachainChainSpec {
     fn berachain_fork_activation(&self, fork: BerachainHardfork) -> ForkCondition {
         self.fork(fork)
+    }
+}
+
+impl EthExecutorSpec for BerachainChainSpec {
+    fn deposit_contract_address(&self) -> Option<Address> {
+        self.inner.deposit_contract.map(|deposit_contract| deposit_contract.address)
     }
 }
 

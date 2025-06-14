@@ -118,7 +118,7 @@ where
             ctx.node.evm_config().clone(),
             ctx.config.rpc.flashbots_config(),
             Box::new(ctx.node.task_executor().clone()),
-            Arc::new(EthereumEngineValidator::new(Arc::from(ctx.config.chain.inner().clone()))),
+            Arc::new(EthereumEngineValidator::new(ctx.config.chain.clone())),
         );
 
         self.inner
@@ -178,7 +178,7 @@ where
     >,
     EthApiFor<N>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
 {
-    type Validator = EthereumEngineValidator;
+    type Validator = EthereumEngineValidator<BerachainChainSpec>;
 
     async fn engine_validator(&self, ctx: &AddOnsContext<'_, N>) -> eyre::Result<Self::Validator> {
         BerachainEngineValidatorBuilder::default().build(ctx).await
