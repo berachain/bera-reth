@@ -1,6 +1,7 @@
 //! Berachain chain spec
 
 use crate::hardforks::{BerachainHardfork, BerachainHardforks};
+use alloy_consensus::BlockHeader;
 use alloy_eips::eip2124::{ForkFilter, ForkId, Head};
 use alloy_genesis::Genesis;
 use derive_more::{Constructor, Into};
@@ -9,15 +10,13 @@ use reth::{
         BaseFeeParams, Chain, EthereumHardfork, EthereumHardforks, ForkCondition, Hardfork,
     },
     primitives::Header,
-    revm::primitives::{B256, U256},
+    revm::primitives::{Address, B256, U256},
 };
 use reth_chainspec::{ChainSpec, DepositContract, EthChainSpec, Hardforks};
 use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
-use std::{fmt::Display, sync::Arc};
-use alloy_consensus::BlockHeader;
-use reth::revm::primitives::Address;
 use reth_evm::eth::spec::EthExecutorSpec;
+use std::{fmt::Display, sync::Arc};
 use tracing::info;
 
 /// Berachain chain spec

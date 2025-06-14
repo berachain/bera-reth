@@ -16,11 +16,11 @@ use reth_cli::chainspec::ChainSpecParser;
 use reth_cli_commands::{launcher::FnLauncher, node::NoArgs};
 use reth_db::DatabaseEnv;
 use reth_ethereum_cli::interface::Commands;
+use reth_evm::EthEvmFactory;
 use reth_evm_ethereum::EthEvmConfig;
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
 use reth_tracing::FileWorkerGuard;
 use std::{fmt, future::Future, sync::Arc};
-use reth_evm::EthEvmFactory;
 use tracing::info;
 
 /// The main bera-reth cli interface.
@@ -73,7 +73,10 @@ where
         let _ = install_prometheus_recorder();
 
         let components = |spec: Arc<C::ChainSpec>| {
-            (EthEvmConfig::new_with_evm_factory(spec.clone(), EthEvmFactory::default()), EthBeaconConsensus::new(spec))
+            (
+                EthEvmConfig::new_with_evm_factory(spec.clone(), EthEvmFactory::default()),
+                EthBeaconConsensus::new(spec),
+            )
         };
         match self.command {
             Commands::Node(command) => runner.run_command_until_exit(|ctx| {

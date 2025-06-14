@@ -1,5 +1,4 @@
-use crate::chainspec::BerachainChainSpec;
-use crate::node::BerachainNode;
+use crate::{chainspec::BerachainChainSpec, node::BerachainNode};
 use reth::api::{AddOnsContext, FullNodeComponents, NodeTypes};
 use reth_node_builder::rpc::EngineValidatorBuilder;
 use reth_node_ethereum::EthereumEngineValidator;
