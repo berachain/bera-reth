@@ -17,7 +17,6 @@ use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
-use tracing::info;
 
 /// Berachain chain spec
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq)]
