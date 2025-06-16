@@ -93,7 +93,7 @@ where
 {
     type RpcBlock = alloy_rpc_types::Block;
 
-    fn rpc_to_primitive_block(_rpc_block: Self::RpcBlock) -> BlockTy<Self> {
-        todo!()
+    fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> BlockTy<Self> {
+        rpc_block.into_consensus().convert_transactions()
     }
 }
