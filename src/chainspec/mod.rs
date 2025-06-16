@@ -203,7 +203,7 @@ impl From<Genesis> for BerachainChainSpec {
         // Time-based hardforks
         let berachain_genesis_config =
             BerachainGenesisConfig::try_from(&genesis.config.extra_fields).unwrap_or_else(|e| {
-                panic!("failed to parse berachain genesis config from genesis file: {}", e)
+                panic!("failed to parse berachain genesis config from genesis file: {e}")
             });
 
         let time_hardfork_opts = [
