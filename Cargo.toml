@@ -20,7 +20,7 @@ reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "with-ro
 reth-cli = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
 reth-tracing = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
 reth-rpc = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
-alloy-eips ="1.0.9"
+alloy-eips = "1.0.9"
 alloy-genesis = "1.0.9"
 alloy-consensus = "1.0.9"
 alloy-rpc-types = "1.0.9"
@@ -30,6 +30,8 @@ tracing = "0.1.41"
 eyre = "0.6"
 jsonrpsee-core = "0.25.1"
 log = "0.4.27"
+serde = { version = "1.0", features = ["derive"], default-features = false }
+
 
 [patch.crates-io]
 #alloy-consensus = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
@@ -58,6 +60,3 @@ log = "0.4.27"
 #alloy-transport-http = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
 #alloy-transport-ipc = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
 #alloy-transport-ws = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-
-[net]
-git-fetch-with-cli = true

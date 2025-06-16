@@ -9,6 +9,7 @@ hardfork!(
         Prague1,
     }
 );
+
 pub trait BerachainHardforks: EthereumHardforks {
     fn berachain_fork_activation(&self, fork: BerachainHardfork) -> ForkCondition;
     fn is_prague1_active_at_timestamp(&self, timestamp: u64) -> bool {

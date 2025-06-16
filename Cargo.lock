@@ -1403,6 +1403,7 @@ dependencies = [
  "reth-rpc",
  "reth-tracing",
  "reth-trie-db",
+ "serde",
  "tracing",
 ]
 
