@@ -19,15 +19,9 @@ use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
 /// Berachain chain spec
-#[derive(Debug, Clone, Into, Constructor, PartialEq, Eq)]
+#[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
 pub struct BerachainChainSpec {
     inner: ChainSpec,
-}
-
-impl Default for BerachainChainSpec {
-    fn default() -> Self {
-        Self { inner: ChainSpec::default() }
-    }
 }
 
 impl EthChainSpec for BerachainChainSpec {
