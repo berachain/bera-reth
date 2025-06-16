@@ -24,7 +24,11 @@ pub struct BerachainChainSpec {
     inner: ChainSpec,
 }
 
-impl BerachainChainSpec {}
+impl Default for BerachainChainSpec {
+    fn default() -> Self {
+        Self { inner: ChainSpec::default() }
+    }
+}
 
 impl EthChainSpec for BerachainChainSpec {
     type Header = Header;

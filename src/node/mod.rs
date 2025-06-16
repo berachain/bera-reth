@@ -1,43 +1,21 @@
 pub mod cli;
 mod evm;
-mod rpc;
 
-use crate::{
-    chainspec::BerachainChainSpec,
-    node::{
-        evm::BerachainExecutorBuilder,
-        rpc::{BerachainApiBuilder, engine_api::BerachainEngineValidatorBuilder},
-    },
-};
-use reth::{
-    api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeAddOns, NodeTypes},
-    revm::context::TxEnv,
-    rpc::{
-        api::{BlockSubmissionValidationApiServer, eth::FromEvmError},
-        builder::{RethRpcModule, config::RethRpcServerConfig},
-        eth::FullEthApiServer,
-        server_types::eth::EthApiError,
-    },
-};
-use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, NextBlockEnvAttributes};
-use reth_node_api::AddOnsContext;
+use crate::{chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder};
+use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeTypes};
+use reth_evm::{ConfigureEvm, EvmFactory};
 use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder},
-    rpc::{
-        BasicEngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, RethRpcAddOns,
-        RpcAddOns, RpcHandle,
-    },
+    rpc::BasicEngineApiBuilder,
 };
 use reth_node_ethereum::{
-    EthereumEngineValidator, EthereumNode,
+    EthereumAddOns, EthereumEngineValidatorBuilder, EthereumEthApiBuilder, EthereumNode,
     node::{
         EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder,
         EthereumPoolBuilder,
     },
 };
-use reth_rpc::{ValidationApi, eth::EthApiFor};
-use std::sync::Arc;
 
 /// Type configuration for a regular Berachain node.
 
@@ -78,113 +56,6 @@ impl NodeTypes for BerachainNode {
     type Payload = <EthereumNode as NodeTypes>::Payload;
 }
 
-#[derive(Debug)]
-pub struct BerachainAddOns<N: FullNodeComponents>
-where
-    EthApiFor<N>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
-{
-    inner: RpcAddOns<
-        N,
-        BerachainApiBuilder,
-        BerachainEngineValidatorBuilder,
-        BasicEngineApiBuilder<BerachainEngineValidatorBuilder>,
-    >,
-}
-
-impl<N> NodeAddOns<N> for BerachainAddOns<N>
-where
-    N: FullNodeComponents<
-            Types: NodeTypes<
-                ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
-                StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
-                Storage = <BerachainNode as NodeTypes>::Storage,
-                Primitives = <BerachainNode as NodeTypes>::Primitives,
-                Payload = <BerachainNode as NodeTypes>::Payload,
-            >,
-            Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
-        >,
-    EthApiError: FromEvmError<N::Evm>,
-    EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
-{
-    type Handle = RpcHandle<N, EthApiFor<N>>;
-
-    async fn launch_add_ons(
-        self,
-        ctx: reth_node_api::AddOnsContext<'_, N>,
-    ) -> eyre::Result<Self::Handle> {
-        let validation_api = ValidationApi::new(
-            ctx.node.provider().clone(),
-            Arc::new(ctx.node.consensus().clone()),
-            ctx.node.evm_config().clone(),
-            ctx.config.rpc.flashbots_config(),
-            Box::new(ctx.node.task_executor().clone()),
-            Arc::new(EthereumEngineValidator::new(ctx.config.chain.clone())),
-        );
-
-        self.inner
-            .launch_add_ons_with(ctx, move |container| {
-                container.modules.merge_if_module_configured(
-                    RethRpcModule::Flashbots,
-                    validation_api.into_rpc(),
-                )?;
-
-                Ok(())
-            })
-            .await
-    }
-}
-
-impl<N: FullNodeComponents> Default for BerachainAddOns<N>
-where
-    EthApiFor<N>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
-{
-    fn default() -> Self {
-        Self { inner: Default::default() }
-    }
-}
-
-impl<N> RethRpcAddOns<N> for BerachainAddOns<N>
-where
-    N: FullNodeComponents<
-            Types: NodeTypes<
-                ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
-                StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
-                Storage = <BerachainNode as NodeTypes>::Storage,
-                Primitives = <BerachainNode as NodeTypes>::Primitives,
-                Payload = <BerachainNode as NodeTypes>::Payload,
-            >,
-            Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
-        >,
-    EthApiError: FromEvmError<N::Evm>,
-    EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
-{
-    type EthApi = EthApiFor<N>;
-
-    fn hooks_mut(&mut self) -> &mut reth_node_builder::rpc::RpcHooks<N, Self::EthApi> {
-        self.inner.hooks_mut()
-    }
-}
-
-impl<N> EngineValidatorAddOn<N> for BerachainAddOns<N>
-where
-    N: FullNodeComponents<
-        Types: NodeTypes<
-            ChainSpec = <BerachainNode as NodeTypes>::ChainSpec,
-            StateCommitment = <BerachainNode as NodeTypes>::StateCommitment,
-            Storage = <BerachainNode as NodeTypes>::Storage,
-            Primitives = <BerachainNode as NodeTypes>::Primitives,
-            Payload = <BerachainNode as NodeTypes>::Payload,
-        >,
-    >,
-    EthApiFor<N>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
-{
-    type Validator = EthereumEngineValidator<BerachainChainSpec>;
-
-    async fn engine_validator(&self, ctx: &AddOnsContext<'_, N>) -> eyre::Result<Self::Validator> {
-        BerachainEngineValidatorBuilder::default().build(ctx).await
-    }
-}
-
 impl<N> Node<N> for BerachainNode
 where
     N: FullNodeTypes<Types = Self>,
@@ -197,8 +68,11 @@ where
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
     >;
-    type AddOns = BerachainAddOns<
+    type AddOns = EthereumAddOns<
         NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
+        EthereumEthApiBuilder,
+        EthereumEngineValidatorBuilder<BerachainChainSpec>,
+        BasicEngineApiBuilder<EthereumEngineValidatorBuilder<BerachainChainSpec>>,
     >;
 
     fn components_builder(&self) -> Self::ComponentsBuilder {
@@ -206,7 +80,11 @@ where
     }
 
     fn add_ons(&self) -> Self::AddOns {
-        BerachainAddOns::default()
+        EthereumAddOns::default()
+            .with_engine_validator(EthereumEngineValidatorBuilder::<BerachainChainSpec>::default())
+            .with_engine_api(BasicEngineApiBuilder::<
+                EthereumEngineValidatorBuilder<BerachainChainSpec>,
+            >::default())
     }
 }
 
