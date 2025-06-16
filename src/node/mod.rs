@@ -3,7 +3,6 @@ mod evm;
 
 use crate::{chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder};
 use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeTypes};
-use reth_evm::ConfigureEvm;
 use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder},
