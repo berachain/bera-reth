@@ -14,82 +14,24 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt, clippy
 
     - name: Setup Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.21'
 
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
     - name: Build bera-reth
-      run: make build
+      run: cargo build --release
 
-    - name: Clone beacon-kit if not exists
+    - name: Clone beacon-kit
       run: |
-        if [ ! -d "../beacon-kit" ]; then
-          cd ..
-          git clone https://github.com/berachain/beacon-kit.git
-          cd beacon-kit
-        else
-          cd ../beacon-kit
-          git pull
-        fi
+        cd ..
+        git clone https://github.com/berachain/beacon-kit.git
 
-    - name: Start BeaconKit and test block progression
+    - name: Run integration test
       run: |
-        # Start beacon-kit in background
-        cd ../beacon-kit && make start &
-        BEACON_PID=$!
-        
-        # Start bera-reth in background
-        make start-bera-reth-local &
-        RETH_PID=$!
-        
-        # Wait for initialization
-        sleep 5
-        
-        # Monitor block progression for 60 seconds
-        timeout 60 bash -c '
-          prev_block=0
-          while true; do
-            # Extract block number from logs
-            current_block=$(tail -20 ~/.bera-reth/logs/bera-reth.log 2>/dev/null | grep -o "block_number=[0-9]*" | tail -1 | cut -d= -f2 || echo "0")
-            
-            if [ -n "$current_block" ] && [ "$current_block" -gt "$prev_block" ]; then
-              echo "Block progression: $prev_block -> $current_block"
-              prev_block=$current_block
-              
-              if [ "$current_block" -ge 10 ]; then
-                echo "SUCCESS: Reached block $current_block (>= 10)"
-                exit 0
-              fi
-            fi
-            
-            sleep 2
-          done
-        '
-        
-        # Cleanup
-        kill $BEACON_PID $RETH_PID 2>/dev/null || true
-        
-        if [ $? -eq 0 ]; then
-          echo "Integration test PASSED: Block progression reached target"
-        else
-          echo "Integration test FAILED: Block progression did not reach block 10"
-          exit 1
-        fi
+        chmod +x scripts/test-block-progression.sh
+        BEACON_KIT_PATH=../beacon-kit TARGET_BLOCK=5 TIMEOUT=300 ./scripts/test-block-progression.sh
