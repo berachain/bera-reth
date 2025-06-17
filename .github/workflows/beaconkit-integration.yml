@@ -13,25 +13,25 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
 
-    - name: Build bera-reth
-      run: cargo build --release
+      - name: Build bera-reth
+        run: cargo build
 
-    - name: Clone beacon-kit
-      run: |
-        cd ..
-        git clone https://github.com/berachain/beacon-kit.git
+      - name: Clone beacon-kit
+        run: |
+          cd ..
+          git clone https://github.com/berachain/beacon-kit.git
 
-    - name: Run integration test
-      run: |
-        chmod +x scripts/test-block-progression.sh
-        BEACON_KIT_PATH=../beacon-kit TARGET_BLOCK=5 TIMEOUT=300 ./scripts/test-block-progression.sh
+      - name: Run integration test
+        run: |
+          chmod +x scripts/test-block-progression.sh
+          BEACON_KIT_PATH=../beacon-kit TARGET_BLOCK=5 TIMEOUT=300 ./scripts/test-block-progression.sh
