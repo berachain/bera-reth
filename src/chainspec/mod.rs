@@ -50,7 +50,7 @@ use std::{fmt::Display, sync::Arc};
 /// Berachain's Proof-of-Liquidity consensus mechanism.
 const PRAGUE1_MIN_BASE_FEE_WEI: u64 = 1_000_000_000;
 
-/// Default base fee when Prague1 is not active (allows zero base fee)
+/// Default minimum base fee when Prague1 is not active.
 const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 
 /// Berachain chain specification containing all network parameters and hardfork rules.

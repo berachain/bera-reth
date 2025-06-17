@@ -35,7 +35,6 @@ hardfork!(
         /// This hardfork introduces:
         /// - Minimum base fee of 1 gwei (1,000,000,000 wei)
         /// - Enhanced base fee calculation parameters
-        /// - Economic incentive alignment for Berachain's PoL consensus
         ///
         /// Activated via timestamp-based fork condition.
         Prague1,
@@ -45,19 +44,7 @@ hardfork!(
 /// Trait providing access to Berachain-specific hardfork activation conditions.
 ///
 /// This trait extends [`EthereumHardforks`] to provide methods for querying
-/// Berachain custom hardfork activation status. It should be implemented by
-/// any chain specification that supports Berachain hardforks.
-///
-/// # Example
-///
-/// ```no_run
-/// use bera_reth::hardforks::{BerachainHardfork, BerachainHardforks};
-/// use reth::chainspec::ForkCondition;
-///
-/// fn check_prague1_active<T: BerachainHardforks>(chain: &T, timestamp: u64) -> bool {
-///     chain.is_prague1_active_at_timestamp(timestamp)
-/// }
-/// ```
+/// Berachain custom hardfork activation status.
 pub trait BerachainHardforks: EthereumHardforks {
     /// Returns the activation condition for a given Berachain hardfork.
     ///

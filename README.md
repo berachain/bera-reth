@@ -81,6 +81,19 @@ cargo audit
 cargo udeps --all-features --locked
 ```
 
+---
+
+## 📚 Documentation
+
+View the comprehensive code documentation locally:
+
+```bash
+# Build and open documentation in your browser
+cargo doc --open --no-deps --document-private-items
+```
+
+This will generate and open detailed API documentation including all modules, types, and examples.
+
 ## 📜 License
 
 Licensed under the Apache-2.0 License. See [LICENSE](LICENSE) for details.
