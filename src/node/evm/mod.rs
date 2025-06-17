@@ -2,11 +2,11 @@
 //!
 //! This module provides the execution environment configuration for Berachain nodes.
 //! It implements the [`ExecutorBuilder`] trait to create EVM instances that are
-//! compatible with Berachain's custom hardforks and consensus mechanisms.
+//! identical to Ethereum's EVM execution.
 //!
 //! The executor handles:
-//! - Transaction execution with Berachain-specific rules
-//! - State transitions according to custom hardforks
+//! - Standard Ethereum transaction execution
+//! - State transitions according to Ethereum hardforks (plus Berachain's Prague1)
 //! - Integration with Reth's modular architecture
 
 use reth_node_builder::PayloadBuilderConfig;
@@ -16,16 +16,17 @@ use reth_evm::EthEvmFactory;
 use reth_node_builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder};
 use reth_node_ethereum::EthEvmConfig;
 
-/// Builder for creating Berachain-specific EVM execution environments.
+/// Builder for creating Berachain EVM execution environments.
 ///
-/// This builder creates EVM configurations that support Berachain's custom
-/// hardforks and consensus rules. It integrates with Reth's node builder
-/// pattern to provide modular execution capabilities.
+/// This builder creates EVM configurations that are identical to Ethereum's
+/// standard EVM execution, with the exception that it uses Berachain's
+/// chain specification which includes the Prague1 hardfork for minimum
+/// base fee enforcement.
 ///
 /// The executor builder configures:
-/// - Custom chain specification handling
-/// - Berachain-specific hardfork logic
-/// - Payload building with custom extra data
+/// - Standard Ethereum EVM execution using `EthEvmConfig`
+/// - Berachain chain specification (which extends Ethereum hardforks)
+/// - Payload building with standard extra data handling
 ///
 /// # Example
 ///
@@ -48,10 +49,14 @@ where
 
     /// Builds the EVM configuration for Berachain execution.
     ///
-    /// This method creates an EVM configuration that:
-    /// - Uses the Berachain chain specification for custom hardfork logic
-    /// - Integrates with the standard Ethereum EVM factory
-    /// - Configures payload building with custom extra data
+    /// This method creates an EVM configuration that is identical to Ethereum's
+    /// standard EVM setup, using:
+    /// - Berachain's chain specification (which extends Ethereum with Prague1)
+    /// - Standard Ethereum EVM factory (`EthEvmFactory`)
+    /// - Standard payload building with extra data configuration
+    ///
+    /// The resulting EVM executes transactions using standard Ethereum rules,
+    /// with the addition of Berachain's Prague1 hardfork for minimum base fee.
     ///
     /// # Arguments
     ///
@@ -59,7 +64,7 @@ where
     ///
     /// # Returns
     ///
-    /// A configured [`EthEvmConfig`] ready for transaction execution
+    /// A configured [`EthEvmConfig`] ready for standard Ethereum transaction execution
     ///
     /// # Errors
     ///
