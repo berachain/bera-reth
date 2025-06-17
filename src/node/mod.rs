@@ -1,14 +1,4 @@
-//! # Berachain Node Implementation
-//!
-//! This module provides the core node implementation for Berachain, including:
-//! - CLI interface and command handling
-//! - EVM execution environment configuration
-//! - Node type definitions and builder patterns
-//! - Integration with Reth's modular architecture
-//!
-//! The node implementation follows Reth's component-based design, allowing for
-//! flexible configuration and extension of functionality specific to Berachain's
-//! consensus and execution requirements.
+//! Berachain node implementation using Reth's component-based architecture
 
 pub mod cli;
 pub mod evm;

@@ -1,36 +1,11 @@
-//! # Berachain Genesis Configuration
-//!
-//! This module handles parsing and validation of Berachain-specific genesis parameters.
-//! It extends the standard Ethereum genesis format with custom fields required for
-//! Berachain's hardforks and consensus mechanisms.
-//!
-//! ## Key Types
-//!
-//! - [`BerachainGenesisConfig`]: Main configuration structure containing all Berachain-specific
-//!   genesis parameters
-//! - [`BerachainForkConfig`]: Configuration for individual Berachain hardforks
-//! - [`BerachainConfigError`]: Comprehensive error handling for configuration parsing
-//!
-//! ## Example Genesis Format
-//!
-//! ```json
-//! {
-//!   "berachain": {
-//!     "prague1": {
-//!       "time": 1620000000,
-//!       "baseFeeChangeDenominator": 48,
-//!       "minimumBaseFeeWei": 1000000000
-//!     }
-//!   }
-//! }
-//! ```
+//! Berachain genesis configuration parsing and validation
 
 use jsonrpsee_core::__reexports::serde_json;
 use reth::rpc::types::serde_helpers::OtherFields;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Comprehensive error types for Berachain genesis configuration parsing and validation.
+/// Errors for Berachain genesis configuration parsing
 #[derive(Debug, Error)]
 pub enum BerachainConfigError {
     /// The required 'berachain' field is missing from the genesis configuration
@@ -50,16 +25,7 @@ pub enum BerachainConfigError {
     InvalidActivationTime(u64),
 }
 
-/// Configuration parameters for a Berachain hardfork.
-///
-/// This structure defines the activation time and economic parameters
-/// that take effect when a Berachain hardfork activates.
-///
-/// # Fields
-///
-/// * `time` - Unix timestamp when this hardfork activates
-/// * `base_fee_change_denominator` - Denominator used in EIP-1559 base fee calculations
-/// * `minimum_base_fee_wei` - Minimum base fee enforced after activation (in wei)
+/// Configuration for a Berachain hardfork activation
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BerachainForkConfig {
@@ -71,24 +37,7 @@ pub struct BerachainForkConfig {
     pub minimum_base_fee_wei: u64,
 }
 
-/// Complete Berachain genesis configuration containing all custom hardfork parameters.
-///
-/// This structure is parsed from the "berachain" field in the genesis JSON file
-/// and contains configuration for all Berachain-specific hardforks.
-///
-/// # Example
-///
-/// ```
-/// use bera_reth::genesis::{BerachainForkConfig, BerachainGenesisConfig};
-///
-/// let config = BerachainGenesisConfig {
-///     prague1: BerachainForkConfig {
-///         time: 1620000000,
-///         base_fee_change_denominator: 48,
-///         minimum_base_fee_wei: 1_000_000_000, // 1 gwei
-///     },
-/// };
-/// ```
+/// Complete Berachain genesis configuration from JSON "berachain" field
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BerachainGenesisConfig {
@@ -97,12 +46,7 @@ pub struct BerachainGenesisConfig {
 }
 
 impl Default for BerachainGenesisConfig {
-    /// Creates a default Berachain genesis configuration.
-    ///
-    /// This provides sensible defaults for development and testing:
-    /// - Prague1 activated far in the future (timestamp: u64::MAX)
-    /// - Berachain standard base fee change denominator (48)
-    /// - Minimum base fee of 1 gwei
+    /// Default config with Prague1 disabled and 1 gwei minimum base fee
     fn default() -> Self {
         Self {
             prague1: BerachainForkConfig {
@@ -115,17 +59,7 @@ impl Default for BerachainGenesisConfig {
 }
 
 impl BerachainForkConfig {
-    /// Creates a new validated BerachainForkConfig.
-    ///
-    /// # Arguments
-    ///
-    /// * `time` - Unix timestamp for hardfork activation
-    /// * `base_fee_change_denominator` - Must be greater than 0
-    /// * `minimum_base_fee_wei` - Minimum base fee in wei
-    ///
-    /// # Errors
-    ///
-    /// Returns [`BerachainConfigError::InvalidDenominator`] if denominator is 0.
+    /// Creates validated config. Returns error if denominator is 0.
     pub fn new(
         time: u64,
         base_fee_change_denominator: u128,
@@ -141,15 +75,7 @@ impl BerachainForkConfig {
 impl TryFrom<&OtherFields> for BerachainGenesisConfig {
     type Error = BerachainConfigError;
 
-    /// Attempts to parse BerachainGenesisConfig from genesis file's "other" fields.
-    ///
-    /// This method looks for a "berachain" field in the genesis configuration
-    /// and deserializes it into a BerachainGenesisConfig.
-    ///
-    /// # Errors
-    ///
-    /// * [`BerachainConfigError::MissingBerachainField`] - No "berachain" field found
-    /// * [`BerachainConfigError::InvalidConfig`] - Invalid configuration format
+    /// Parse BerachainGenesisConfig from genesis "berachain" field
     fn try_from(others: &OtherFields) -> Result<Self, Self::Error> {
         match others.get_deserialized::<Self>("berachain") {
             Some(Ok(cfg)) => {

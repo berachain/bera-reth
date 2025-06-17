@@ -1,24 +1,4 @@
-//! # Berachain Chain Specification
-//!
-//! This module defines the complete chain specification for Berachain, including:
-//! - Network parameters and consensus rules
-//! - Hardfork activation schedule (both Ethereum and Berachain-specific)
-//! - Base fee calculation with minimum enforcement
-//! - Genesis configuration parsing and validation
-//!
-//! ## Key Features
-//!
-//! - **Prague1 Hardfork**: Introduces minimum base fee of 1 gwei
-//! - **Enhanced EIP-1559**: Custom base fee calculation parameters
-//! - **Full Ethereum Compatibility**: Supports all standard Ethereum hardforks
-//! - **Modular Architecture**: Integrates seamlessly with Reth's node builder
-//!
-//! ## Constants
-//!
-//! The module defines several important constants for network operation:
-//! - Minimum base fee enforcement levels
-//! - Default configuration values
-//! - Network-specific parameters
+//! Berachain chain specification with Ethereum hardforks plus Prague1 minimum base fee
 
 use crate::{
     genesis::BerachainGenesisConfig,
@@ -42,40 +22,13 @@ use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
-/// Minimum base fee in wei enforced after Prague1 hardfork activation (1 gwei).
-///
-/// This constant defines the minimum base fee that will be enforced for all
-/// transactions after the Prague1 hardfork activates. It prevents the base fee
-/// from dropping to zero, ensuring economic incentives remain aligned with
-/// Berachain's Proof-of-Liquidity consensus mechanism.
+/// Minimum base fee enforced after Prague1 hardfork (1 gwei)
 const PRAGUE1_MIN_BASE_FEE_WEI: u64 = 1_000_000_000;
 
 /// Default minimum base fee when Prague1 is not active.
 const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 
-/// Berachain chain specification containing all network parameters and hardfork rules.
-///
-/// This structure wraps Reth's standard [`ChainSpec`] and extends it with
-/// Berachain-specific functionality, including custom hardfork logic and
-/// enhanced base fee calculations.
-///
-/// # Key Features
-///
-/// - Custom hardfork implementations (Prague1)
-/// - Minimum base fee enforcement
-/// - Full Ethereum compatibility
-/// - Integration with BeaconKit consensus
-///
-/// # Example
-///
-/// ```no_run
-/// use alloy_genesis::Genesis;
-/// use bera_reth::chainspec::BerachainChainSpec;
-///
-/// // Create from genesis configuration
-/// let genesis = Genesis::default(); // Normally loaded from JSON
-/// let chain_spec = BerachainChainSpec::from(genesis);
-/// ```
+/// Berachain chain specification wrapping Reth's ChainSpec with Prague1 hardfork
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
 pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
@@ -194,7 +147,7 @@ impl EthExecutorSpec for BerachainChainSpec {
     }
 }
 
-/// Berachain chain specification parser.
+/// Parser for Berachain chain specifications
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub struct BerachainChainSpecParser;
