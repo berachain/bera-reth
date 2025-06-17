@@ -46,11 +46,11 @@ pub struct BerachainGenesisConfig {
 }
 
 impl Default for BerachainGenesisConfig {
-    /// Default config with Prague1 disabled and 1 gwei minimum base fee
+    /// Default config with Prague1 activated immediately at genesis
     fn default() -> Self {
         Self {
             prague1: BerachainForkConfig {
-                time: u64::MAX,                      // Far future - effectively disabled
+                time: 0,                             // Activate immediately at genesis
                 base_fee_change_denominator: 48,     // Berachain standard value
                 minimum_base_fee_wei: 1_000_000_000, // 1 gwei
             },

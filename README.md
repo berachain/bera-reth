@@ -52,10 +52,39 @@ The binary will be at `target/release/bera-reth`.
 
 ---
 
-## ▶️ Running Locally with BeaconKit
+## ▶️ Running with BeaconKit
 
-1. Run `make start` from **your Beacon-Kit repository**. 
-2. Save the path to your BeaconKit repository in the `BEACON_KIT` envar, e.g. `export BEACON_KIT=/Users/rezbera/Code/beacon-kit`
+Use the provided test script to automatically set up and test BeaconKit with bera-reth:
+
+```bash
+# Basic usage (tests progression to block 10 with 120s timeout)
+./scripts/test-block-progression.sh
+
+# Custom configuration
+BEACON_KIT_PATH=/path/to/beacon-kit TARGET_BLOCK=20 TIMEOUT=180 ./scripts/test-block-progression.sh
+```
+
+### Environment Variables
+
+- `BEACON_KIT_PATH`: Path to your BeaconKit repository (default: `../beacon-kit`)
+- `TARGET_BLOCK`: Target block number to reach (default: `10`)
+- `TIMEOUT`: Maximum time to wait in seconds (default: `120`)
+
+### What the script does
+
+1. Cleans up any existing data directories
+2. Starts BeaconKit with `[BEACONKIT]` log prefixes
+3. Starts bera-reth with `[RETH]` log prefixes
+4. Monitors block progression via JSON-RPC calls
+5. Reports success when target block is reached
+6. Automatically cleans up all processes on exit or Ctrl+C
+
+### Manual Setup (Alternative)
+
+If you prefer to run the components manually:
+
+1. Run `make start` from **your Beacon-Kit repository**
+2. Save the path to your BeaconKit repository: `export BEACON_KIT=/path/to/beacon-kit`
 3. Run `make start-bera-reth-local` from **this repository**
 
 ---
