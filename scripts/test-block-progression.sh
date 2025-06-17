@@ -18,6 +18,8 @@ done
 
 cleanup() { 
     echo "Cleaning up processes..."
+    [ -n "$BEACON_PID" ] && kill $BEACON_PID 2>/dev/null || true
+    [ -n "$RETH_PID" ] && kill $RETH_PID 2>/dev/null || true
     pkill -f "beacond\|bera-reth" 2>/dev/null || true
     pkill -f "make start" 2>/dev/null || true
     pkill -f "make start-bera-reth-local" 2>/dev/null || true
@@ -34,19 +36,39 @@ get_block() {
 
 echo "Testing block progression to $TARGET_BLOCK (timeout: ${TIMEOUT}s)"
 
-# Clean and start BeaconKit
+# Clean directories
 rm -rf /.tmp/beacond ~/.bera-reth 2>/dev/null || true
+
+# Start BeaconKit with timeout protection
+echo "Starting BeaconKit..."
 cd "$BEACON_KIT_PATH"
-echo "y" | make start 2>&1 | sed 's/^/[BEACONKIT] /' &
-sleep 5
+timeout 180 bash -c 'echo "y" | make start' 2>&1 | sed 's/^/[BEACONKIT] /' &
+BEACON_PID=$!
+
+# Wait for BeaconKit to initialize with timeout
+WAIT_TIME=0
+while [ $WAIT_TIME -lt 60 ]; do
+    if [ -f "$BEACON_KIT_PATH/.tmp/beacond/eth-genesis.json" ]; then
+        echo "BeaconKit initialized successfully"
+        break
+    fi
+    sleep 2
+    WAIT_TIME=$((WAIT_TIME + 2))
+done
 
 # Verify genesis file exists
-[ ! -f "$BEACON_KIT_PATH/.tmp/beacond/eth-genesis.json" ] && { echo "ERROR: Genesis file not found"; exit 1; }
+[ ! -f "$BEACON_KIT_PATH/.tmp/beacond/eth-genesis.json" ] && { 
+    echo "ERROR: Genesis file not found after ${WAIT_TIME}s"; 
+    kill $BEACON_PID 2>/dev/null || true
+    exit 1; 
+}
 
 # Start bera-reth
+echo "Starting bera-reth..."
 cd - >/dev/null
-BEACON_KIT="$BEACON_KIT_PATH" make start-bera-reth-local 2>&1 | sed 's/^/[RETH] /' &
-sleep 5
+BEACON_KIT="$BEACON_KIT_PATH" timeout 60 make start-bera-reth-local 2>&1 | sed 's/^/[RETH] /' &
+RETH_PID=$!
+sleep 10
 
 # Monitor block progression
 start_time=$(date +%s)
