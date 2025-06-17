@@ -2,9 +2,10 @@ name: BeaconKit Integration Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
   pull_request:
-    branches: [ main, develop ]
+  merge_group:
 
 jobs:
   beaconkit-integration:
