@@ -1,4 +1,9 @@
-#![allow(missing_docs)]
+//! # Bera-Reth Main Entry Point
+//!
+//! This is the main executable entry point for the Bera-Reth execution client.
+//! It sets up the runtime environment, configures logging and signal handling,
+//! and launches the Berachain node with the appropriate configuration.
+
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
@@ -11,10 +16,21 @@ use reth::{args::RessArgs, ress::install_ress_subprotocol};
 use reth_node_builder::NodeHandle;
 use tracing::info;
 
+/// Main entry point for the Bera-Reth execution client.
+///
+/// This function sets up the runtime environment including:
+/// - Signal handlers for crash reporting
+/// - Backtrace configuration for debugging
+/// - Node initialization and launch
+///
+/// The function parses command-line arguments and launches the appropriate
+/// Berachain node configuration based on the provided parameters.
 fn main() {
+    // Install signal handler for better crash reporting
     reth_cli_util::sigsegv_handler::install();
 
     // Enable backtraces unless a RUST_BACKTRACE value has already been explicitly provided.
+    // This helps with debugging issues during development and operation.
     if std::env::var_os("RUST_BACKTRACE").is_none() {
         unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
     }

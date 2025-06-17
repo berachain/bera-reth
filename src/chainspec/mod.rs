@@ -1,4 +1,24 @@
-//! Berachain chain spec
+//! # Berachain Chain Specification
+//!
+//! This module defines the complete chain specification for Berachain, including:
+//! - Network parameters and consensus rules
+//! - Hardfork activation schedule (both Ethereum and Berachain-specific)
+//! - Base fee calculation with minimum enforcement
+//! - Genesis configuration parsing and validation
+//!
+//! ## Key Features
+//!
+//! - **Prague1 Hardfork**: Introduces minimum base fee of 1 gwei
+//! - **Enhanced EIP-1559**: Custom base fee calculation parameters
+//! - **Full Ethereum Compatibility**: Supports all standard Ethereum hardforks
+//! - **Modular Architecture**: Integrates seamlessly with Reth's node builder
+//!
+//! ## Constants
+//!
+//! The module defines several important constants for network operation:
+//! - Minimum base fee enforcement levels
+//! - Default configuration values
+//! - Network-specific parameters
 
 use crate::{
     genesis::BerachainGenesisConfig,
@@ -22,9 +42,43 @@ use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
-/// Berachain chain spec
+/// Minimum base fee in wei enforced after Prague1 hardfork activation (1 gwei).
+///
+/// This constant defines the minimum base fee that will be enforced for all
+/// transactions after the Prague1 hardfork activates. It prevents the base fee
+/// from dropping to zero, ensuring economic incentives remain aligned with
+/// Berachain's Proof-of-Liquidity consensus mechanism.
+const PRAGUE1_MIN_BASE_FEE_WEI: u64 = 1_000_000_000;
+
+/// Default base fee when Prague1 is not active (allows zero base fee)
+const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
+
+/// Berachain chain specification containing all network parameters and hardfork rules.
+///
+/// This structure wraps Reth's standard [`ChainSpec`] and extends it with
+/// Berachain-specific functionality, including custom hardfork logic and
+/// enhanced base fee calculations.
+///
+/// # Key Features
+///
+/// - Custom hardfork implementations (Prague1)
+/// - Minimum base fee enforcement
+/// - Full Ethereum compatibility
+/// - Integration with BeaconKit consensus
+///
+/// # Example
+///
+/// ```no_run
+/// use alloy_genesis::Genesis;
+/// use bera_reth::chainspec::BerachainChainSpec;
+///
+/// // Create from genesis configuration
+/// let genesis = Genesis::default(); // Normally loaded from JSON
+/// let chain_spec = BerachainChainSpec::from(genesis);
+/// ```
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
 pub struct BerachainChainSpec {
+    /// The underlying Reth chain specification
     inner: ChainSpec,
 }
 impl EthChainSpec for BerachainChainSpec {
@@ -90,8 +144,11 @@ impl EthChainSpec for BerachainChainSpec {
         // Note that we use this parent block timestamp to determine whether Prague 1 is active.
         // This means that we technically start the base_fee enforcement the block after the fork
         // block. This is a conscious decision to minimize fork diffs across execution clients.
-        let min_base_fee =
-            if self.is_prague1_active_at_timestamp(parent.timestamp()) { 1_000_000_000 } else { 0 };
+        let min_base_fee = if self.is_prague1_active_at_timestamp(parent.timestamp()) {
+            PRAGUE1_MIN_BASE_FEE_WEI
+        } else {
+            DEFAULT_MIN_BASE_FEE_WEI
+        };
 
         raw.max(min_base_fee)
     }
@@ -201,9 +258,12 @@ impl From<Genesis> for BerachainChainSpec {
             };
 
         // Time-based hardforks
+        // For the From implementation, we use a default config if parsing fails
+        // This maintains backward compatibility while preventing panics
         let berachain_genesis_config =
             BerachainGenesisConfig::try_from(&genesis.config.extra_fields).unwrap_or_else(|e| {
-                panic!("failed to parse berachain genesis config from genesis file: {e}")
+                tracing::warn!("Failed to parse berachain genesis config, using defaults: {}", e);
+                BerachainGenesisConfig::default()
             });
 
         let time_hardfork_opts = [

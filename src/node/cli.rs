@@ -108,8 +108,13 @@ where
                 runner.run_until_ctrl_c(command.execute::<EthNetworkPrimitives>())
             }
             Commands::Config(command) => runner.run_until_ctrl_c(command.execute()),
-            Commands::Debug(_) => {
-                todo!("consider fixing")
+            Commands::Debug(_command) => {
+                // Debug commands require special handling and are typically used for
+                // development and troubleshooting. Currently not implemented for Berachain.
+                runner.run_blocking_until_ctrl_c(async {
+                    tracing::warn!("Debug commands are not yet implemented for Berachain nodes");
+                    Err(eyre::eyre!("Debug commands not available for Berachain nodes. This feature is planned for future releases."))
+                })
             }
             Commands::Recover(command) => {
                 runner.run_command_until_exit(|ctx| command.execute::<BerachainNode>(ctx))

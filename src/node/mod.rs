@@ -1,5 +1,17 @@
+//! # Berachain Node Implementation
+//!
+//! This module provides the core node implementation for Berachain, including:
+//! - CLI interface and command handling
+//! - EVM execution environment configuration
+//! - Node type definitions and builder patterns
+//! - Integration with Reth's modular architecture
+//!
+//! The node implementation follows Reth's component-based design, allowing for
+//! flexible configuration and extension of functionality specific to Berachain's
+//! consensus and execution requirements.
+
 pub mod cli;
-mod evm;
+pub mod evm;
 
 use crate::{chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder};
 use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeTypes};
