@@ -1,3 +1,7 @@
 /target
 .idea
 .claude
+
+# Coverage reports
+lcov.info
+target/llvm-cov/

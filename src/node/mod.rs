@@ -1,5 +1,8 @@
 //! Berachain node implementation using Reth's component-based architecture
 
+#[cfg(test)]
+mod tests;
+
 pub mod cli;
 pub mod evm;
 

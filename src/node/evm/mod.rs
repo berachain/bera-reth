@@ -1,5 +1,8 @@
 //! Berachain EVM executor using standard Ethereum execution with Berachain chain spec
 
+#[cfg(test)]
+mod tests;
+
 use reth_node_builder::PayloadBuilderConfig;
 
 use crate::{chainspec::BerachainChainSpec, node::BerachainNode};

@@ -132,4 +132,3 @@ jobs:
         run: cargo doc --all --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: "-D warnings"
-

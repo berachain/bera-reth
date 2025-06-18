@@ -113,6 +113,23 @@ pr-fix: ## Auto-fix formatting issues
 ###                           Tests & Simulation                            ###
 ###############################################################################
 
+# Test coverage configuration
+COV_FILE := lcov.info
+
+.PHONY: test
+test: ## Run all tests
+	cargo test --all --locked --verbose
+
+.PHONY: cov-unit
+cov-unit: ## Run unit tests with coverage using cargo-llvm-cov
+	rm -f $(COV_FILE)
+	cargo llvm-cov --lcov --output-path $(COV_FILE) --all --locked
+
+.PHONY: cov-report-html
+cov-report-html: cov-unit ## Generate HTML coverage report and open in browser
+	cargo llvm-cov report --html
+	@echo "Coverage report generated in target/llvm-cov/html/index.html"
+
 # ask_reset_dir_func checks if the directory passed in exists, and if so asks the user whether it
 # should delete it. Note that on linux, docker may have created the directory with root
 # permissions, so we may need to ask the user to delete it with sudo

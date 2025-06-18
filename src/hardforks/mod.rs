@@ -1,5 +1,8 @@
 //! Berachain hardfork definitions for use alongside Ethereum hardforks
 
+#[cfg(test)]
+mod tests;
+
 use reth::chainspec::{EthereumHardforks, ForkCondition, hardfork};
 
 hardfork!(

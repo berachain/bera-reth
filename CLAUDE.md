@@ -54,10 +54,16 @@ BEACON_KIT_PATH=../beacon-kit make start-bera-reth-local
 cargo +nightly fmt --all -- --check
 
 # Linting
-cargo clippy --all-targets --all-features -- -D warnings
+cargo +nightly clippy --all-targets --all-features -- -D warnings
 
 # Tests
 cargo test --all --locked --verbose
+
+# Test coverage
+make cov-unit
+
+# HTML coverage report
+make cov-report-html
 
 # Security audit
 cargo audit
@@ -143,7 +149,10 @@ BEACON_KIT_PATH=/path/to/beacon-kit ./scripts/test-block-progression.sh
 cargo +nightly fmt --all
 
 # Lint
-cargo clippy --all-targets --all-features -- -D warnings
+cargo +nightly clippy --all-targets --all-features -- -D warnings
+
+# Test coverage
+make cov-unit
 
 # Documentation
 cargo doc --open --no-deps --document-private-items

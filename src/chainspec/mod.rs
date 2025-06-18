@@ -1,5 +1,8 @@
 //! Berachain chain specification with Ethereum hardforks plus Prague1 minimum base fee
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     genesis::BerachainGenesisConfig,
     hardforks::{BerachainHardfork, BerachainHardforks},
