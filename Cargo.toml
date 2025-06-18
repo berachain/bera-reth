@@ -33,6 +33,12 @@ log = "0.4.27"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 thiserror = "2.0"
 
+[features]
+default = ["jemalloc"]
+jemalloc = ["reth/jemalloc"]
+asm-keccak = ["reth/asm-keccak"]
+min-debug-logs = ["reth/min-debug-logs"]
+
 [profile.maxperf]
 inherits = "release"
 lto = "fat"
