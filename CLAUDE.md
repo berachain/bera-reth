@@ -19,9 +19,9 @@ Bera-Reth is a high-performance Rust execution client for Berachain, built on th
 - **CLI**: `src/node/cli.rs` - Command-line interface
 
 ### Reference Implementations
-- **Prime Reference**: Ethereum at `~/Code/Reth/src/main.rs`
-- **Inspiration**: BSC implementation at `~/Code/reth-bsc`
-- **Integration**: BeaconKit at `~/Code/beacon-kit`
+- **Prime Reference**: [Reth Ethereum implementation](https://github.com/paradigmxyz/reth) - Study `src/main.rs` and node builder patterns
+- **Inspiration**: [Reth-BSC implementation](https://github.com/paradigmxyz/reth/tree/main/examples/bsc) - Chain-specific adaptations
+- **Integration**: [BeaconKit](https://github.com/berachain/beacon-kit) - Consensus client for testing
 
 ## Development Workflow
 
@@ -40,7 +40,7 @@ BEACON_KIT=/path/to/beacon-kit make start-bera-reth-local
 ### Code Quality
 ```bash
 # Format check
-cargo fmt --all -- --check
+cargo +nightly fmt --all -- --check
 
 # Linting
 cargo clippy --all-targets --all-features -- -D warnings
@@ -128,7 +128,7 @@ cargo build --release
 BEACON_KIT_PATH=/path/to/beacon-kit ./scripts/test-block-progression.sh
 
 # Format
-cargo fmt --all
+cargo +nightly fmt --all
 
 # Lint
 cargo clippy --all-targets --all-features -- -D warnings
