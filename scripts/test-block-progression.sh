@@ -16,7 +16,7 @@ for port in 8545 8551 30303 3500; do
     fi
 done
 
-cleanup() { 
+cleanup() {
     echo "Cleaning up processes..."
     [ -n "$BEACON_PID" ] && kill $BEACON_PID 2>/dev/null || true
     [ -n "$RETH_PID" ] && kill $RETH_PID 2>/dev/null || true
@@ -62,10 +62,10 @@ while [ $WAIT_TIME -lt 10 ]; do
 done
 
 # Verify genesis file exists
-[ ! -f "$BEACON_KIT_PATH/.tmp/beacond/eth-genesis.json" ] && { 
-    echo "ERROR: Genesis file not found after ${WAIT_TIME}s"; 
+[ ! -f "$BEACON_KIT_PATH/.tmp/beacond/eth-genesis.json" ] && {
+    echo "ERROR: Genesis file not found after ${WAIT_TIME}s";
     kill $BEACON_PID 2>/dev/null || true
-    exit 1; 
+    exit 1;
 }
 
 # Start bera-reth
@@ -81,17 +81,17 @@ prev_block=0
 
 while [ $(($(date +%s) - start_time)) -lt $TIMEOUT ]; do
     current_block=$(get_block)
-    
+
     if [ "$current_block" != "0" ] && [ "$current_block" -gt "$prev_block" ]; then
         echo "Block: $prev_block -> $current_block"
         prev_block=$current_block
-        
+
         [ "$current_block" -ge "$TARGET_BLOCK" ] && {
             echo "SUCCESS: Reached block $current_block in $(($(date +%s) - start_time))s"
             exit 0
         }
     fi
-    
+
     sleep 3
 done
 
