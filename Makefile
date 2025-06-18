@@ -21,10 +21,9 @@ DOCKER_IMAGE_NAME ?= bera-reth
 ###                               Docker                                    ###
 ###############################################################################
 
-# Note: This requires a buildx builder with emulation support. For example:
-#
-# `docker run --privileged --rm tonistiigi/binfmt --install amd64,arm64`
-# `docker buildx create --use --driver docker-container --name cross-builder`
+# Note: Multi-platform builds use buildx with QEMU emulation.
+# In CI, this is handled automatically by setup-buildx-action and setup-qemu-action.
+# For local development, ensure Docker Desktop has multi-platform support enabled.
 .PHONY: docker-build-push
 docker-build-push: ## Build and push a cross-arch Docker image tagged with the latest git tag.
 	$(call docker_build_push,$(GIT_TAG),$(GIT_TAG))
@@ -109,7 +108,7 @@ JWT_PATH = ${BEACON_KIT}/testing/files/jwt.hex
 IPC_PATH = ${BEACON_KIT}/.tmp/beacond/eth-home/eth-engine.ipc
 ETH_GENESIS_PATH = ${BEACON_KIT}/.tmp/beacond/eth-genesis.json
 
-## Start an ephemeral `bera-reth` node using the local `reth` binary (no Docker)
+## Start an ephemeral `bera-reth` node using the local binary (no Docker)
 start-bera-reth-local:
 	cargo build
 	$(call ask_reset_dir_func, $(ETH_DATA_DIR))
