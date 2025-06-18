@@ -1,7 +1,5 @@
 //! Berachain EVM executor using standard Ethereum execution with Berachain chain spec
 
-#[cfg(test)]
-mod tests;
 
 use reth_node_builder::PayloadBuilderConfig;
 
@@ -27,5 +25,31 @@ where
             EthEvmConfig::new_with_evm_factory(ctx.chain_spec().clone(), EthEvmFactory::default())
                 .with_extra_data(ctx.payload_builder_config().extra_data_bytes());
         Ok(evm_config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_executor_builder() {
+        let builder = BerachainExecutorBuilder;
+        
+        // Test Debug implementation
+        let debug_str = format!("{builder:?}");
+        assert!(debug_str.contains("BerachainExecutorBuilder"));
+    }
+
+    #[test]
+    fn test_executor_builder_copy() {
+        let builder = BerachainExecutorBuilder;
+        let copied = builder; // Copy due to Copy trait
+
+        // Both should be usable and identical
+        assert_eq!(format!("{builder:?}"), format!("{copied:?}"));
+        
+        let _builder1 = builder;
+        let _builder2 = copied;
     }
 }

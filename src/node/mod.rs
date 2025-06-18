@@ -1,7 +1,5 @@
 //! Berachain node implementation using Reth's component-based architecture
 
-#[cfg(test)]
-mod tests;
 
 pub mod cli;
 pub mod evm;
@@ -139,5 +137,34 @@ where
 
     fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> BlockTy<Self> {
         rpc_block.into_consensus().convert_transactions()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chainspec::BerachainChainSpec;
+
+    #[test]
+    fn test_node_types() {
+        let node = BerachainNode::default();
+        
+        // Test that BerachainNode can be instantiated and has Debug
+        let debug_str = format!("{node:?}");
+        assert!(debug_str.contains("BerachainNode"));
+    }
+
+    #[test]
+    fn test_type_compatibility() {
+        // Test that our types work together
+        let _spec = BerachainChainSpec::default();
+        let _node = BerachainNode::default();
+        
+        // This test ensures our types compile together correctly
+        fn _compile_test() -> (BerachainChainSpec, BerachainNode) {
+            (BerachainChainSpec::default(), BerachainNode::default())
+        }
+        
+        let _ = _compile_test();
     }
 }
