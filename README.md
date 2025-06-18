@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/reth-rect.png" alt="Bera-Reth" width="400"/>
+<img src="assets/bera-reth.png" alt="Bera-Reth" width="400"/>
 
 <p>
   <a href="https://github.com/berachain/bera-reth/actions/workflows/ci.yml">
