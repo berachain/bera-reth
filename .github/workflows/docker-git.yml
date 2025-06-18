@@ -1,0 +1,10 @@
+name: Docker Git SHA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  docker-git:
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      make-target: docker-build-push-git-sha
