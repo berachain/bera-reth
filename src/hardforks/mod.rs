@@ -1,6 +1,6 @@
 //! Berachain hardfork definitions for use alongside Ethereum hardforks
 
-use reth::chainspec::{hardfork, EthereumHardforks, ForkCondition};
+use reth::chainspec::{EthereumHardforks, ForkCondition, hardfork};
 
 hardfork!(
     /// Berachain hardforks to be mixed with [`EthereumHardfork`]
