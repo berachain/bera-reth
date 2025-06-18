@@ -89,8 +89,9 @@ cargo udeps --all-features --locked
 
 ### Git Workflow
 - **Main branch**: `main` (no `develop` branch)
-- **Commit style**: Semantic, clear, focused
-- **PR descriptions**: Succinct, accurate, technical
+- **Commit style**: Follow semantic format (feat:, fix:, perf:, chore:) with imperative mood under 50 characters
+- **PR descriptions**: Use flowing prose to explain what changed and why, providing context for reviewers
+- **Guidelines**: Reference https://github.com/ithacaxyz/claude-md/blob/main/CLAUDE.md for best practices on technical writing and documentation structure
 
 ## Key File Locations
 
