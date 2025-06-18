@@ -1,8 +1,23 @@
+<div align="center">
+
+<img src="assets/reth-rect.png" alt="Bera-Reth" width="400"/>
+
+<p>
+  <a href="https://github.com/berachain/bera-reth/actions/workflows/ci.yml">
+    <img src="https://github.com/berachain/bera-reth/actions/workflows/ci.yml/badge.svg" alt="CI"/>
+  </a>
+  <a href="https://github.com/berachain/bera-reth">
+    <img src="https://img.shields.io/badge/status-in%20development-yellow.svg" alt="Status"/>
+  </a>
+</p>
+
+</div>
+
 # Bera-Reth
 
-A Rust execution client for Berachain, built with the Reth SDK.
+A high-performance Rust execution client for Berachain, built with the Reth SDK.
 
-⚠️ **Not ready for production**
+> ⚠️ **Not ready for production**
 
 ## Getting Started
 
