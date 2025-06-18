@@ -107,11 +107,10 @@ mod tests {
         let v: Value = serde_json::from_str(json).unwrap();
         let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
         let res = BerachainGenesisConfig::try_from(&other_fields);
-        assert!(
-            res.expect_err("must be an error")
-                .to_string()
-                .contains("Missing required 'berachain' field")
-        );
+        assert!(res
+            .expect_err("must be an error")
+            .to_string()
+            .contains("Missing required 'berachain' field"));
     }
 
     #[test]

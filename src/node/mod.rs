@@ -6,16 +6,16 @@ pub mod evm;
 use crate::{chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder};
 use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeTypes};
 use reth_node_builder::{
-    DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder},
     rpc::BasicEngineApiBuilder,
+    DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
 };
 use reth_node_ethereum::{
-    EthereumAddOns, EthereumEngineValidatorBuilder, EthereumEthApiBuilder, EthereumNode,
     node::{
         EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder,
         EthereumPoolBuilder,
     },
+    EthereumAddOns, EthereumEngineValidatorBuilder, EthereumEthApiBuilder, EthereumNode,
 };
 
 /// Type configuration for a regular Berachain node.
@@ -70,7 +70,7 @@ where
     ///   - Validates transactions according to chain rules
     ///   - Provides transactions for block building
     ///
-    /// - **BasicPayloadServiceBuilder<EthereumPayloadBuilder>**: Block building and payload
+    /// - **`BasicPayloadServiceBuilder<EthereumPayloadBuilder>`**: Block building and payload
     ///   creation
     ///   - Triggered by Engine API `forkchoice_updated` calls from consensus layer
     ///   - Assembles transactions from pool into block payloads

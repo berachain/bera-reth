@@ -14,10 +14,10 @@ use reth::{
         Hardfork,
     },
     primitives::{Header, SealedHeader},
-    revm::primitives::{Address, B256, U256, b256},
+    revm::primitives::{b256, Address, B256, U256},
 };
-use reth_chainspec::{ChainSpec, DepositContract, EthChainSpec, Hardforks, make_genesis_header};
-use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
+use reth_chainspec::{make_genesis_header, ChainSpec, DepositContract, EthChainSpec, Hardforks};
+use reth_cli::chainspec::{parse_genesis, ChainSpecParser};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};

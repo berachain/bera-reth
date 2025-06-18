@@ -4,12 +4,12 @@ use crate::{
 };
 use clap::Parser;
 use reth::{
-    CliRunner,
     args::LogArgs,
     beacon_consensus::EthBeaconConsensus,
     network::EthNetworkPrimitives,
     prometheus_exporter::install_prometheus_recorder,
     version::{LONG_VERSION, SHORT_VERSION},
+    CliRunner,
 };
 use reth_chainspec::EthChainSpec;
 use reth_cli::chainspec::ChainSpecParser;

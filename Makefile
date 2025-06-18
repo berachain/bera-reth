@@ -82,6 +82,36 @@ build-aarch64-unknown-linux-gnu:
 		cross build --bin bera-reth --target aarch64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)"
 
 ###############################################################################
+###                               Development                               ###
+###############################################################################
+
+.PHONY: pr
+pr: ## Run all checks that are run in CI for pull requests
+	@echo "Running all PR checks..."
+	@echo "1. Checking code formatting..."
+	cargo +nightly fmt --all -- --check
+	@echo "2. Checking TOML formatting..."
+	/Users/rezbera/.dprint/bin/dprint check
+	@echo "3. Running clippy..."
+	cargo clippy --all-targets --all-features -- -D warnings
+	@echo "4. Running security audit..."
+	cargo deny check
+	@echo "5. Checking unused dependencies..."
+	cargo +nightly udeps --all-features --locked
+	@echo "6. Building documentation..."
+	RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps --document-private-items
+	@echo "7. Running tests..."
+	cargo test --all --locked --verbose
+	@echo "All PR checks passed! ✅"
+
+.PHONY: pr-fix
+pr-fix: ## Auto-fix formatting issues
+	@echo "Auto-fixing formatting issues..."
+	cargo +nightly fmt --all
+	/Users/rezbera/.dprint/bin/dprint fmt
+	@echo "Formatting fixed! ✅"
+
+###############################################################################
 ###                           Tests & Simulation                            ###
 ###############################################################################
 
