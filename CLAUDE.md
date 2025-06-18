@@ -50,20 +50,11 @@ BEACON_KIT_PATH=../beacon-kit make start-bera-reth-local
 
 ### Code Quality
 ```bash
-# Format check
-cargo +nightly fmt --all -- --check
+# Run all quality checks (REQUIRED before every commit)
+make pr
 
-# Linting
-cargo clippy --all-targets --all-features -- -D warnings
-
-# Tests
-cargo test --all --locked --verbose
-
-# Security audit
-cargo audit
-
-# Dead code detection
-cargo udeps --all-features --locked
+# Auto-fix formatting issues
+make pr-fix
 ```
 
 ### Testing Strategy
@@ -83,14 +74,16 @@ cargo udeps --all-features --locked
 
 ### Communication Guidelines
 - **All code and PR comments must be succinct**
-- **No references to Claude in commits or PRs**
+- **NEVER reference AI tools in commits, PRs, or code**
 - **Focus on answering exactly what was asked**
 - **Keep responses concise and direct**
 
 ### Git Workflow
 - **Main branch**: `main` (no `develop` branch)
+- **Pre-commit requirement**: ALWAYS run `make pr` before committing
 - **Commit style**: Follow semantic format (feat:, fix:, perf:, chore:) with imperative mood under 50 characters
 - **PR descriptions**: Use flowing prose to explain what changed and why, providing context for reviewers
+- **AI tool references**: STRICTLY FORBIDDEN in all commits, PRs, and code
 - **Guidelines**: Reference https://github.com/ithacaxyz/claude-md/blob/main/CLAUDE.md for best practices on technical writing and documentation structure
 
 ## Key File Locations
@@ -139,11 +132,11 @@ cargo build --release
 # Test locally
 BEACON_KIT_PATH=/path/to/beacon-kit ./scripts/test-block-progression.sh
 
-# Format
-cargo +nightly fmt --all
+# Quality checks (run before EVERY commit)
+make pr
 
-# Lint
-cargo clippy --all-targets --all-features -- -D warnings
+# Auto-fix formatting
+make pr-fix
 
 # Documentation
 cargo doc --open --no-deps --document-private-items
