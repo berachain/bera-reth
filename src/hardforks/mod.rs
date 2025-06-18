@@ -1,6 +1,5 @@
 //! Berachain hardfork definitions for use alongside Ethereum hardforks
 
-
 use reth::chainspec::{EthereumHardforks, ForkCondition, hardfork};
 
 hardfork!(
@@ -52,11 +51,11 @@ mod tests {
     #[test]
     fn test_hardforks_trait_implementation() {
         let hardforks = MockHardforks;
-        
+
         // Test Prague1 activation at genesis (timestamp 0)
         let activation = hardforks.berachain_fork_activation(BerachainHardfork::Prague1);
         assert_eq!(activation, ForkCondition::Timestamp(0));
-        
+
         // Test Prague1 active at timestamp using trait method
         assert!(hardforks.is_prague1_active_at_timestamp(0));
         assert!(hardforks.is_prague1_active_at_timestamp(100));

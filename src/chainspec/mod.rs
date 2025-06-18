@@ -1,6 +1,5 @@
 //! Berachain chain specification with Ethereum hardforks plus Prague1 minimum base fee
 
-
 use crate::{
     genesis::BerachainGenesisConfig,
     hardforks::{BerachainHardfork, BerachainHardforks},
@@ -291,7 +290,7 @@ mod tests {
     #[test]
     fn test_chain_spec_default() {
         let chain_spec = BerachainChainSpec::default();
-        
+
         // Test that default creates a valid chain spec
         assert_eq!(chain_spec.prune_delete_limit(), 20000);
         assert!(chain_spec.deposit_contract().is_none());
@@ -326,7 +325,7 @@ mod tests {
 
         // Test next block base fee calculation
         let next_base_fee = chain_spec.next_block_base_fee(genesis_header);
-        
+
         // The function should execute without panic - actual value depends on genesis header
         // This test verifies the calculation works correctly
         let _fee = next_base_fee;

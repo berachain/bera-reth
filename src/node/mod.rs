@@ -1,6 +1,5 @@
 //! Berachain node implementation using Reth's component-based architecture
 
-
 pub mod cli;
 pub mod evm;
 
@@ -148,7 +147,7 @@ mod tests {
     #[test]
     fn test_node_types() {
         let node = BerachainNode::default();
-        
+
         // Test that BerachainNode can be instantiated and has Debug
         let debug_str = format!("{node:?}");
         assert!(debug_str.contains("BerachainNode"));
@@ -159,12 +158,12 @@ mod tests {
         // Test that our types work together
         let _spec = BerachainChainSpec::default();
         let _node = BerachainNode::default();
-        
+
         // This test ensures our types compile together correctly
         fn _compile_test() -> (BerachainChainSpec, BerachainNode) {
             (BerachainChainSpec::default(), BerachainNode::default())
         }
-        
+
         let _ = _compile_test();
     }
 }

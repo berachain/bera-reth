@@ -1,6 +1,5 @@
 //! Berachain EVM executor using standard Ethereum execution with Berachain chain spec
 
-
 use reth_node_builder::PayloadBuilderConfig;
 
 use crate::{chainspec::BerachainChainSpec, node::BerachainNode};
@@ -35,7 +34,7 @@ mod tests {
     #[test]
     fn test_executor_builder() {
         let builder = BerachainExecutorBuilder;
-        
+
         // Test Debug implementation
         let debug_str = format!("{builder:?}");
         assert!(debug_str.contains("BerachainExecutorBuilder"));
@@ -48,7 +47,7 @@ mod tests {
 
         // Both should be usable and identical
         assert_eq!(format!("{builder:?}"), format!("{copied:?}"));
-        
+
         let _builder1 = builder;
         let _builder2 = copied;
     }
