@@ -14,6 +14,32 @@ permissions:
   security-events: write
 
 jobs:
+  pr-title:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            perf
+            refactor
+            docs
+            test
+            build
+            ci
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject "{subject}" found in the PR title "{title}"
+            didn't match the configured pattern. Please ensure that the subject
+            doesn't start with an uppercase character.
+
   fmt:
     name: Check formatting
     runs-on: ubuntu-latest
@@ -30,6 +56,15 @@ jobs:
       - name: Run rustfmt
         run: cargo fmt --all --check
 
+  toml-fmt:
+    name: Check TOML formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup dprint
+        uses: dprint/check@v2.2
+
   clippy:
     name: Clippy lint
     runs-on: ubuntu-latest
@@ -45,6 +80,35 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  deny:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          log-level: warn
+          command: check
+          arguments: --all-features
+
+  udeps:
+    name: Check unused dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      
+      - name: Install cargo-udeps
+        run: cargo install cargo-udeps --locked
+      
+      - name: Check for unused dependencies
+        run: cargo +nightly udeps --all-features --locked
+
   test:
     name: Run tests
     runs-on: ubuntu-latest
@@ -59,3 +123,47 @@ jobs:
 
       - name: Run tests
         run: cargo test --all --locked --verbose
+
+  docs:
+    name: Check documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      
+      - name: Check documentation
+        run: cargo doc --all --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+  coverage:
+    name: Test coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate coverage report
+        run: cargo llvm-cov --lcov --output-path lcov.info --all --locked
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: lcov.info
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
