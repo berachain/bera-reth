@@ -52,7 +52,7 @@ BEACON_PID=$!
 
 # Wait for BeaconKit to initialize with timeout
 WAIT_TIME=0
-while [ $WAIT_TIME -lt 60 ]; do
+while [ $WAIT_TIME -lt 10 ]; do
     if [ -f "$BEACON_KIT_PATH/.tmp/beacond/eth-genesis.json" ]; then
         echo "BeaconKit initialized successfully"
         break
