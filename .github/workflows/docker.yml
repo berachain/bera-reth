@@ -8,12 +8,22 @@ on:
 jobs:
   docker-release-candidate:
     if: contains(github.ref, '-rc')
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
       make-target: docker-build-push
 
   docker-latest:
     if: ${{ !contains(github.ref, '-rc') }}
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
       make-target: docker-build-push-latest

@@ -5,6 +5,11 @@ on:
 
 jobs:
   docker-git:
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
       make-target: docker-build-push-git-sha
