@@ -55,39 +55,30 @@ docker-build-push-nightly-profiling: ## Build and push cross-arch Docker image w
 
 # Create a cross-arch Docker image with the given tags and push it
 define docker_build_push
-	$(MAKE) build-x86_64-unknown-linux-gnu
-	mkdir -p $(BIN_DIR)/amd64
-	cp $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/bera-reth $(BIN_DIR)/amd64/bera-reth
-
-	$(MAKE) build-aarch64-unknown-linux-gnu
-	mkdir -p $(BIN_DIR)/arm64
-	cp $(CARGO_TARGET_DIR)/aarch64-unknown-linux-gnu/$(PROFILE)/bera-reth $(BIN_DIR)/arm64/bera-reth
-
-	docker buildx build --file ./Dockerfile.cross . \
+	docker buildx build --file ./Dockerfile . \
 		--platform linux/amd64,linux/arm64 \
 		--tag $(DOCKER_IMAGE_NAME):$(1) \
 		--tag $(DOCKER_IMAGE_NAME):$(2) \
 		--build-arg COMMIT=$(GIT_SHA) \
 		--build-arg VERSION=$(GIT_TAG) \
+		--build-arg BUILD_PROFILE=$(PROFILE) \
+		--build-arg FEATURES="$(FEATURES)" \
 		--provenance=false \
 		--push
 endef
 
-# Cross-compilation targets (based on upstream Reth patterns)
-build-x86_64-unknown-linux-gnu:
-	@echo "Building x86_64 binary..."
-	@command -v cross >/dev/null 2>&1 || { echo "ERROR: cross not installed. Run: cargo install cross --git https://github.com/cross-rs/cross"; exit 1; }
-	RUSTFLAGS="-C link-arg=-lgcc -Clink-arg=-static-libgcc" \
-		cross build --bin bera-reth --target x86_64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)"
-	@echo "Built x86_64 binary: $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/bera-reth"
+# Local build targets for development
+.PHONY: build
+build: ## Build bera-reth locally
+	cargo build --features "$(FEATURES)" --profile "$(PROFILE)"
 
-build-aarch64-unknown-linux-gnu: export JEMALLOC_SYS_WITH_LG_PAGE=16
-build-aarch64-unknown-linux-gnu:
-	@echo "Building aarch64 binary..."
-	@command -v cross >/dev/null 2>&1 || { echo "ERROR: cross not installed. Run: cargo install cross --git https://github.com/cross-rs/cross"; exit 1; }
-	RUSTFLAGS="-C link-arg=-lgcc -Clink-arg=-static-libgcc" \
-		cross build --bin bera-reth --target aarch64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)"
-	@echo "Built aarch64 binary: $(CARGO_TARGET_DIR)/aarch64-unknown-linux-gnu/$(PROFILE)/bera-reth"
+.PHONY: build-release
+build-release: ## Build bera-reth with release profile
+	$(MAKE) build PROFILE=release
+
+.PHONY: build-maxperf
+build-maxperf: ## Build bera-reth with maxperf profile
+	$(MAKE) build PROFILE=maxperf
 
 ###############################################################################
 ###                           Tests & Simulation                            ###
