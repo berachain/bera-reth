@@ -2,6 +2,14 @@
 
 Bera-Reth is a high-performance Rust execution client for Berachain, built on the Reth SDK. This guide helps AI agents understand the project structure, development patterns, and contribution practices.
 
+## Imports
+
+```claude-md-imports
+- ~/Code/Reth as reth-reference
+- ~/Code/reth-bsc as reth-bsc-reference  
+- ~/Code/beacon-kit as beaconkit-reference
+```
+
 ## Project Overview
 
 **What**: Rust execution client for Berachain using Reth SDK  
@@ -19,9 +27,9 @@ Bera-Reth is a high-performance Rust execution client for Berachain, built on th
 - **CLI**: `src/node/cli.rs` - Command-line interface
 
 ### Reference Implementations
-- **Prime Reference**: [Reth Ethereum implementation](https://github.com/paradigmxyz/reth) - Study `src/main.rs` and node builder patterns
-- **Inspiration**: [Reth-BSC implementation](https://github.com/paradigmxyz/reth/tree/main/examples/bsc) - Chain-specific adaptations
-- **Integration**: [BeaconKit](https://github.com/berachain/beacon-kit) - Consensus client for testing
+- **Prime Reference**: `reth-reference/src/main.rs` - Ethereum implementation patterns and node builder
+- **Inspiration**: `reth-bsc-reference` - Chain-specific adaptations for BSC
+- **Integration**: `beaconkit-reference` - Consensus client for testing integration
 
 ## Development Workflow
 
@@ -31,7 +39,7 @@ Bera-Reth is a high-performance Rust execution client for Berachain, built on th
 cargo build --release
 
 # Integration testing with BeaconKit
-BEACON_KIT=/path/to/beacon-kit make start-bera-reth-local
+BEACON_KIT=../beacon-kit make start-bera-reth-local
 
 # Local development testing
 ./scripts/test-block-progression.sh
@@ -99,11 +107,11 @@ cargo udeps --all-features --locked
 ## Common Tasks
 
 ### Adding New Features
-1. Study Reth reference implementation first
+1. Study `reth-reference` implementation patterns first
 2. Follow existing patterns in bera-reth codebase
 3. Extract constants for magic numbers
 4. Write succinct documentation
-5. Test with BeaconKit integration locally
+5. Test with `beaconkit-reference` integration locally
 
 ### Debugging Integration
 - Use script debug mode: `set -ex` in test script
@@ -113,7 +121,7 @@ cargo udeps --all-features --locked
 
 ### Performance Optimization
 - Focus on Reth SDK optimization patterns
-- Reference main Reth implementation for best practices
+- Reference `reth-reference` implementation for best practices
 - Consider Berachain-specific optimizations
 - Benchmark against standard Ethereum clients
 
