@@ -42,7 +42,7 @@ get_block() {
 echo "Testing block progression to $TARGET_BLOCK (timeout: ${TIMEOUT}s)"
 
 # Clean directories
-rm -rf /.tmp/beacond ~/.bera-reth 2>/dev/null || true
+rm -rf "$BEACON_KIT_PATH/.tmp/beacond" ~/.bera-reth 2>/dev/null || true
 
 # Start BeaconKit with timeout protection
 echo "Starting BeaconKit..."
