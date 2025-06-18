@@ -28,10 +28,15 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 get_block() {
-    curl -s -X POST -H "Content-Type: application/json" \
+    result=$(curl -s -X POST -H "Content-Type: application/json" \
          --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
          http://localhost:8545 2>/dev/null | \
-    grep -o '"result":"[^"]*"' | cut -d'"' -f4 | xargs printf "%d\n" 2>/dev/null || echo "0"
+    grep -o '"result":"[^"]*"' | cut -d'"' -f4 2>/dev/null)
+    if [ -n "$result" ]; then
+        printf "%d\n" "$result" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
 }
 
 echo "Testing block progression to $TARGET_BLOCK (timeout: ${TIMEOUT}s)"
@@ -42,7 +47,7 @@ rm -rf /.tmp/beacond ~/.bera-reth 2>/dev/null || true
 # Start BeaconKit with timeout protection
 echo "Starting BeaconKit..."
 cd "$BEACON_KIT_PATH"
-timeout 180 bash -c 'echo "y" | make start' 2>&1 | sed 's/^/[BEACONKIT] /' &
+bash -c 'echo "y" | make start' 2>&1 | sed 's/^/[BEACONKIT] /' &
 BEACON_PID=$!
 
 # Wait for BeaconKit to initialize with timeout
@@ -66,7 +71,7 @@ done
 # Start bera-reth
 echo "Starting bera-reth..."
 cd - >/dev/null
-BEACON_KIT="$BEACON_KIT_PATH" timeout 60 make start-bera-reth-local 2>&1 | sed 's/^/[RETH] /' &
+BEACON_KIT="$BEACON_KIT_PATH" make start-bera-reth-local 2>&1 | sed 's/^/[RETH] /' &
 RETH_PID=$!
 sleep 10
 
@@ -77,7 +82,7 @@ prev_block=0
 while [ $(($(date +%s) - start_time)) -lt $TIMEOUT ]; do
     current_block=$(get_block)
     
-    if [ "$current_block" -gt "$prev_block" ]; then
+    if [ "$current_block" != "0" ] && [ "$current_block" -gt "$prev_block" ]; then
         echo "Block: $prev_block -> $current_block"
         prev_block=$current_block
         
