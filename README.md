@@ -42,6 +42,18 @@ BEACON_KIT_PATH=/path/to/beacon-kit ./scripts/test-block-progression.sh
 
 ## Development
 
+### Prerequisites
+
+Install required development tools:
+
+```bash
+# Install dprint for TOML formatting
+curl -fsSL https://dprint.dev/install.sh | sh
+
+# Install cargo-deny for dependency auditing
+cargo install cargo-deny
+```
+
 ### Quality Checks
 
 ```bash

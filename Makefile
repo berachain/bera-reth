@@ -89,7 +89,7 @@ pr: ## Run all checks that are run in CI for pull requests
 	@echo "1. Checking code formatting..."
 	cargo +nightly fmt --all -- --check
 	@echo "2. Checking TOML formatting..."
-	/Users/rezbera/.dprint/bin/dprint check
+	dprint check
 	@echo "3. Running clippy..."
 	cargo clippy --all-targets --all-features -- -D warnings
 	@echo "4. Running security audit..."
@@ -106,7 +106,7 @@ pr: ## Run all checks that are run in CI for pull requests
 pr-fix: ## Auto-fix formatting issues
 	@echo "Auto-fixing formatting issues..."
 	cargo +nightly fmt --all
-	/Users/rezbera/.dprint/bin/dprint fmt
+	dprint fmt
 	@echo "Formatting fixed! ✅"
 
 ###############################################################################
