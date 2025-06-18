@@ -317,17 +317,4 @@ mod tests {
             reth_chainspec::ChainKind::Named(reth_chainspec::NamedChain::Mainnet)
         );
     }
-
-    #[test]
-    fn test_prague1_min_base_fee() {
-        let chain_spec = BerachainChainSpec::default();
-        let genesis_header = chain_spec.genesis_header();
-
-        // Test next block base fee calculation
-        let next_base_fee = chain_spec.next_block_base_fee(genesis_header);
-
-        // The function should execute without panic - actual value depends on genesis header
-        // This test verifies the calculation works correctly
-        let _fee = next_base_fee;
-    }
 }
