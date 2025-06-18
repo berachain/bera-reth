@@ -9,8 +9,8 @@ GIT_TAG ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 BIN_DIR = "dist/bin"
 CARGO_TARGET_DIR ?= target
 PROFILE ?= release
-# Features: jemalloc (memory allocator), asm-keccak (optimized hashing), min-debug-logs (reduce log overhead)
-FEATURES ?= jemalloc asm-keccak min-debug-logs
+# Features: No custom features defined for bera-reth
+FEATURES ?=
 DOCKER_IMAGE_NAME ?= bera-reth
 
 ###############################################################################
