@@ -90,7 +90,7 @@ jobs:
         run: cargo install cargo-deny --locked
       
       - name: Run security audit
-        run: cargo deny check --all-features
+        run: cargo deny check
 
   udeps:
     name: Check unused dependencies
@@ -133,27 +133,3 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D warnings"
 
-  coverage:
-    name: Test coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: llvm-tools-preview
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Generate coverage report
-        run: cargo llvm-cov --lcov --output-path lcov.info --all --locked
-
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: lcov.info
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

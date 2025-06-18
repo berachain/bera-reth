@@ -166,20 +166,36 @@ If you prefer to run the components manually:
 We enforce formatting, linting, security, and dead-code checks:
 
 ```bash
+# Run all CI checks locally (recommended before creating PRs)
+make pr
+
+# Auto-fix formatting issues
+make pr-fix
+```
+
+### Individual Quality Checks
+
+```bash
 # 1️⃣ Check formatting
 cargo fmt --all -- --check
 
-# 2️⃣ Lint with Clippy (deny all warnings)
+# 2️⃣ Check TOML formatting
+dprint check
+
+# 3️⃣ Lint with Clippy (deny all warnings)
 cargo clippy --all-targets --all-features -- -D warnings
 
-# 3️⃣ Run tests
-cargo test --all --locked --verbose
-
 # 4️⃣ Security audit
-cargo audit
+cargo deny check
 
 # 5️⃣ Detect unused dependencies
 cargo udeps --all-features --locked
+
+# 6️⃣ Check documentation builds
+RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps --document-private-items
+
+# 7️⃣ Run tests
+cargo test --all --locked --verbose
 ```
 
 ---
