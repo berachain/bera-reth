@@ -52,28 +52,33 @@ The binary will be at `target/release/bera-reth`.
 
 ---
 
-## ▶️ Running with BeaconKit
+## ▶️ Running with BeaconKit (Local Development)
 
-Use the provided test script to automatically set up and test BeaconKit with bera-reth:
+For local development and testing, you can use the provided script to test BeaconKit integration:
 
 ```bash
 # Basic usage (tests progression to block 10 with 120s timeout)
-./scripts/test-block-progression.sh
+BEACON_KIT_PATH=/path/to/beacon-kit ./scripts/test-block-progression.sh
 
 # Custom configuration
-BEACON_KIT_PATH=/path/to/beacon-kit TARGET_BLOCK=20 TIMEOUT=180 ./scripts/test-block-progression.sh
+BEACON_KIT_PATH=/path/to/beacon-kit TARGET_BLOCK=5 TIMEOUT=180 ./scripts/test-block-progression.sh
 ```
+
+### Prerequisites
+
+- Local BeaconKit repository cloned and built
+- Set `BEACON_KIT_PATH` to your BeaconKit directory
 
 ### Environment Variables
 
-- `BEACON_KIT_PATH`: Path to your BeaconKit repository (default: `../beacon-kit`)
+- `BEACON_KIT_PATH`: Path to your BeaconKit repository (required)
 - `TARGET_BLOCK`: Target block number to reach (default: `10`)
 - `TIMEOUT`: Maximum time to wait in seconds (default: `120`)
 
 ### What the script does
 
 1. Cleans up any existing data directories
-2. Starts BeaconKit with `[BEACONKIT]` log prefixes
+2. Starts BeaconKit locally with `[BEACONKIT]` log prefixes
 3. Starts bera-reth with `[RETH]` log prefixes
 4. Monitors block progression via JSON-RPC calls
 5. Reports success when target block is reached
@@ -83,9 +88,8 @@ BEACON_KIT_PATH=/path/to/beacon-kit TARGET_BLOCK=20 TIMEOUT=180 ./scripts/test-b
 
 If you prefer to run the components manually:
 
-1. Run `make start` from **your Beacon-Kit repository**
-2. Save the path to your BeaconKit repository: `export BEACON_KIT=/path/to/beacon-kit`
-3. Run `make start-bera-reth-local` from **this repository**
+1. Run `make start` from **your BeaconKit repository**
+2. Run `BEACON_KIT=/path/to/beacon-kit make start-bera-reth-local` from **this repository**
 
 ---
 
