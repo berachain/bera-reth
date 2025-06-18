@@ -142,7 +142,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chainspec::BerachainChainSpec;
 
     #[test]
     fn test_node_types() {
