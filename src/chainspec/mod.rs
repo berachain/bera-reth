@@ -90,7 +90,7 @@ impl EthChainSpec for BerachainChainSpec {
     fn next_block_base_fee<H>(&self, parent: &H) -> u64
     where
         Self: Sized,
-        H: BlockHeader + BlockHeader,
+        H: BlockHeader,
     {
         let raw = parent
             .next_block_base_fee(self.base_fee_params_at_timestamp(parent.timestamp()))
