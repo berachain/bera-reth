@@ -10,8 +10,8 @@ use alloy_genesis::Genesis;
 use derive_more::{Constructor, Into};
 use reth::{
     chainspec::{
-        BaseFeeParams, Chain, ChainHardforks, EthereumHardfork, EthereumHardforks, ForkCondition,
-        Hardfork,
+        BaseFeeParams, BaseFeeParamsKind, Chain, ChainHardforks, EthereumHardfork,
+        EthereumHardforks, ForkCondition, Hardfork,
     },
     primitives::{Header, SealedHeader},
     revm::primitives::{Address, B256, U256, b256},
@@ -46,6 +46,8 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn base_fee_params_at_timestamp(&self, timestamp: u64) -> BaseFeeParams {
+        // Use the inner implementation which respects our configured base_fee_params
+        // This will correctly return Prague1 parameters when active
         self.inner.base_fee_params_at_timestamp(timestamp)
     }
 
@@ -268,6 +270,40 @@ impl From<Genesis> for BerachainChainSpec {
 
         let hardforks = ChainHardforks::new(ordered_hardforks);
 
+        // Create base fee parameters based on Prague1 configuration
+        let base_fee_params = if berachain_genesis_config.prague1.time == 0 {
+            // Prague1 active at genesis - use constant params with Berachain's denominator
+            BaseFeeParamsKind::Constant(BaseFeeParams {
+                max_change_denominator: berachain_genesis_config
+                    .prague1
+                    .base_fee_change_denominator,
+                elasticity_multiplier: 2, // Standard Ethereum value
+            })
+        } else {
+            // Prague1 activates later - use variable params
+            let fork_base_fee_params = vec![
+                // Pre-Prague1: standard Ethereum params
+                (
+                    EthereumHardfork::London.boxed(),
+                    BaseFeeParams {
+                        max_change_denominator: 8, // Standard Ethereum value
+                        elasticity_multiplier: 2,
+                    },
+                ),
+                // Post-Prague1: Berachain params
+                (
+                    BerachainHardfork::Prague1.boxed(),
+                    BaseFeeParams {
+                        max_change_denominator: berachain_genesis_config
+                            .prague1
+                            .base_fee_change_denominator,
+                        elasticity_multiplier: 2,
+                    },
+                ),
+            ];
+            BaseFeeParamsKind::Variable(fork_base_fee_params.into())
+        };
+
         let inner = ChainSpec {
             chain: genesis.config.chain_id.into(),
             genesis_header: SealedHeader::new_unhashed(make_genesis_header(&genesis, &hardforks)),
@@ -276,6 +312,7 @@ impl From<Genesis> for BerachainChainSpec {
             paris_block_and_final_difficulty,
             deposit_contract,
             blob_params,
+            base_fee_params,
             ..Default::default()
         };
         Self { inner }
@@ -286,6 +323,7 @@ impl From<Genesis> for BerachainChainSpec {
 mod tests {
     use super::*;
     use alloy_genesis::Genesis;
+    use jsonrpsee_core::__reexports::serde_json::json;
 
     #[test]
     fn test_chain_spec_default() {
@@ -316,5 +354,175 @@ mod tests {
             *chain_spec.chain().kind(),
             reth_chainspec::ChainKind::Named(reth_chainspec::NamedChain::Mainnet)
         );
+    }
+
+    #[test]
+    fn test_base_fee_params_prague1_at_genesis() {
+        // Create genesis with Prague1 active at genesis (time = 0)
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0); // Enable EIP-1559
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        // At genesis, should use Berachain's base fee params
+        let params = chain_spec.base_fee_params_at_timestamp(0);
+        assert_eq!(params.max_change_denominator, 48);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // Should still be the same after genesis
+        let params = chain_spec.base_fee_params_at_timestamp(1000);
+        assert_eq!(params.max_change_denominator, 48);
+        assert_eq!(params.elasticity_multiplier, 2);
+    }
+
+    #[test]
+    fn test_base_fee_params_prague1_delayed() {
+        // Create genesis with Prague1 activating at timestamp 1000
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0); // Enable EIP-1559
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Before Prague1, should use standard Ethereum params
+        let params = chain_spec.base_fee_params_at_timestamp(999);
+        assert_eq!(params.max_change_denominator, 8);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // At Prague1 activation, should use Berachain params
+        let params = chain_spec.base_fee_params_at_timestamp(1000);
+        assert_eq!(params.max_change_denominator, 48);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // After Prague1, should still use Berachain params
+        let params = chain_spec.base_fee_params_at_timestamp(2000);
+        assert_eq!(params.max_change_denominator, 48);
+        assert_eq!(params.elasticity_multiplier, 2);
+    }
+
+    #[test]
+    fn test_base_fee_params_custom_denominator() {
+        // Test with a custom denominator value
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 100,
+                    "minimumBaseFeeWei": 1000000000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        let params = chain_spec.base_fee_params_at_timestamp(0);
+        assert_eq!(params.max_change_denominator, 100);
+        assert_eq!(params.elasticity_multiplier, 2);
+    }
+
+    #[test]
+    fn test_base_fee_params_missing_berachain_config() {
+        // Test fallback when berachain config is missing
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0);
+        // No berachain config in extra_fields
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Should use default config (Prague1 at time 0, denominator 48)
+        let params = chain_spec.base_fee_params_at_timestamp(0);
+        assert_eq!(params.max_change_denominator, 48);
+        assert_eq!(params.elasticity_multiplier, 2);
+    }
+
+    #[test]
+    fn test_prague1_hardfork_activation() {
+        // Test that Prague1 hardfork is properly registered
+        let mut genesis = Genesis::default();
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1500,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Check Prague1 activation
+        assert!(!chain_spec.is_prague1_active_at_timestamp(1499));
+        assert!(chain_spec.is_prague1_active_at_timestamp(1500));
+        assert!(chain_spec.is_prague1_active_at_timestamp(2000));
+    }
+
+    #[test]
+    fn test_next_block_base_fee_with_prague1() {
+        // Create genesis with Prague1 at timestamp 1000
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Create a parent block before Prague1
+        let parent_header = Header {
+            timestamp: 999,
+            base_fee_per_gas: Some(100_000_000), // 0.1 gwei
+            ..Default::default()
+        };
+
+        // Before Prague1, base fee can go below 1 gwei
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header);
+        assert!(next_base_fee < PRAGUE1_MIN_BASE_FEE_WEI);
+
+        // Create a parent block at Prague1 activation
+        let parent_header = Header {
+            timestamp: 1000,
+            base_fee_per_gas: Some(100_000_000), // 0.1 gwei
+            ..Default::default()
+        };
+
+        // After Prague1, base fee should be at least 1 gwei
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header);
+        assert_eq!(next_base_fee, PRAGUE1_MIN_BASE_FEE_WEI);
     }
 }
