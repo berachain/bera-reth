@@ -20,7 +20,7 @@ env:
 
 jobs:
   docker-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -36,28 +36,12 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker builder
-        run: |
-          docker run --privileged --rm tonistiigi/binfmt --install arm64,amd64
-          docker buildx create --use --name cross-builder
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build and push Docker image
         run: DOCKER_IMAGE_NAME=${{ env.DOCKER_IMAGE_NAME }} PROFILE=${{ inputs.profile }} make ${{ inputs.make-target }}

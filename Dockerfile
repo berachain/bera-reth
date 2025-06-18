@@ -63,8 +63,8 @@ RUN TARGET=$(cat /tmp/target.txt) && \
 RUN TARGET=$(cat /tmp/target.txt) && \
     cp /app/target/$TARGET/$BUILD_PROFILE/bera-reth /app/bera-reth
 
-# Use Ubuntu as the release image
-FROM ubuntu:22.04 AS runtime
+# Use Ubuntu as the release image  
+FROM ubuntu:24.04 AS runtime
 WORKDIR /app
 
 # Install runtime dependencies
