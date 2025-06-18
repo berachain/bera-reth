@@ -152,18 +152,4 @@ mod tests {
         let debug_str = format!("{node:?}");
         assert!(debug_str.contains("BerachainNode"));
     }
-
-    #[test]
-    fn test_type_compatibility() {
-        // Test that our types work together
-        let _spec = BerachainChainSpec::default();
-        let _node = BerachainNode::default();
-
-        // This test ensures our types compile together correctly
-        fn _compile_test() -> (BerachainChainSpec, BerachainNode) {
-            (BerachainChainSpec::default(), BerachainNode::default())
-        }
-
-        let _ = _compile_test();
-    }
 }

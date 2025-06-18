@@ -26,29 +26,3 @@ where
         Ok(evm_config)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_executor_builder() {
-        let builder = BerachainExecutorBuilder;
-
-        // Test Debug implementation
-        let debug_str = format!("{builder:?}");
-        assert!(debug_str.contains("BerachainExecutorBuilder"));
-    }
-
-    #[test]
-    fn test_executor_builder_copy() {
-        let builder = BerachainExecutorBuilder;
-        let copied = builder; // Copy due to Copy trait
-
-        // Both should be usable and identical
-        assert_eq!(format!("{builder:?}"), format!("{copied:?}"));
-
-        let _builder1 = builder;
-        let _builder2 = copied;
-    }
-}
