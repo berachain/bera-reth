@@ -21,10 +21,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
-          override: true
           components: rustfmt
 
       - name: Run rustfmt
@@ -37,9 +35,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain with clippy
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
           components: clippy
 
       - name: Run clippy
@@ -52,10 +49,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Run tests
         run: cargo test --all --locked --verbose

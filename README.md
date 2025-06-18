@@ -84,11 +84,11 @@ make docker-build-push FEATURES="jemalloc asm-keccak"
 
 #### Prerequisites for Multi-Platform Builds
 
-```bash
-# Setup buildx with emulation support
-docker run --privileged --rm tonistiigi/binfmt --install amd64,arm64
-docker buildx create --use --driver docker-container --name cross-builder
-```
+Multi-platform builds require Docker with buildx support:
+
+- **Docker Desktop**: Multi-platform support is enabled by default
+- **Linux servers**: Install `qemu-user-static` package for emulation support
+- **CI/CD**: Handled automatically by `setup-buildx-action` and `setup-qemu-action`
 
 #### Automated Docker Builds via GitHub Actions
 
