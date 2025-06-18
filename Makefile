@@ -51,23 +51,30 @@ docker-build-push-nightly-profiling: ## Build and push cross-arch Docker image w
 
 # Create a cross-arch Docker image with the given tags and push it
 define docker_build_push
-	@echo "Building x86_64 binary..."
+	@echo "=== Building x86_64 binary ==="
 	$(MAKE) build-x86_64-unknown-linux-gnu
 	@echo "Creating dist directories..."
 	mkdir -p $(BIN_DIR)/amd64
+	@echo "Listing target directory contents:"
+	ls -la $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/ || echo "Target directory does not exist"
 	@echo "Copying x86_64 binary..."
 	cp $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/bera-reth $(BIN_DIR)/amd64/bera-reth
 	@echo "Verifying x86_64 binary copied successfully..."
-	test -f $(BIN_DIR)/amd64/bera-reth
+	test -f $(BIN_DIR)/amd64/bera-reth && ls -la $(BIN_DIR)/amd64/bera-reth
 
-	@echo "Building aarch64 binary..."
+	@echo "=== Building aarch64 binary ==="
 	$(MAKE) build-aarch64-unknown-linux-gnu
 	mkdir -p $(BIN_DIR)/arm64
+	@echo "Listing target directory contents:"
+	ls -la $(CARGO_TARGET_DIR)/aarch64-unknown-linux-gnu/$(PROFILE)/ || echo "Target directory does not exist"
 	@echo "Copying aarch64 binary..."
 	cp $(CARGO_TARGET_DIR)/aarch64-unknown-linux-gnu/$(PROFILE)/bera-reth $(BIN_DIR)/arm64/bera-reth
 	@echo "Verifying aarch64 binary copied successfully..."
-	test -f $(BIN_DIR)/arm64/bera-reth
+	test -f $(BIN_DIR)/arm64/bera-reth && ls -la $(BIN_DIR)/arm64/bera-reth
 
+	@echo "=== Final verification ==="
+	@echo "Contents of dist/bin:"
+	find $(BIN_DIR) -type f -exec ls -la {} \;
 	@echo "Building and pushing Docker image..."
 	docker buildx build --file ./Dockerfile.cross . \
 		--platform linux/amd64,linux/arm64 \
@@ -81,21 +88,31 @@ endef
 
 # Cross-compilation targets
 build-x86_64-unknown-linux-gnu:
-	@echo "Building x86_64 binary..."
-	@command -v cross >/dev/null 2>&1 || { echo "cross is not installed. Run: cargo install cross --git https://github.com/cross-rs/cross"; exit 1; }
+	@echo "=== Building x86_64 binary ==="
+	@echo "Checking for cross tool..."
+	@command -v cross >/dev/null 2>&1 || { echo "ERROR: cross is not installed. Run: cargo install cross --git https://github.com/cross-rs/cross"; exit 1; }
+	@echo "cross tool found at: $$(command -v cross)"
+	@echo "Starting cross-compilation for x86_64..."
 	RUSTFLAGS="-C link-arg=-lgcc -Clink-arg=-static-libgcc" \
-		cross build --bin bera-reth --target x86_64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)"
-	@echo "Verifying x86_64 binary exists..."
-	test -f $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/bera-reth
+		cross build --bin bera-reth --target x86_64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)" --verbose
+	@echo "Cross-compilation completed. Verifying binary exists..."
+	@echo "Expected binary location: $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/bera-reth"
+	test -f $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/bera-reth || { echo "ERROR: x86_64 binary not found!"; exit 1; }
+	@echo "x86_64 binary verified successfully"
 
 build-aarch64-unknown-linux-gnu: export JEMALLOC_SYS_WITH_LG_PAGE=16
 build-aarch64-unknown-linux-gnu:
-	@echo "Building aarch64 binary..."
-	@command -v cross >/dev/null 2>&1 || { echo "cross is not installed. Run: cargo install cross --git https://github.com/cross-rs/cross"; exit 1; }
+	@echo "=== Building aarch64 binary ==="
+	@echo "Checking for cross tool..."
+	@command -v cross >/dev/null 2>&1 || { echo "ERROR: cross is not installed. Run: cargo install cross --git https://github.com/cross-rs/cross"; exit 1; }
+	@echo "cross tool found at: $$(command -v cross)"
+	@echo "Starting cross-compilation for aarch64..."
 	RUSTFLAGS="-C link-arg=-lgcc -Clink-arg=-static-libgcc" \
-		cross build --bin bera-reth --target aarch64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)"
-	@echo "Verifying aarch64 binary exists..."
-	test -f $(CARGO_TARGET_DIR)/aarch64-unknown-linux-gnu/$(PROFILE)/bera-reth
+		cross build --bin bera-reth --target aarch64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)" --verbose
+	@echo "Cross-compilation completed. Verifying binary exists..."
+	@echo "Expected binary location: $(CARGO_TARGET_DIR)/aarch64-unknown-linux-gnu/$(PROFILE)/bera-reth"
+	test -f $(CARGO_TARGET_DIR)/aarch64-unknown-linux-gnu/$(PROFILE)/bera-reth || { echo "ERROR: aarch64 binary not found!"; exit 1; }
+	@echo "aarch64 binary verified successfully"
 
 ###############################################################################
 ###                           Tests & Simulation                            ###
