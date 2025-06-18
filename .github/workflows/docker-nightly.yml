@@ -1,0 +1,20 @@
+name: Docker Nightly
+
+on:
+  schedule:
+    # Run at 1:00 AM UTC every day
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  docker-nightly:
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      make-target: docker-build-push-nightly
+      profile: maxperf
+
+  docker-nightly-profiling:
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      make-target: docker-build-push-nightly-profiling
+      profile: profiling

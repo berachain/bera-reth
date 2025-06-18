@@ -40,6 +40,8 @@ cd bera-reth
 
 ## 📦 Building
 
+### Native Build
+
 ```bash
 # Debug build
 cargo build
@@ -49,6 +51,72 @@ cargo build --release
 ```
 
 The binary will be at `target/release/bera-reth`.
+
+### Docker Build
+
+Build Docker images using Makefile targets (following Reth patterns):
+
+```bash
+# Build for local development
+make docker-build-local
+
+# Build and push multi-platform images with git tag
+make docker-build-push
+
+# Build and push with latest tag
+make docker-build-push-latest
+
+# Build and push with git SHA tag
+make docker-build-push-git-sha
+```
+
+#### Docker Build Variables
+
+Override these variables to customize builds:
+
+```bash
+# Custom image name and profile
+make docker-build-local DOCKER_IMAGE_NAME=my-bera-reth PROFILE=release
+
+# Custom features
+make docker-build-push FEATURES="jemalloc asm-keccak"
+```
+
+#### Prerequisites for Multi-Platform Builds
+
+```bash
+# Setup buildx with emulation support
+docker run --privileged --rm tonistiigi/binfmt --install amd64,arm64
+docker buildx create --use --driver docker-container --name cross-builder
+```
+
+#### Automated Docker Builds via GitHub Actions
+
+Docker images are automatically built and published to GitHub Container Registry:
+
+- **Release builds**: Triggered on version tags (`v*`), published to `ghcr.io/berachain/bera-reth:vX.Y.Z`
+- **Nightly builds**: Triggered daily at 1:00 AM UTC, published to `ghcr.io/berachain/bera-reth:nightly` 
+- **Development builds**: Manual trigger via GitHub Actions, tagged with git SHA
+
+**Available image variants:**
+- `latest` - Latest stable release
+- `vX.Y.Z` - Specific version releases  
+- `nightly` - Daily builds with maxperf profile
+- `nightly-profiling` - Daily builds with profiling symbols
+- `{git-sha}` - Development builds for testing
+
+#### Manual Docker Build (Alternative)
+
+```bash
+# Simple single-platform build
+docker build -t bera-reth:latest .
+
+# With build arguments
+docker build -t bera-reth:latest \
+  --build-arg COMMIT=$(git rev-parse HEAD) \
+  --build-arg VERSION=$(git describe --tags) \
+  .
+```
 
 ---
 

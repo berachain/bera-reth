@@ -1,0 +1,17 @@
+# exclude everything
+*
+
+# include source files
+!/src
+!Cargo.lock
+!Cargo.toml
+!rustfmt.toml
+
+# include for vergen constants
+!/.git
+
+# include licenses
+!LICENSE
+
+# include scripts
+!/scripts
