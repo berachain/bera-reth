@@ -3,11 +3,7 @@
 pub mod cli;
 pub mod evm;
 
-use crate::{
-    chainspec::BerachainChainSpec,
-    node::evm::BerachainExecutorBuilder,
-    payload::{BerachainPayloadBuilder, BerachainPayloadTypes},
-};
+use crate::{chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder};
 use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeTypes};
 use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
@@ -16,7 +12,10 @@ use reth_node_builder::{
 };
 use reth_node_ethereum::{
     EthereumAddOns, EthereumEngineValidatorBuilder, EthereumEthApiBuilder, EthereumNode,
-    node::{EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPoolBuilder},
+    node::{
+        EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder,
+        EthereumPoolBuilder,
+    },
 };
 
 /// Type configuration for a regular Berachain node.
@@ -31,7 +30,7 @@ impl BerachainNode {
     ) -> ComponentsBuilder<
         Node,
         EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<BerachainPayloadBuilder>,
+        BasicPayloadServiceBuilder<EthereumPayloadBuilder>,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
@@ -43,19 +42,19 @@ impl BerachainNode {
             .node_types::<Node>()
             .pool(EthereumPoolBuilder::default())
             .executor(BerachainExecutorBuilder)
-            .payload(BasicPayloadServiceBuilder::new(BerachainPayloadBuilder::new()))
+            .payload(BasicPayloadServiceBuilder::default())
             .network(EthereumNetworkBuilder::default())
             .consensus(EthereumConsensusBuilder::default())
     }
 }
 
-// Same as ETH Except we use BerachainChainSpec and BerachainPayloadTypes
+// Same as ETH Except we use BerachainChainSpec
 impl NodeTypes for BerachainNode {
     type Primitives = <EthereumNode as NodeTypes>::Primitives;
     type ChainSpec = BerachainChainSpec;
     type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
     type Storage = <EthereumNode as NodeTypes>::Storage;
-    type Payload = BerachainPayloadTypes;
+    type Payload = <EthereumNode as NodeTypes>::Payload;
 }
 
 impl<N> Node<N> for BerachainNode
@@ -71,12 +70,12 @@ where
     ///   - Validates transactions according to chain rules
     ///   - Provides transactions for block building
     ///
-    /// - **`BasicPayloadServiceBuilder<BerachainPayloadBuilder>`**: Block building and payload
+    /// - **`BasicPayloadServiceBuilder<EthereumPayloadBuilder>`**: Block building and payload
     ///   creation
     ///   - Triggered by Engine API `forkchoice_updated` calls from consensus layer
     ///   - Assembles transactions from pool into block payloads
     ///   - Handles payload building jobs and manages build timeouts
-    ///   - Uses BerachainPayloadBuilder wrapping EthereumPayloadBuilder with custom attributes
+    ///   - Uses standard EthereumPayloadBuilder for block construction
     ///
     /// - **EthereumNetworkBuilder**: P2P networking and peer management
     ///   - Handles block/transaction propagation via devp2p
@@ -95,7 +94,7 @@ where
     type ComponentsBuilder = ComponentsBuilder<
         N,
         EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<BerachainPayloadBuilder>,
+        BasicPayloadServiceBuilder<EthereumPayloadBuilder>,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
