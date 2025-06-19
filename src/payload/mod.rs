@@ -1,3 +1,5 @@
+pub mod builder;
+
 use alloy_eips::eip4895::{Withdrawal, Withdrawals};
 use alloy_primitives::B256;
 use alloy_rpc_types_engine::PayloadId;
@@ -7,6 +9,8 @@ use reth_payload_primitives::{PayloadAttributes, PayloadBuilderAttributes, Paylo
 use reth_primitives::EthPrimitives;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
+
+pub use builder::BerachainPayloadBuilder;
 
 pub const BLS_PUBKEY_LENGTH: usize = 48;
 
