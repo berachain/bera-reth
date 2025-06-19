@@ -37,7 +37,6 @@ reth-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/c
 reth-provider = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-tracing = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
-sha2 = "0.10"
 thiserror = "2.0"
 tracing = "0.1.41"
 
