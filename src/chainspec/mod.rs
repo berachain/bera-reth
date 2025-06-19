@@ -87,18 +87,18 @@ impl EthChainSpec for BerachainChainSpec {
         self.inner.final_paris_total_difficulty()
     }
 
-    fn next_block_base_fee<H>(&self, parent: &H) -> u64
+    fn next_block_base_fee<H>(&self, parent: &H, _: u64) -> u64
     where
         Self: Sized,
         H: BlockHeader,
     {
+        // Note that we use this parent block timestamp to determine whether Prague 1 is active.
+        // This means that we technically start the base_fee changes the block after the fork
+        // block. This is a conscious decision to minimize fork diffs across execution clients.
         let raw = parent
             .next_block_base_fee(self.base_fee_params_at_timestamp(parent.timestamp()))
             .unwrap_or_default();
 
-        // Note that we use this parent block timestamp to determine whether Prague 1 is active.
-        // This means that we technically start the base_fee enforcement the block after the fork
-        // block. This is a conscious decision to minimize fork diffs across execution clients.
         let min_base_fee = if self.is_prague1_active_at_timestamp(parent.timestamp()) {
             PRAGUE1_MIN_BASE_FEE_WEI
         } else {
@@ -511,7 +511,7 @@ mod tests {
         };
 
         // Before Prague1, base fee can go below 1 gwei
-        let next_base_fee = chain_spec.next_block_base_fee(&parent_header);
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
         assert!(next_base_fee < PRAGUE1_MIN_BASE_FEE_WEI);
 
         // Create a parent block at Prague1 activation
@@ -522,7 +522,7 @@ mod tests {
         };
 
         // After Prague1, base fee should be at least 1 gwei
-        let next_base_fee = chain_spec.next_block_base_fee(&parent_header);
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
         assert_eq!(next_base_fee, PRAGUE1_MIN_BASE_FEE_WEI);
     }
 }

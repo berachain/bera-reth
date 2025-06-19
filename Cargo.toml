@@ -13,7 +13,6 @@ clap = { version = "4.5.39", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6"
 jsonrpsee-core = "0.25.1"
-log = "0.4.27"
 reth = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-cli = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
@@ -24,12 +23,9 @@ reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "basefee
 reth-evm = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-node-api = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-rpc = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-tracing = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-trie-db = { git = "https://github.com/rezbera/reth", branch = "with-rose" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 thiserror = "2.0"
 tracing = "0.1.41"
