@@ -8,14 +8,18 @@ license = "MIT OR Apache-2.0"
 alloy-consensus = "1.0.9"
 alloy-eips = "1.0.9"
 alloy-genesis = "1.0.9"
+alloy-primitives = "1.0.9"
 alloy-rpc-types = "1.0.9"
+alloy-rpc-types-engine = "1.0.9"
 clap = { version = "4.5.39", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6"
+hex = { version = "0.4", features = ["serde"] }
 jsonrpsee-core = "0.25.1"
 reth = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-cli = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
+reth-ethereum-engine-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-db = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
@@ -25,8 +29,12 @@ reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "basefee
 reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
+reth-payload-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
+reth-payload-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
+reth-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-tracing = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
+sha2 = "0.10"
 thiserror = "2.0"
 tracing = "0.1.41"
 
