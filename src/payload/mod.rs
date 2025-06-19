@@ -148,7 +148,7 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
     }
 
     if let Some(validator_pubkey) = &attributes.validator_pubkey {
-        hasher.update(&validator_pubkey.0);
+        hasher.update(validator_pubkey.0);
     }
 
     let out = hasher.finalize();

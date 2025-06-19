@@ -20,12 +20,12 @@ reth = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-w
 reth-basic-payload-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-cli = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-ethereum-engine-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-ethereum-payload-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-db = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
+reth-ethereum-engine-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
+reth-ethereum-payload-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-evm = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
 reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
