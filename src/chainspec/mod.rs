@@ -4,8 +4,10 @@ use crate::{
     genesis::BerachainGenesisConfig,
     hardforks::{BerachainHardfork, BerachainHardforks},
 };
-use alloy_consensus::BlockHeader;
-use alloy_eips::eip2124::{ForkFilter, ForkId, Head};
+use alloy_eips::{
+    calc_next_block_base_fee,
+    eip2124::{ForkFilter, ForkId, Head},
+};
 use alloy_genesis::Genesis;
 use derive_more::{Constructor, Into};
 use reth::{
@@ -87,19 +89,26 @@ impl EthChainSpec for BerachainChainSpec {
         self.inner.final_paris_total_difficulty()
     }
 
-    fn next_block_base_fee<H>(&self, parent: &H, _: u64) -> u64
-    where
-        Self: Sized,
-        H: BlockHeader,
-    {
-        // Note that we use this parent block timestamp to determine whether Prague 1 is active.
+    fn next_block_base_fee(
+        &self,
+        parent_gas_used: u64,
+        parent_gas_limit: u64,
+        parent_base_fee_per_gas: u64,
+        parent_timestamp: u64,
+        _target_timestamp: u64,
+    ) -> u64 {
+        // Note that we use the parent block timestamp to determine whether Prague 1 is active.
         // This means that we technically start the base_fee changes the block after the fork
         // block. This is a conscious decision to minimize fork diffs across execution clients.
-        let raw = parent
-            .next_block_base_fee(self.base_fee_params_at_timestamp(parent.timestamp()))
-            .unwrap_or_default();
+        let base_fee_params = self.base_fee_params_at_timestamp(parent_timestamp);
+        let raw = calc_next_block_base_fee(
+            parent_gas_used,
+            parent_gas_limit,
+            parent_base_fee_per_gas,
+            base_fee_params,
+        );
 
-        let min_base_fee = if self.is_prague1_active_at_timestamp(parent.timestamp()) {
+        let min_base_fee = if self.is_prague1_active_at_timestamp(parent_timestamp) {
             PRAGUE1_MIN_BASE_FEE_WEI
         } else {
             DEFAULT_MIN_BASE_FEE_WEI
@@ -511,7 +520,13 @@ mod tests {
         };
 
         // Before Prague1, base fee can go below 1 gwei
-        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
+        let next_base_fee = chain_spec.next_block_base_fee(
+            parent_header.gas_used,
+            parent_header.gas_limit,
+            parent_header.base_fee_per_gas.unwrap_or_default(),
+            parent_header.timestamp,
+            parent_header.timestamp + 12,
+        );
         assert!(next_base_fee < PRAGUE1_MIN_BASE_FEE_WEI);
 
         // Create a parent block at Prague1 activation
@@ -522,7 +537,13 @@ mod tests {
         };
 
         // After Prague1, base fee should be at least 1 gwei
-        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
+        let next_base_fee = chain_spec.next_block_base_fee(
+            parent_header.gas_used,
+            parent_header.gas_limit,
+            parent_header.base_fee_per_gas.unwrap_or_default(),
+            parent_header.timestamp,
+            parent_header.timestamp + 12,
+        );
         assert_eq!(next_base_fee, PRAGUE1_MIN_BASE_FEE_WEI);
     }
 }
