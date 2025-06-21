@@ -65,7 +65,6 @@ RUN TARGET=$(cat /tmp/target.txt) && \
 
 # Use Ubuntu as the release image  
 FROM ubuntu:24.04 AS runtime
-WORKDIR /app
 
 # Install runtime dependencies
 RUN apt-get update && \
