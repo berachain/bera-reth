@@ -231,6 +231,8 @@ impl From<Genesis> for BerachainChainSpec {
                     "Berachain networks require terminal total difficulty of 0 (merge at genesis)"
                 );
             }
+        } else {
+            panic!("Berachain networks require terminal_total_difficulty to be set to 0");
         }
         if let Some(merge_block) = genesis.config.merge_netsplit_block {
             if merge_block != 0 {
@@ -354,6 +356,8 @@ mod tests {
     #[test]
     fn test_chain_spec_default() {
         let chain_spec = BerachainChainSpec::default();
+
+        // Test that default creates a valid chain spec
         assert_eq!(chain_spec.prune_delete_limit(), 20000);
         assert!(chain_spec.deposit_contract().is_none());
     }
@@ -361,6 +365,8 @@ mod tests {
     #[test]
     fn test_base_fee_params() {
         let chain_spec = BerachainChainSpec::default();
+
+        // Test base fee params
         let params = chain_spec.base_fee_params_at_timestamp(0);
         assert_eq!(params.max_change_denominator, 8);
         assert_eq!(params.elasticity_multiplier, 2);
@@ -369,8 +375,11 @@ mod tests {
     #[test]
     fn test_from_genesis() {
         let mut genesis = Genesis::default();
-        genesis.config.cancun_time = Some(0);
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Should create a valid chain spec
         assert_eq!(
             *chain_spec.chain().kind(),
             reth_chainspec::ChainKind::Named(reth_chainspec::NamedChain::Mainnet)
@@ -379,9 +388,11 @@ mod tests {
 
     #[test]
     fn test_base_fee_params_prague1_at_genesis() {
+        // Create genesis with Prague1 active at genesis (time = 0)
         let mut genesis = Genesis::default();
-        genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0);
+        genesis.config.london_block = Some(0); // Enable EIP-1559
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -396,10 +407,12 @@ mod tests {
 
         let chain_spec = BerachainChainSpec::from(genesis);
 
+        // At genesis, should use Berachain's base fee params
         let params = chain_spec.base_fee_params_at_timestamp(0);
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
 
+        // Should still be the same after genesis
         let params = chain_spec.base_fee_params_at_timestamp(1000);
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
@@ -407,9 +420,11 @@ mod tests {
 
     #[test]
     fn test_base_fee_params_prague1_delayed() {
+        // Create genesis with Prague1 activating at timestamp 1000
         let mut genesis = Genesis::default();
-        genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0);
+        genesis.config.london_block = Some(0); // Enable EIP-1559
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -424,14 +439,17 @@ mod tests {
 
         let chain_spec = BerachainChainSpec::from(genesis);
 
+        // Before Prague1, should use standard Ethereum params
         let params = chain_spec.base_fee_params_at_timestamp(999);
         assert_eq!(params.max_change_denominator, 8);
         assert_eq!(params.elasticity_multiplier, 2);
 
+        // At Prague1 activation, should use Berachain params
         let params = chain_spec.base_fee_params_at_timestamp(1000);
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
 
+        // After Prague1, should still use Berachain params
         let params = chain_spec.base_fee_params_at_timestamp(2000);
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
@@ -439,9 +457,11 @@ mod tests {
 
     #[test]
     fn test_base_fee_params_custom_denominator() {
+        // Test with a custom denominator value
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0);
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -463,11 +483,16 @@ mod tests {
 
     #[test]
     fn test_base_fee_params_missing_berachain_config() {
+        // Test fallback when berachain config is missing
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0);
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        // No berachain config in extra_fields
 
         let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Should use default config (Prague1 at time 0, denominator 48)
         let params = chain_spec.base_fee_params_at_timestamp(0);
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
@@ -475,8 +500,10 @@ mod tests {
 
     #[test]
     fn test_prague1_hardfork_activation() {
+        // Test that Prague1 hardfork is properly registered
         let mut genesis = Genesis::default();
-        genesis.config.cancun_time = Some(0);
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -490,6 +517,8 @@ mod tests {
             reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
 
         let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Check Prague1 activation
         assert!(!chain_spec.is_prague1_active_at_timestamp(1499));
         assert!(chain_spec.is_prague1_active_at_timestamp(1500));
         assert!(chain_spec.is_prague1_active_at_timestamp(2000));
@@ -497,9 +526,11 @@ mod tests {
 
     #[test]
     fn test_next_block_base_fee_with_prague1() {
+        // Create genesis with Prague1 at timestamp 1000
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0);
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -514,15 +545,32 @@ mod tests {
 
         let chain_spec = BerachainChainSpec::from(genesis);
 
+        // Create a parent block before Prague1
         let parent_header =
             Header { timestamp: 999, base_fee_per_gas: Some(100_000_000), ..Default::default() };
+
+        // Before Prague1, base fee can go below 1 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
         assert!(next_base_fee < PRAGUE1_MIN_BASE_FEE_WEI);
 
+        // Create a parent block at Prague1 activation
         let parent_header =
             Header { timestamp: 1000, base_fee_per_gas: Some(100_000_000), ..Default::default() };
+
+        // After Prague1, base fee should be at least 1 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
         assert_eq!(next_base_fee, PRAGUE1_MIN_BASE_FEE_WEI);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Berachain networks require terminal_total_difficulty to be set to 0"
+    )]
+    fn test_panic_on_missing_ttd() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        // No terminal_total_difficulty set
+        let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
     #[test]
@@ -586,6 +634,7 @@ mod tests {
     fn test_valid_prague1_after_prague() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.prague_time = Some(1000);
         let extra_fields_json = json!({
             "berachain": {
@@ -606,6 +655,7 @@ mod tests {
     fn test_valid_prague1_same_time_as_prague() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.prague_time = Some(1000);
         let extra_fields_json = json!({
             "berachain": {
@@ -638,6 +688,7 @@ mod tests {
     fn test_panic_on_merge_not_at_genesis() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.merge_netsplit_block = Some(5);
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
