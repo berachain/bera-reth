@@ -196,32 +196,27 @@ impl From<Genesis> for BerachainChainSpec {
 
         for (name, block) in pre_cancun_forks {
             if let Some(block_num) = block {
-                if block_num != 0 {
-                    panic!(
-                        "Berachain networks require {} hardfork at genesis (block 0), got block {}",
-                        name, block_num
-                    );
-                }
+                assert_eq!(
+                    block_num, 0,
+                    "Berachain networks require {name} hardfork at genesis (block 0), got block {block_num}"
+                );
             }
         }
 
         // Shanghai must be at genesis if configured
         if let Some(shanghai_time) = genesis.config.shanghai_time {
-            if shanghai_time != 0 {
-                panic!(
-                    "Berachain networks require Shanghai hardfork at genesis (time = 0), got time {}",
-                    shanghai_time
-                );
-            }
+            assert_eq!(
+                shanghai_time, 0,
+                "Berachain networks require Shanghai hardfork at genesis (time = 0), got time {shanghai_time}"
+            );
         }
 
         // Validate Prague1 comes after Prague if both are configured
-        if let (Some(prague_time), prague1_time) =
-            (genesis.config.prague_time, berachain_genesis_config.prague1.time)
-        {
-            if prague1_time < prague_time {
-                panic!("Prague1 hardfork must activate at or after Prague hardfork");
-            }
+        if let Some(prague_time) = genesis.config.prague_time {
+            assert!(
+                berachain_genesis_config.prague1.time >= prague_time,
+                "Prague1 hardfork must activate at or after Prague hardfork"
+            );
         }
 
         // Berachain networks don't support proof-of-work or non-genesis merge
@@ -235,12 +230,10 @@ impl From<Genesis> for BerachainChainSpec {
             panic!("Berachain networks require terminal_total_difficulty to be set to 0");
         }
         if let Some(merge_block) = genesis.config.merge_netsplit_block {
-            if merge_block != 0 {
-                panic!(
-                    "Berachain networks require merge at genesis (block 0), got block {}",
-                    merge_block
-                );
-            }
+            assert_eq!(
+                merge_block, 0,
+                "Berachain networks require merge at genesis (block 0), got block {merge_block}"
+            );
         }
 
         // Berachain hardforks: all pre-Cancun at genesis, then configurable time-based forks
