@@ -180,14 +180,10 @@ impl From<Genesis> for BerachainChainSpec {
             );
         }
 
-        // Berachain does not support DAO fork
-        if genesis.config.dao_fork_block.is_some() {
-            panic!("Berachain networks do not support the DAO fork");
-        }
-
         // All pre-Cancun forks must be at genesis (block 0)
         let pre_cancun_forks = [
             (EthereumHardfork::Homestead, genesis.config.homestead_block),
+            (EthereumHardfork::Dao, genesis.config.dao_fork_block),
             (EthereumHardfork::Tangerine, genesis.config.eip150_block),
             (EthereumHardfork::SpuriousDragon, genesis.config.eip155_block),
             (EthereumHardfork::Byzantium, genesis.config.byzantium_block),
@@ -254,7 +250,7 @@ impl From<Genesis> for BerachainChainSpec {
         let mut hardforks = vec![
             (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
-            // DAO fork is not supported on Berachain
+            (EthereumHardfork::Dao.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
@@ -701,12 +697,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Berachain networks do not support the DAO fork")]
-    fn test_panic_on_dao_fork_configured() {
+    #[should_panic(
+        expected = "Berachain networks require Dao hardfork at genesis (block 0), got block 5"
+    )]
+    fn test_panic_on_dao_fork_not_at_genesis() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::ZERO);
-        genesis.config.dao_fork_block = Some(0);
+        genesis.config.dao_fork_block = Some(5);
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
 }
