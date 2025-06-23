@@ -174,31 +174,34 @@ impl From<Genesis> for BerachainChainSpec {
 
         // Berachain networks must start with Cancun at genesis
         if genesis.config.cancun_time != Some(0) {
-            panic!("Berachain networks require Cancun hardfork at genesis (time = 0)");
+            panic!(
+                "Berachain networks require {} hardfork at genesis (time = 0)",
+                EthereumHardfork::Cancun
+            );
         }
 
         // All pre-Cancun forks must be at genesis (block 0)
         let pre_cancun_forks = [
-            ("Homestead", genesis.config.homestead_block),
-            ("DAO", genesis.config.dao_fork_block),
-            ("Tangerine", genesis.config.eip150_block),
-            ("SpuriousDragon", genesis.config.eip155_block),
-            ("Byzantium", genesis.config.byzantium_block),
-            ("Constantinople", genesis.config.constantinople_block),
-            ("Petersburg", genesis.config.petersburg_block),
-            ("Istanbul", genesis.config.istanbul_block),
-            ("MuirGlacier", genesis.config.muir_glacier_block),
-            ("Berlin", genesis.config.berlin_block),
-            ("London", genesis.config.london_block),
-            ("ArrowGlacier", genesis.config.arrow_glacier_block),
-            ("GrayGlacier", genesis.config.gray_glacier_block),
+            (EthereumHardfork::Homestead, genesis.config.homestead_block),
+            (EthereumHardfork::Dao, genesis.config.dao_fork_block),
+            (EthereumHardfork::Tangerine, genesis.config.eip150_block),
+            (EthereumHardfork::SpuriousDragon, genesis.config.eip155_block),
+            (EthereumHardfork::Byzantium, genesis.config.byzantium_block),
+            (EthereumHardfork::Constantinople, genesis.config.constantinople_block),
+            (EthereumHardfork::Petersburg, genesis.config.petersburg_block),
+            (EthereumHardfork::Istanbul, genesis.config.istanbul_block),
+            (EthereumHardfork::MuirGlacier, genesis.config.muir_glacier_block),
+            (EthereumHardfork::Berlin, genesis.config.berlin_block),
+            (EthereumHardfork::London, genesis.config.london_block),
+            (EthereumHardfork::ArrowGlacier, genesis.config.arrow_glacier_block),
+            (EthereumHardfork::GrayGlacier, genesis.config.gray_glacier_block),
         ];
 
-        for (name, block) in pre_cancun_forks {
+        for (hardfork, block) in pre_cancun_forks {
             match block {
                 Some(block_num) if block_num != 0 => {
                     panic!(
-                        "Berachain networks require {name} hardfork at genesis (block 0), got block {block_num}"
+                        "Berachain networks require {hardfork} hardfork at genesis (block 0), got block {block_num}"
                     );
                 }
                 _ => {}
@@ -209,7 +212,8 @@ impl From<Genesis> for BerachainChainSpec {
         match genesis.config.shanghai_time {
             Some(shanghai_time) if shanghai_time != 0 => {
                 panic!(
-                    "Berachain networks require Shanghai hardfork at genesis (time = 0), got time {shanghai_time}"
+                    "Berachain networks require {} hardfork at genesis (time = 0), got time {shanghai_time}",
+                    EthereumHardfork::Shanghai
                 );
             }
             _ => {}
