@@ -91,7 +91,7 @@ pr: ## Run all checks that are run in CI for pull requests
 	@echo "2. Checking TOML formatting..."
 	dprint check
 	@echo "3. Running clippy..."
-	cargo clippy --all-targets --all-features -- -D warnings
+	cargo +nightly clippy --all-targets --all-features -- -D warnings
 	@echo "4. Running security audit..."
 	cargo deny check
 	@echo "5. Checking unused dependencies..."
