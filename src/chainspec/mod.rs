@@ -171,91 +171,122 @@ impl ChainSpecParser for BerachainChainSpecParser {
 
 impl From<Genesis> for BerachainChainSpec {
     fn from(genesis: Genesis) -> Self {
-        // Block-based hardforks
-        let block_hardfork_opts = [
-            (EthereumHardfork::Frontier.boxed(), Some(0)),
-            (EthereumHardfork::Homestead.boxed(), genesis.config.homestead_block),
-            (EthereumHardfork::Dao.boxed(), genesis.config.dao_fork_block),
-            (EthereumHardfork::Tangerine.boxed(), genesis.config.eip150_block),
-            (EthereumHardfork::SpuriousDragon.boxed(), genesis.config.eip155_block),
-            (EthereumHardfork::Byzantium.boxed(), genesis.config.byzantium_block),
-            (EthereumHardfork::Constantinople.boxed(), genesis.config.constantinople_block),
-            (EthereumHardfork::Petersburg.boxed(), genesis.config.petersburg_block),
-            (EthereumHardfork::Istanbul.boxed(), genesis.config.istanbul_block),
-            (EthereumHardfork::MuirGlacier.boxed(), genesis.config.muir_glacier_block),
-            (EthereumHardfork::Berlin.boxed(), genesis.config.berlin_block),
-            (EthereumHardfork::London.boxed(), genesis.config.london_block),
-            (EthereumHardfork::ArrowGlacier.boxed(), genesis.config.arrow_glacier_block),
-            (EthereumHardfork::GrayGlacier.boxed(), genesis.config.gray_glacier_block),
-        ];
-        let mut hardforks = block_hardfork_opts
-            .into_iter()
-            .filter_map(|(hardfork, opt)| opt.map(|block| (hardfork, ForkCondition::Block(block))))
-            .collect::<Vec<_>>();
-
-        // We expect no new networks to be configured with the merge, so we ignore the TTD field
-        // and merge netsplit block from external genesis files. All existing networks that have
-        // merged should have a static ChainSpec already (namely mainnet and sepolia).
-        let paris_block_and_final_difficulty =
-            if let Some(ttd) = genesis.config.terminal_total_difficulty {
-                hardforks.push((
-                    EthereumHardfork::Paris.boxed(),
-                    ForkCondition::TTD {
-                        // NOTE: this will not work properly if the merge is not activated at
-                        // genesis, and there is no merge netsplit block
-                        activation_block_number: genesis
-                            .config
-                            .merge_netsplit_block
-                            .unwrap_or_default(),
-                        total_difficulty: ttd,
-                        fork_block: genesis.config.merge_netsplit_block,
-                    },
-                ));
-
-                genesis.config.merge_netsplit_block.map(|block| (block, ttd))
-            } else {
-                None
-            };
-
-        // Time-based hardforks
-        // For the From implementation, we use a default config if parsing fails
-        // This maintains backward compatibility while preventing panics
         let berachain_genesis_config =
             BerachainGenesisConfig::try_from(&genesis.config.extra_fields).unwrap_or_else(|e| {
                 tracing::warn!("Failed to parse berachain genesis config, using defaults: {}", e);
                 BerachainGenesisConfig::default()
             });
 
-        let time_hardfork_opts = [
-            (EthereumHardfork::Shanghai.boxed(), genesis.config.shanghai_time),
-            (EthereumHardfork::Cancun.boxed(), genesis.config.cancun_time),
-            (EthereumHardfork::Prague.boxed(), genesis.config.prague_time),
-            (EthereumHardfork::Osaka.boxed(), genesis.config.osaka_time),
-            (BerachainHardfork::Prague1.boxed(), Some(berachain_genesis_config.prague1.time)),
+        // Berachain networks must start with Cancun at genesis
+        if genesis.config.cancun_time != Some(0) {
+            panic!(
+                "Berachain networks require {} hardfork at genesis (time = 0)",
+                EthereumHardfork::Cancun
+            );
+        }
+
+        // All pre-Cancun forks must be at genesis (block 0)
+        let pre_cancun_forks = [
+            (EthereumHardfork::Homestead, genesis.config.homestead_block),
+            (EthereumHardfork::Dao, genesis.config.dao_fork_block),
+            (EthereumHardfork::Tangerine, genesis.config.eip150_block),
+            (EthereumHardfork::SpuriousDragon, genesis.config.eip155_block),
+            (EthereumHardfork::Byzantium, genesis.config.byzantium_block),
+            (EthereumHardfork::Constantinople, genesis.config.constantinople_block),
+            (EthereumHardfork::Petersburg, genesis.config.petersburg_block),
+            (EthereumHardfork::Istanbul, genesis.config.istanbul_block),
+            (EthereumHardfork::MuirGlacier, genesis.config.muir_glacier_block),
+            (EthereumHardfork::Berlin, genesis.config.berlin_block),
+            (EthereumHardfork::London, genesis.config.london_block),
+            (EthereumHardfork::ArrowGlacier, genesis.config.arrow_glacier_block),
+            (EthereumHardfork::GrayGlacier, genesis.config.gray_glacier_block),
         ];
 
-        let mut time_hardforks = time_hardfork_opts
-            .into_iter()
-            .filter_map(|(hardfork, opt)| {
-                opt.map(|time| (hardfork, ForkCondition::Timestamp(time)))
-            })
-            .collect::<Vec<_>>();
-
-        hardforks.append(&mut time_hardforks);
-
-        // Ordered Hardforks
-        let mainnet_hardforks: ChainHardforks = EthereumHardfork::mainnet().into();
-        let mainnet_order = mainnet_hardforks.forks_iter();
-
-        let mut ordered_hardforks = Vec::with_capacity(hardforks.len());
-        for (hardfork, _) in mainnet_order {
-            if let Some(pos) = hardforks.iter().position(|(e, _)| **e == *hardfork) {
-                ordered_hardforks.push(hardforks.remove(pos));
+        for (hardfork, block) in pre_cancun_forks {
+            match block {
+                Some(block_num) if block_num != 0 => {
+                    panic!(
+                        "Berachain networks require {hardfork} hardfork at genesis (block 0), got block {block_num}"
+                    );
+                }
+                _ => {}
             }
         }
 
-        // append the remaining unknown hardforks to ensure we don't filter any out
-        ordered_hardforks.append(&mut hardforks);
+        // Shanghai must be at genesis if configured
+        match genesis.config.shanghai_time {
+            Some(shanghai_time) if shanghai_time != 0 => {
+                panic!(
+                    "Berachain networks require {} hardfork at genesis (time = 0), got time {shanghai_time}",
+                    EthereumHardfork::Shanghai
+                );
+            }
+            _ => {}
+        }
+
+        // Validate Prague1 comes after Prague if both are configured
+        match (genesis.config.prague_time, berachain_genesis_config.prague1.time) {
+            (Some(prague_time), prague1_time) if prague1_time < prague_time => {
+                panic!("Prague1 hardfork must activate at or after Prague hardfork");
+            }
+            _ => {}
+        }
+
+        // Berachain networks don't support proof-of-work or non-genesis merge
+        if let Some(ttd) = genesis.config.terminal_total_difficulty {
+            if !ttd.is_zero() {
+                panic!(
+                    "Berachain networks require terminal total difficulty of 0 (merge at genesis)"
+                );
+            }
+        } else {
+            panic!("Berachain networks require terminal_total_difficulty to be set to 0");
+        }
+        match genesis.config.merge_netsplit_block {
+            Some(merge_block) if merge_block != 0 => {
+                panic!(
+                    "Berachain networks require merge at genesis (block 0), got block {merge_block}"
+                );
+            }
+            _ => {}
+        }
+
+        // Berachain hardforks: all pre-Cancun at genesis, then configurable time-based forks
+        let mut hardforks = vec![
+            (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Dao.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Constantinople.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Petersburg.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::MuirGlacier.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::ArrowGlacier.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::GrayGlacier.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Paris.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Shanghai.boxed(), ForkCondition::Timestamp(0)),
+            (EthereumHardfork::Cancun.boxed(), ForkCondition::Timestamp(0)),
+        ];
+
+        // Add post-Cancun configurable forks
+        if let Some(prague_time) = genesis.config.prague_time {
+            hardforks
+                .push((EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(prague_time)));
+        }
+        if let Some(osaka_time) = genesis.config.osaka_time {
+            hardforks.push((EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(osaka_time)));
+        }
+        hardforks.push((
+            BerachainHardfork::Prague1.boxed(),
+            ForkCondition::Timestamp(berachain_genesis_config.prague1.time),
+        ));
+
+        let paris_block_and_final_difficulty =
+            Some((0, genesis.config.terminal_total_difficulty.unwrap_or_default()));
 
         // Extract blob parameters directly from blob_schedule
         let blob_params = genesis.config.blob_schedule_blob_params();
@@ -273,7 +304,7 @@ impl From<Genesis> for BerachainChainSpec {
                 topic: b256!("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5"),
             });
 
-        let hardforks = ChainHardforks::new(ordered_hardforks);
+        let hardforks = ChainHardforks::new(hardforks);
 
         // Create base fee parameters based on Prague1 configuration
         let base_fee_params = if berachain_genesis_config.prague1.time == 0 {
@@ -351,7 +382,9 @@ mod tests {
 
     #[test]
     fn test_from_genesis() {
-        let genesis = Genesis::default();
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let chain_spec = BerachainChainSpec::from(genesis);
 
         // Should create a valid chain spec
@@ -366,6 +399,8 @@ mod tests {
         // Create genesis with Prague1 active at genesis (time = 0)
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0); // Enable EIP-1559
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -396,6 +431,8 @@ mod tests {
         // Create genesis with Prague1 activating at timestamp 1000
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0); // Enable EIP-1559
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -431,6 +468,8 @@ mod tests {
         // Test with a custom denominator value
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -455,6 +494,8 @@ mod tests {
         // Test fallback when berachain config is missing
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         // No berachain config in extra_fields
 
         let chain_spec = BerachainChainSpec::from(genesis);
@@ -469,6 +510,8 @@ mod tests {
     fn test_prague1_hardfork_activation() {
         // Test that Prague1 hardfork is properly registered
         let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -494,6 +537,8 @@ mod tests {
         // Create genesis with Prague1 at timestamp 1000
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
+        genesis.config.cancun_time = Some(0); // Required for Berachain
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -509,25 +554,162 @@ mod tests {
         let chain_spec = BerachainChainSpec::from(genesis);
 
         // Create a parent block before Prague1
-        let parent_header = Header {
-            timestamp: 999,
-            base_fee_per_gas: Some(100_000_000), // 0.1 gwei
-            ..Default::default()
-        };
+        let parent_header =
+            Header { timestamp: 999, base_fee_per_gas: Some(100_000_000), ..Default::default() };
 
         // Before Prague1, base fee can go below 1 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
         assert!(next_base_fee.unwrap() < PRAGUE1_MIN_BASE_FEE_WEI);
 
         // Create a parent block at Prague1 activation
-        let parent_header = Header {
-            timestamp: 1000,
-            base_fee_per_gas: Some(100_000_000), // 0.1 gwei
-            ..Default::default()
-        };
+        let parent_header =
+            Header { timestamp: 1000, base_fee_per_gas: Some(100_000_000), ..Default::default() };
 
         // After Prague1, base fee should be at least 1 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
         assert_eq!(next_base_fee.unwrap(), PRAGUE1_MIN_BASE_FEE_WEI);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Berachain networks require terminal_total_difficulty to be set to 0"
+    )]
+    fn test_panic_on_missing_ttd() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        // No terminal_total_difficulty set
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(expected = "Berachain networks require Cancun hardfork at genesis (time = 0)")]
+    fn test_panic_on_missing_cancun() {
+        let genesis = Genesis::default();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(expected = "Berachain networks require Cancun hardfork at genesis (time = 0)")]
+    fn test_panic_on_cancun_not_at_genesis() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(100);
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Berachain networks require London hardfork at genesis (block 0), got block 5"
+    )]
+    fn test_panic_on_london_not_at_genesis() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.london_block = Some(5);
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Berachain networks require Shanghai hardfork at genesis (time = 0), got time 500"
+    )]
+    fn test_panic_on_shanghai_not_at_genesis() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.shanghai_time = Some(500);
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(expected = "Prague1 hardfork must activate at or after Prague hardfork")]
+    fn test_panic_on_prague1_before_prague() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(2000);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    fn test_valid_prague1_after_prague() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        genesis.config.prague_time = Some(1000);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 2000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let chain_spec = BerachainChainSpec::from(genesis);
+        assert!(chain_spec.is_prague1_active_at_timestamp(2000));
+    }
+
+    #[test]
+    fn test_valid_prague1_same_time_as_prague() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        genesis.config.prague_time = Some(1000);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let chain_spec = BerachainChainSpec::from(genesis);
+        assert!(chain_spec.is_prague1_active_at_timestamp(1000));
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Berachain networks require terminal total difficulty of 0 (merge at genesis)"
+    )]
+    fn test_panic_on_non_zero_ttd() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::from(1000));
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(expected = "Berachain networks require merge at genesis (block 0), got block 5")]
+    fn test_panic_on_merge_not_at_genesis() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        genesis.config.merge_netsplit_block = Some(5);
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Berachain networks require Dao hardfork at genesis (block 0), got block 5"
+    )]
+    fn test_panic_on_dao_fork_not_at_genesis() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        genesis.config.dao_fork_block = Some(5);
+        let _chain_spec = BerachainChainSpec::from(genesis);
     }
 }
