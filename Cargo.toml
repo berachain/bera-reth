@@ -5,11 +5,11 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-alloy-consensus = "1.0.9"
-alloy-eips = "1.0.9"
-alloy-genesis = "1.0.9"
-alloy-primitives = "1.0.9"
-alloy-rpc-types = "1.0.9"
+alloy-consensus = "1.0.13"
+alloy-eips = "1.0.13"
+alloy-genesis = "1.0.13"
+alloy-primitives = "1.2.1"
+alloy-rpc-types = "1.0.13"
 clap = { version = "4.5.39", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6"
