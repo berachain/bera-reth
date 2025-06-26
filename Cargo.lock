@@ -1375,6 +1375,7 @@ dependencies = [
  "alloy-consensus",
  "alloy-eips",
  "alloy-genesis",
+ "alloy-primitives",
  "alloy-rpc-types",
  "clap",
  "derive_more",
