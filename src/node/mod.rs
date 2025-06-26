@@ -3,19 +3,18 @@
 pub mod cli;
 pub mod evm;
 
-use crate::{chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder};
+use crate::{
+    chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder,
+    payload::BerachainPayloadBuilder,
+};
 use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeTypes};
 use reth_node_builder::{
-    DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
-    components::{BasicPayloadServiceBuilder, ComponentsBuilder},
+    DebugNode, Node, NodeAdapter, NodeComponentsBuilder, components::ComponentsBuilder,
     rpc::BasicEngineApiBuilder,
 };
 use reth_node_ethereum::{
     EthereumAddOns, EthereumEngineValidatorBuilder, EthereumEthApiBuilder, EthereumNode,
-    node::{
-        EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder,
-        EthereumPoolBuilder,
-    },
+    node::{EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPoolBuilder},
 };
 
 /// Type configuration for a regular Berachain node.
@@ -30,7 +29,7 @@ impl BerachainNode {
     ) -> ComponentsBuilder<
         Node,
         EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<EthereumPayloadBuilder>,
+        BerachainPayloadBuilder,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
@@ -42,7 +41,7 @@ impl BerachainNode {
             .node_types::<Node>()
             .pool(EthereumPoolBuilder::default())
             .executor(BerachainExecutorBuilder)
-            .payload(BasicPayloadServiceBuilder::default())
+            .payload(BerachainPayloadBuilder::default())
             .network(EthereumNetworkBuilder::default())
             .consensus(EthereumConsensusBuilder::default())
     }
@@ -70,12 +69,11 @@ where
     ///   - Validates transactions according to chain rules
     ///   - Provides transactions for block building
     ///
-    /// - **`BasicPayloadServiceBuilder<EthereumPayloadBuilder>`**: Block building and payload
-    ///   creation
+    /// - **BerachainPayloadBuilder**: Block building and payload creation
     ///   - Triggered by Engine API `forkchoice_updated` calls from consensus layer
     ///   - Assembles transactions from pool into block payloads
     ///   - Handles payload building jobs and manages build timeouts
-    ///   - Uses EthereumPayloadBuilder for standard Ethereum block construction
+    ///   - Uses Berachain-specific configuration and timing
     ///
     /// - **EthereumNetworkBuilder**: P2P networking and peer management
     ///   - Handles block/transaction propagation via devp2p
@@ -94,7 +92,7 @@ where
     type ComponentsBuilder = ComponentsBuilder<
         N,
         EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<EthereumPayloadBuilder>,
+        BerachainPayloadBuilder,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
