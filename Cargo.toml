@@ -24,6 +24,7 @@ reth-cli-util = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a1
 reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
 reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
 reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }

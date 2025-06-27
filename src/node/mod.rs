@@ -4,17 +4,20 @@ pub mod cli;
 pub mod evm;
 
 use crate::{
-    chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder,
-    payload::builder::BerachainPayloadBuilder,
+    chainspec::BerachainChainSpec,
+    node::evm::BerachainExecutorBuilder,
+    payload::{
+        BerachainEngineTypes, BerachainEngineValidatorBuilder, BerachainPayloadBuilderBuilder,
+    },
 };
 use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeTypes};
 use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder},
-    rpc::BasicEngineApiBuilder,
+    rpc::{BasicEngineApiBuilder, RpcAddOns},
 };
 use reth_node_ethereum::{
-    EthereumAddOns, EthereumEngineValidatorBuilder, EthereumEthApiBuilder, EthereumNode,
+    EthereumEthApiBuilder, EthereumNode,
     node::{EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPoolBuilder},
 };
 
@@ -30,7 +33,7 @@ impl BerachainNode {
     ) -> ComponentsBuilder<
         Node,
         EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<BerachainPayloadBuilder>,
+        BasicPayloadServiceBuilder<BerachainPayloadBuilderBuilder>,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
@@ -41,8 +44,8 @@ impl BerachainNode {
         ComponentsBuilder::default()
             .node_types::<Node>()
             .pool(EthereumPoolBuilder::default())
-            .executor(BerachainExecutorBuilder)
-            .payload(BasicPayloadServiceBuilder::new(BerachainPayloadBuilder))
+            .executor(BerachainExecutorBuilder::default())
+            .payload(BasicPayloadServiceBuilder::new(BerachainPayloadBuilderBuilder))
             .network(EthereumNetworkBuilder::default())
             .consensus(EthereumConsensusBuilder::default())
     }
@@ -54,8 +57,21 @@ impl NodeTypes for BerachainNode {
     type ChainSpec = BerachainChainSpec;
     type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
     type Storage = <EthereumNode as NodeTypes>::Storage;
-    type Payload = <EthereumNode as NodeTypes>::Payload;
+    type Payload = BerachainEngineTypes;
 }
+
+/// Custom addons configuring RPC types
+///
+///         NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
+//         EthereumEthApiBuilder,
+//         EthereumEngineValidatorBuilder<BerachainChainSpec>,
+//         BasicEngineApiBuilder<EthereumEngineValidatorBuilder<BerachainChainSpec>>,
+pub type BerachainAddOns<N> = RpcAddOns<
+    N,
+    EthereumEthApiBuilder,
+    BerachainEngineValidatorBuilder,
+    BasicEngineApiBuilder<BerachainEngineValidatorBuilder>,
+>;
 
 impl<N> Node<N> for BerachainNode
 where
@@ -94,7 +110,7 @@ where
     type ComponentsBuilder = ComponentsBuilder<
         N,
         EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<BerachainPayloadBuilder>,
+        BasicPayloadServiceBuilder<BerachainPayloadBuilderBuilder>,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
@@ -108,11 +124,8 @@ where
     ///   - Processes `forkchoice_updated` to trigger payload building
     ///   - Handles `new_payload` for block execution and validation
     ///   - Manages consensus-execution layer synchronization
-    type AddOns = EthereumAddOns<
+    type AddOns = BerachainAddOns<
         NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
-        EthereumEthApiBuilder,
-        EthereumEngineValidatorBuilder<BerachainChainSpec>,
-        BasicEngineApiBuilder<EthereumEngineValidatorBuilder<BerachainChainSpec>>,
     >;
 
     fn components_builder(&self) -> Self::ComponentsBuilder {
@@ -120,11 +133,12 @@ where
     }
 
     fn add_ons(&self) -> Self::AddOns {
-        EthereumAddOns::default()
-            .with_engine_validator(EthereumEngineValidatorBuilder::<BerachainChainSpec>::default())
-            .with_engine_api(BasicEngineApiBuilder::<
-                EthereumEngineValidatorBuilder<BerachainChainSpec>,
-            >::default())
+        RpcAddOns::new(
+            EthereumEthApiBuilder,
+            BerachainEngineValidatorBuilder::default(),
+            BasicEngineApiBuilder::default(),
+            Default::default(),
+        )
     }
 }
 

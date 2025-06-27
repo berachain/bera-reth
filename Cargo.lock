@@ -1413,6 +1413,7 @@ dependencies = [
  "hex",
  "jsonrpsee-core",
  "reth",
+ "reth-basic-payload-builder",
  "reth-chainspec",
  "reth-cli",
  "reth-cli-commands",
