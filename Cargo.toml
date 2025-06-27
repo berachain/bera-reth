@@ -5,37 +5,28 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-alloy-consensus = "1.0.9"
-alloy-eips = "1.0.9"
-alloy-genesis = "1.0.9"
-alloy-primitives = "1.0.9"
-alloy-rpc-types = "1.0.9"
-alloy-rpc-types-engine = "1.0.9"
+alloy-consensus = "1.0.13"
+alloy-eips = "1.0.13"
+alloy-genesis = "1.0.13"
+alloy-primitives = "1.2.1"
+alloy-rpc-types = "1.0.13"
 clap = { version = "4.5.39", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6"
-hex = { version = "0.4", features = ["serde"] }
 jsonrpsee-core = "0.25.1"
-reth = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-basic-payload-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-cli = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-db = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-ethereum-engine-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-ethereum-payload-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-evm = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-payload-builder = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-payload-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-primitives = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-provider = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
-reth-tracing = { git = "https://github.com/rezbera/reth", branch = "basefee/centralize-with-rose" }
+reth = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-cli = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-network-peers = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", rev = "07b19553a14fe9c2e6c36a7c3b8b793bbc9c50a7" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 thiserror = "2.0"
 tracing = "0.1.41"
@@ -56,31 +47,3 @@ incremental = false
 inherits = "release"
 debug = "full"
 strip = "none"
-
-[patch.crates-io]
-# alloy-consensus = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-eips = { git = "https://github.com/rezbera/alloy", branch = "BRIP-0002" }
-# alloy-genesis = { git = "https://github.com/rezbera/alloy", branch = "BRIP-0002" }
-# alloy-json-rpc = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-network = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-network-primitives = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-provider = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-pubsub = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-client = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-admin = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-anvil = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-beacon = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-debug = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-engine = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-eth = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-mev = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-trace = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-rpc-types-txpool = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-serde = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-signer = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-signer-local = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-transport = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-transport-http = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-transport-ipc = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
-# alloy-transport-ws = { git = "https://github.com/rezbera/alloy", branch ="BRIP-0002"}
