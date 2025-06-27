@@ -104,10 +104,16 @@ pr: ## Run all checks that are run in CI for pull requests
 
 .PHONY: pr-fix
 pr-fix: ## Auto-fix formatting issues
-	@echo "Auto-fixing formatting issues..."
+	@echo "Auto-fixing formatting and clippy issues..."
 	cargo +nightly fmt --all
 	dprint fmt
-	@echo "Formatting fixed! ✅"
+	@echo "Formatting issues fixed! ✅"
+
+.PHONY: clippy-fix
+clippy-fix: ## Auto-fix clippy issues
+	@echo "Auto-fixing clippy issues..."
+	cargo +nightly clippy --fix --all-targets --all-features -- -D warnings
+	@echo "Clippy issues fixed! ✅"
 
 ###############################################################################
 ###                           Tests & Simulation                            ###

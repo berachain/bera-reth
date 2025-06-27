@@ -1,67 +1,43 @@
-//! Berachain payload builder implementation
+use crate::node::BerachainNode;
+use reth_chainspec::EthChainSpec;
+use reth_ethereum_payload_builder::EthereumBuilderConfig;
+use reth_evm::ConfigureEvm;
+use reth_node_api::FullNodeTypes;
+use reth_node_builder::{BuilderContext, PayloadBuilderConfig, components::PayloadBuilderBuilder};
+use reth_node_types::{PrimitivesTy, TxTy};
+use reth_transaction_pool::{PoolTransaction, TransactionPool};
 
-use crate::chainspec::BerachainChainSpec;
-use reth_basic_payload_builder::{BasicPayloadJobGenerator, BasicPayloadJobGeneratorConfig};
-use reth_node_builder::{BuilderContext, FullNodeTypes, PayloadServiceBuilder};
-use reth_payload_builder::{PayloadBuilderHandle, PayloadBuilderService};
-use reth_provider::CanonStateSubscriptions;
+pub struct BerachainPayloadBuilder;
 
-/// Berachain payload builder configuration
-#[derive(Debug, Clone)]
-pub struct BerachainPayloadBuilderConfig {
-    /// Max time for payload building
-    pub deadline: Option<std::time::Duration>,
-    /// Maximum number of cached payloads
-    pub max_payload_tasks: usize,
-}
-
-impl Default for BerachainPayloadBuilderConfig {
-    fn default() -> Self {
-        Self { deadline: Some(std::time::Duration::from_secs(12)), max_payload_tasks: 3 }
-    }
-}
-
-/// Berachain payload service builder
-#[derive(Debug, Default, Clone)]
-pub struct BerachainPayloadBuilder {
-    config: BerachainPayloadBuilderConfig,
-}
-
-impl BerachainPayloadBuilder {
-    pub fn new(config: BerachainPayloadBuilderConfig) -> Self {
-        Self { config }
-    }
-}
-
-impl<Node, Pool> PayloadServiceBuilder<Node, Pool> for BerachainPayloadBuilder
+impl<Node, Pool, Evm> PayloadBuilderBuilder<Node, Pool, Evm> for BerachainPayloadBuilder
 where
-    Node: FullNodeTypes,
-    Node::Types: NodeTypes<ChainSpec = BerachainChainSpec>,
-    Pool: Clone + Unpin + 'static,
+    Node: FullNodeTypes<Types = BerachainNode>,
+    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TxTy<Node::Types>>>
+        + Unpin
+        + 'static,
+    Evm: ConfigureEvm<
+            Primitives = PrimitivesTy<BerachainNode>,
+            NextBlockEnvCtx = reth_evm::NextBlockEnvAttributes,
+        > + 'static,
 {
-    async fn spawn_payload_service(
+    type PayloadBuilder =
+        reth_ethereum_payload_builder::EthereumPayloadBuilder<Pool, Node::Provider, Evm>;
+
+    async fn build_payload_builder(
         self,
         ctx: &BuilderContext<Node>,
         pool: Pool,
-    ) -> eyre::Result<PayloadBuilderHandle<Node::Types>> {
-        let conf = BasicPayloadJobGeneratorConfig::default()
-            .interval(std::time::Duration::from_secs(1))
-            .deadline(self.config.deadline.unwrap_or(std::time::Duration::from_secs(12)))
-            .max_payload_tasks(self.config.max_payload_tasks);
+        evm_config: Evm,
+    ) -> eyre::Result<Self::PayloadBuilder> {
+        let conf = ctx.payload_builder_config();
+        let chain = ctx.chain_spec().chain();
+        let gas_limit = conf.gas_limit_for(chain);
 
-        let payload_generator = BasicPayloadJobGenerator::with_builder(
+        Ok(reth_ethereum_payload_builder::EthereumPayloadBuilder::new(
             ctx.provider().clone(),
             pool,
-            ctx.task_executor().clone(),
-            conf,
-            ctx.chain_spec().clone(),
-        );
-
-        let (payload_service, payload_builder) =
-            PayloadBuilderService::new(payload_generator, ctx.provider().canonical_state_stream());
-
-        ctx.task_executor().spawn_critical("payload builder service", Box::pin(payload_service));
-
-        Ok(payload_builder)
+            evm_config,
+            EthereumBuilderConfig::new().with_gas_limit(gas_limit),
+        ))
     }
 }
