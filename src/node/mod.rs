@@ -3,19 +3,22 @@
 pub mod cli;
 pub mod evm;
 
-use crate::{chainspec::BerachainChainSpec, node::evm::BerachainExecutorBuilder};
-use reth::api::{BlockTy, FullNodeComponents, FullNodeTypes, NodeTypes};
+use crate::{
+    chainspec::BerachainChainSpec,
+    engine::{
+        BeraEngineTypes, builder::BerachainPayloadBuilder, validator::BeraEngineValidatorBuilder,
+    },
+    node::evm::BerachainExecutorBuilder,
+};
+use reth::api::{FullNodeTypes, NodeTypes};
 use reth_node_builder::{
-    DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
+    Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder},
     rpc::BasicEngineApiBuilder,
 };
 use reth_node_ethereum::{
-    EthereumAddOns, EthereumEngineValidatorBuilder, EthereumEthApiBuilder, EthereumNode,
-    node::{
-        EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPayloadBuilder,
-        EthereumPoolBuilder,
-    },
+    EthereumAddOns, EthereumEthApiBuilder, EthereumNode,
+    node::{EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPoolBuilder},
 };
 
 /// Type configuration for a regular Berachain node.
@@ -24,37 +27,13 @@ use reth_node_ethereum::{
 #[non_exhaustive]
 pub struct BerachainNode;
 
-impl BerachainNode {
-    pub fn components<Node>(
-        &self,
-    ) -> ComponentsBuilder<
-        Node,
-        EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<EthereumPayloadBuilder>,
-        EthereumNetworkBuilder,
-        BerachainExecutorBuilder,
-        EthereumConsensusBuilder,
-    >
-    where
-        Node: FullNodeTypes<Types = Self>,
-    {
-        ComponentsBuilder::default()
-            .node_types::<Node>()
-            .pool(EthereumPoolBuilder::default())
-            .executor(BerachainExecutorBuilder)
-            .payload(BasicPayloadServiceBuilder::default())
-            .network(EthereumNetworkBuilder::default())
-            .consensus(EthereumConsensusBuilder::default())
-    }
-}
-
 // Same as ETH Except we use BerachainChainSpec
 impl NodeTypes for BerachainNode {
     type Primitives = <EthereumNode as NodeTypes>::Primitives;
     type ChainSpec = BerachainChainSpec;
     type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
     type Storage = <EthereumNode as NodeTypes>::Storage;
-    type Payload = <EthereumNode as NodeTypes>::Payload;
+    type Payload = BeraEngineTypes;
 }
 
 impl<N> Node<N> for BerachainNode
@@ -94,7 +73,7 @@ where
     type ComponentsBuilder = ComponentsBuilder<
         N,
         EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<EthereumPayloadBuilder>,
+        BasicPayloadServiceBuilder<BerachainPayloadBuilder>,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
@@ -103,7 +82,7 @@ where
     /// Reth SDK AddOns providing RPC and Engine API interfaces.
     ///
     /// - **EthApiBuilder**: Standard Ethereum JSON-RPC API implementation
-    /// - **EthereumEngineValidatorBuilder**: Validates Engine API requests with Berachain rules
+    /// - **BeraEngineValidatorBuilder**: Validates Engine API requests with Berachain rules
     /// - **BasicEngineApiBuilder**: Handles consensus layer communication via Engine API
     ///   - Processes `forkchoice_updated` to trigger payload building
     ///   - Handles `new_payload` for block execution and validation
@@ -111,33 +90,27 @@ where
     type AddOns = EthereumAddOns<
         NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
         EthereumEthApiBuilder,
-        EthereumEngineValidatorBuilder<BerachainChainSpec>,
-        BasicEngineApiBuilder<EthereumEngineValidatorBuilder<BerachainChainSpec>>,
+        BeraEngineValidatorBuilder,
     >;
 
     fn components_builder(&self) -> Self::ComponentsBuilder {
-        Self::components(self)
+        ComponentsBuilder::default()
+            .node_types()
+            .pool(EthereumPoolBuilder::default())
+            .executor(BerachainExecutorBuilder)
+            .payload(BasicPayloadServiceBuilder::default())
+            .network(EthereumNetworkBuilder::default())
+            .consensus(EthereumConsensusBuilder::default())
     }
 
     fn add_ons(&self) -> Self::AddOns {
         EthereumAddOns::default()
-            .with_engine_validator(EthereumEngineValidatorBuilder::<BerachainChainSpec>::default())
-            .with_engine_api(BasicEngineApiBuilder::<
-                EthereumEngineValidatorBuilder<BerachainChainSpec>,
-            >::default())
+            .with_engine_validator(BeraEngineValidatorBuilder::default())
+            .with_engine_api(BasicEngineApiBuilder::<BeraEngineValidatorBuilder>::default())
     }
 }
 
-impl<N> DebugNode<N> for BerachainNode
-where
-    N: FullNodeComponents<Types = Self>,
-{
-    type RpcBlock = alloy_rpc_types::Block;
-
-    fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> BlockTy<Self> {
-        rpc_block.into_consensus().convert_transactions()
-    }
-}
+// DebugNode implementation removed - not needed for basic node functionality
 
 #[cfg(test)]
 mod tests {

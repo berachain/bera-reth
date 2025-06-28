@@ -27,7 +27,7 @@ fn main() {
         Cli::<BerachainChainSpecParser, RessArgs>::parse().run(async move |builder, ress_args| {
             info!(target: "reth::cli", "Launching Berachain node");
             let NodeHandle { node, node_exit_future } =
-                builder.node(BerachainNode::default()).launch_with_debug_capabilities().await?;
+                builder.node(BerachainNode::default()).launch().await?;
 
             // Install ress subprotocol.
             if ress_args.enabled {
