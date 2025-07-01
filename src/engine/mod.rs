@@ -1,10 +1,21 @@
 //! Berachain engine types and validation
+//!
+//! This module provides Berachain-specific implementations of engine types
+//! required for the Engine API, while maintaining compatibility with Ethereum
+//! through delegation to standard implementations where appropriate.
+//!
+//! Key components:
+//! - [`BerachainEngineTypes`]: Main engine type configuration
+//! - [`payload::BerachainPayloadAttributes`]: Berachain-specific payload attributes
+//! - [`builder::BerachainPayloadServiceBuilder`]: Service builder for payload integration
+//! - [`builder::BerachainPayloadBuilder`]: Actual payload building implementation
+//! - [`validator::BerachainEngineValidator`]: Engine validation logic
 
 pub mod builder;
-mod payload;
+pub mod payload;
 pub mod validator;
 
-use crate::engine::payload::{BeraPayloadAttributes, BeraPayloadBuilderAttributes};
+use crate::engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes};
 use alloy_rpc_types::engine::{
     ExecutionData, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1,
@@ -15,14 +26,21 @@ use reth::{
 };
 use reth_node_ethereum::EthEngineTypes;
 
+/// Berachain engine types configuration
+///
+/// This type defines the engine-specific types used by Berachain, including
+/// payload attributes, built payload types, and execution data formats.
+/// It delegates most functionality to Ethereum types while providing
+/// extension points for Berachain-specific features.
+/// TODO: Add custom execution data types when Berachain-specific logic is needed.
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct BeraEngineTypes;
+pub struct BerachainEngineTypes;
 
-impl PayloadTypes for BeraEngineTypes {
+impl PayloadTypes for BerachainEngineTypes {
     type ExecutionData = <EthEngineTypes as PayloadTypes>::ExecutionData;
     type BuiltPayload = <EthEngineTypes as PayloadTypes>::BuiltPayload;
-    type PayloadAttributes = BeraPayloadAttributes;
-    type PayloadBuilderAttributes = BeraPayloadBuilderAttributes;
+    type PayloadAttributes = BerachainPayloadAttributes;
+    type PayloadBuilderAttributes = BerachainPayloadBuilderAttributes;
 
     fn block_to_payload(
         block: SealedBlock<
@@ -35,7 +53,7 @@ impl PayloadTypes for BeraEngineTypes {
     }
 }
 
-impl EngineTypes for BeraEngineTypes {
+impl EngineTypes for BerachainEngineTypes {
     type ExecutionPayloadEnvelopeV1 = ExecutionPayloadV1;
     type ExecutionPayloadEnvelopeV2 = ExecutionPayloadEnvelopeV2;
     type ExecutionPayloadEnvelopeV3 = ExecutionPayloadEnvelopeV3;

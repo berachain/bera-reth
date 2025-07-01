@@ -1,7 +1,9 @@
-use crate::engine::payload::{BeraPayloadAttributes, BeraPayloadBuilderAttributes};
+use crate::{
+    chainspec::BerachainChainSpec,
+    engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes},
+};
 use reth::{
     api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, PrimitivesTy, TxTy},
-    chainspec::EthereumHardforks,
     primitives::{EthPrimitives, TransactionSigned},
     providers::StateProviderFactory,
     transaction_pool::{PoolTransaction, TransactionPool},
@@ -16,13 +18,19 @@ use reth_evm::{ConfigureEvm, NextBlockEnvAttributes};
 use reth_evm_ethereum::EthEvmConfig;
 use reth_node_builder::{BuilderContext, PayloadBuilderConfig, components::PayloadBuilderBuilder};
 
+/// Service builder for creating Berachain payload builders
+///
+/// This component integrates with the Reth node builder system to provide
+/// a Berachain-specific payload service that handles the conversion between
+/// Berachain payload attributes and Ethereum payload building logic.
 #[derive(Clone, Default, Debug)]
 #[non_exhaustive]
-pub struct BerachainPayloadBuilder;
+pub struct BerachainPayloadServiceBuilder;
 
-impl<Types, Node, Pool, Evm> PayloadBuilderBuilder<Node, Pool, Evm> for BerachainPayloadBuilder
+impl<Types, Node, Pool, Evm> PayloadBuilderBuilder<Node, Pool, Evm>
+    for BerachainPayloadServiceBuilder
 where
-    Types: NodeTypes<ChainSpec: EthereumHardforks, Primitives = EthPrimitives>,
+    Types: NodeTypes<ChainSpec = BerachainChainSpec, Primitives = EthPrimitives>,
     Node: FullNodeTypes<Types = Types>,
     Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TxTy<Node::Types>>>
         + Unpin
@@ -33,11 +41,11 @@ where
         > + 'static,
     Types::Payload: PayloadTypes<
             BuiltPayload = EthBuiltPayload,
-            PayloadAttributes = BeraPayloadAttributes,
-            PayloadBuilderAttributes = BeraPayloadBuilderAttributes,
+            PayloadAttributes = BerachainPayloadAttributes,
+            PayloadBuilderAttributes = BerachainPayloadBuilderAttributes,
         >,
 {
-    type PayloadBuilder = BerachainPayloadBuilderTODO<Pool, Node::Provider, Evm>;
+    type PayloadBuilder = BerachainPayloadBuilder<Pool, Node::Provider, Evm>;
 
     async fn build_payload_builder(
         self,
@@ -49,7 +57,7 @@ where
         let chain = ctx.chain_spec().chain();
         let gas_limit = conf.gas_limit_for(chain);
 
-        Ok(BerachainPayloadBuilderTODO::new(
+        Ok(BerachainPayloadBuilder::new(
             ctx.provider().clone(),
             pool,
             evm_config,
@@ -58,23 +66,26 @@ where
     }
 }
 
-/// =====
-
+/// Berachain-specific payload builder implementation
+///
+/// This payload builder handles Berachain-specific payload attributes while
+/// delegating the actual payload building to the proven Ethereum implementation.
+/// It provides the necessary type conversions and maintains compatibility
+/// with Berachain's chain specification.
 #[derive(Debug, Clone, PartialEq, Eq)]
-// TODO rename
-pub struct BerachainPayloadBuilderTODO<Pool, Client, EvmConfig = EthEvmConfig> {
-    /// Client providing access to node state.
+pub struct BerachainPayloadBuilder<Pool, Client, EvmConfig = EthEvmConfig> {
+    /// Client providing access to node state
     client: Client,
-    /// Transaction pool.
+    /// Transaction pool
     pool: Pool,
-    /// The type responsible for creating the evm.
+    /// The type responsible for creating the evm
     evm_config: EvmConfig,
-    /// Payload builder configuration.
+    /// Payload builder configuration
     builder_config: EthereumBuilderConfig,
 }
 
-impl<Pool, Client, EvmConfig> BerachainPayloadBuilderTODO<Pool, Client, EvmConfig> {
-    /// `EthereumPayloadBuilder` constructor.
+impl<Pool, Client, EvmConfig> BerachainPayloadBuilder<Pool, Client, EvmConfig> {
+    /// Create a new Berachain payload builder
     pub const fn new(
         client: Client,
         pool: Pool,
@@ -85,15 +96,13 @@ impl<Pool, Client, EvmConfig> BerachainPayloadBuilderTODO<Pool, Client, EvmConfi
     }
 }
 
-// Default implementation of [PayloadBuilder] for unit type
-impl<Pool, Client, EvmConfig> PayloadBuilder
-    for BerachainPayloadBuilderTODO<Pool, Client, EvmConfig>
+impl<Pool, Client, EvmConfig> PayloadBuilder for BerachainPayloadBuilder<Pool, Client, EvmConfig>
 where
     EvmConfig: ConfigureEvm<Primitives = EthPrimitives, NextBlockEnvCtx = NextBlockEnvAttributes>,
-    Client: StateProviderFactory + ChainSpecProvider<ChainSpec: EthereumHardforks> + Clone,
+    Client: StateProviderFactory + ChainSpecProvider<ChainSpec = BerachainChainSpec> + Clone,
     Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TransactionSigned>>,
 {
-    type Attributes = BeraPayloadBuilderAttributes;
+    type Attributes = BerachainPayloadBuilderAttributes;
     type BuiltPayload = EthBuiltPayload;
 
     fn try_build(
@@ -102,6 +111,8 @@ where
     ) -> Result<BuildOutcome<EthBuiltPayload>, PayloadBuilderError> {
         let eth_config = PayloadConfig {
             parent_header: args.config.parent_header,
+            // TODO: Convert BerachainPayloadBuilderAttributes to EthPayloadBuilderAttributes for
+            // compatibility
             attributes: EthPayloadBuilderAttributes::new(
                 args.config.attributes.parent,
                 args.config.attributes.to_eth_payload_attributes(),

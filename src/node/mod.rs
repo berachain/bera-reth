@@ -6,7 +6,8 @@ pub mod evm;
 use crate::{
     chainspec::BerachainChainSpec,
     engine::{
-        BeraEngineTypes, builder::BerachainPayloadBuilder, validator::BeraEngineValidatorBuilder,
+        BerachainEngineTypes, builder::BerachainPayloadServiceBuilder,
+        validator::BerachainEngineValidatorBuilder,
     },
     node::evm::BerachainExecutorBuilder,
 };
@@ -34,7 +35,7 @@ impl NodeTypes for BerachainNode {
     type ChainSpec = BerachainChainSpec;
     type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
     type Storage = <EthereumNode as NodeTypes>::Storage;
-    type Payload = BeraEngineTypes;
+    type Payload = BerachainEngineTypes;
 }
 
 impl<N> Node<N> for BerachainNode
@@ -50,12 +51,12 @@ where
     ///   - Validates transactions according to chain rules
     ///   - Provides transactions for block building
     ///
-    /// - **`BasicPayloadServiceBuilder<EthereumPayloadBuilder>`**: Block building and payload
-    ///   creation
+    /// - **`BasicPayloadServiceBuilder<BerachainPayloadServiceBuilder>`**: Block building and
+    ///   payload creation
     ///   - Triggered by Engine API `forkchoice_updated` calls from consensus layer
     ///   - Assembles transactions from pool into block payloads
     ///   - Handles payload building jobs and manages build timeouts
-    ///   - Uses EthereumPayloadBuilder for standard Ethereum block construction
+    ///   - Uses BerachainPayloadBuilder for Berachain-specific block construction
     ///
     /// - **EthereumNetworkBuilder**: P2P networking and peer management
     ///   - Handles block/transaction propagation via devp2p
@@ -74,7 +75,7 @@ where
     type ComponentsBuilder = ComponentsBuilder<
         N,
         EthereumPoolBuilder,
-        BasicPayloadServiceBuilder<BerachainPayloadBuilder>,
+        BasicPayloadServiceBuilder<BerachainPayloadServiceBuilder>,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
         EthereumConsensusBuilder,
@@ -83,7 +84,7 @@ where
     /// Reth SDK AddOns providing RPC and Engine API interfaces.
     ///
     /// - **EthApiBuilder**: Standard Ethereum JSON-RPC API implementation
-    /// - **BeraEngineValidatorBuilder**: Validates Engine API requests with Berachain rules
+    /// - **BerachainEngineValidatorBuilder**: Validates Engine API requests with Berachain rules
     /// - **BasicEngineApiBuilder**: Handles consensus layer communication via Engine API
     ///   - Processes `forkchoice_updated` to trigger payload building
     ///   - Handles `new_payload` for block execution and validation
@@ -91,7 +92,7 @@ where
     type AddOns = EthereumAddOns<
         NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
         EthereumEthApiBuilder,
-        BeraEngineValidatorBuilder,
+        BerachainEngineValidatorBuilder,
     >;
 
     fn components_builder(&self) -> Self::ComponentsBuilder {
@@ -99,15 +100,15 @@ where
             .node_types()
             .pool(EthereumPoolBuilder::default())
             .executor(BerachainExecutorBuilder)
-            .payload(BasicPayloadServiceBuilder::default())
+            .payload(BasicPayloadServiceBuilder::new(BerachainPayloadServiceBuilder::default()))
             .network(EthereumNetworkBuilder::default())
             .consensus(EthereumConsensusBuilder::default())
     }
 
     fn add_ons(&self) -> Self::AddOns {
         EthereumAddOns::default()
-            .with_engine_validator(BeraEngineValidatorBuilder::default())
-            .with_engine_api(BasicEngineApiBuilder::<BeraEngineValidatorBuilder>::default())
+            .with_engine_validator(BerachainEngineValidatorBuilder::default())
+            .with_engine_api(BasicEngineApiBuilder::<BerachainEngineValidatorBuilder>::default())
     }
 }
 
