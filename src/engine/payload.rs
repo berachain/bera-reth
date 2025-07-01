@@ -14,6 +14,7 @@ use std::convert::Infallible;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BeraPayloadAttributes {
+    #[serde(flatten)]
     pub inner: EthPayloadAttributes,
 }
 
