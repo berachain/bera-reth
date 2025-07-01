@@ -2,7 +2,11 @@ use crate::chainspec::BerachainChainSpec;
 use alloy_eips::eip4895::{Withdrawal, Withdrawals};
 use alloy_primitives::{Address, B256};
 use alloy_rpc_types::engine::PayloadId;
-use reth::{api::PayloadAttributes, builder::PayloadBuilderAttributes};
+use reth::{
+    api::PayloadAttributes,
+    builder::{PayloadAttributesBuilder, PayloadBuilderAttributes},
+    chainspec::EthereumHardforks,
+};
 use reth_engine_local::LocalPayloadAttributesBuilder;
 use reth_ethereum_engine_primitives::payload_id;
 use reth_node_ethereum::engine::EthPayloadAttributes;
@@ -112,26 +116,24 @@ impl BeraPayloadBuilderAttributes {
 }
 
 /// Implementation for LocalPayloadAttributesBuilder to build BeraPayloadAttributes
-impl reth::builder::PayloadAttributesBuilder<BeraPayloadAttributes>
+impl PayloadAttributesBuilder<BeraPayloadAttributes>
     for LocalPayloadAttributesBuilder<BerachainChainSpec>
 {
-    fn build(&self, _timestamp: u64) -> BeraPayloadAttributes {
-        // TODO: Fix
+    fn build(&self, timestamp: u64) -> BeraPayloadAttributes {
         BeraPayloadAttributes {
-            // inner: EthPayloadAttributes {
-            //     timestamp,
-            //     prev_randao: B256::random(),
-            //     suggested_fee_recipient: Address::random(),
-            //     withdrawals: self
-            //         .chain_spec
-            //         .is_shanghai_active_at_timestamp(timestamp)
-            //         .then(Default::default),
-            //     parent_beacon_block_root: self
-            //         .chain_spec
-            //         .is_cancun_active_at_timestamp(timestamp)
-            //         .then(B256::random),
-            // },
-            inner: Default::default(),
+            inner: EthPayloadAttributes {
+                timestamp,
+                prev_randao: B256::random(),
+                suggested_fee_recipient: Address::random(),
+                withdrawals: self
+                    .chain_spec
+                    .is_shanghai_active_at_timestamp(timestamp)
+                    .then(Default::default),
+                parent_beacon_block_root: self
+                    .chain_spec
+                    .is_cancun_active_at_timestamp(timestamp)
+                    .then(B256::random),
+            },
         }
     }
 }

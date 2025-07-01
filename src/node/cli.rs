@@ -7,7 +7,6 @@ use reth::{
     CliRunner,
     args::LogArgs,
     beacon_consensus::EthBeaconConsensus,
-    network::EthNetworkPrimitives,
     prometheus_exporter::install_prometheus_recorder,
     version::{LONG_VERSION, SHORT_VERSION},
 };
@@ -89,7 +88,7 @@ where
                 runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode>())
             }
             Commands::Import(command) => {
-                runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode, _, _>(components))
+                runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode, _>(components))
             }
             Commands::ImportEra(command) => {
                 runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode>())
@@ -101,12 +100,9 @@ where
             Commands::Download(command) => {
                 runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode>())
             }
-            Commands::Stage(command) => runner.run_command_until_exit(|ctx| {
-                command.execute::<BerachainNode, _, _, EthNetworkPrimitives>(ctx, components)
-            }),
-            Commands::P2P(command) => {
-                runner.run_until_ctrl_c(command.execute::<EthNetworkPrimitives>())
-            }
+            Commands::Stage(command) => runner
+                .run_command_until_exit(|ctx| command.execute::<BerachainNode, _>(ctx, components)),
+            Commands::P2P(command) => runner.run_until_ctrl_c(command.execute::<BerachainNode>()),
             Commands::Config(command) => runner.run_until_ctrl_c(command.execute()),
             Commands::Debug(_command) => {
                 // Debug commands require special handling and are typically used for

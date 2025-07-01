@@ -90,11 +90,7 @@ impl EthChainSpec for BerachainChainSpec {
         self.inner.final_paris_total_difficulty()
     }
 
-    fn next_block_base_fee<H>(&self, parent: &H, _: u64) -> Option<u64>
-    where
-        Self: Sized,
-        H: BlockHeader,
-    {
+    fn next_block_base_fee(&self, parent: &Self::Header, _: u64) -> Option<u64> {
         // Note that we use this parent block timestamp to determine whether Prague 1 is active.
         // This means that we technically start the base_fee changes the block after the fork
         // block. This is a conscious decision to minimize fork diffs across execution clients.

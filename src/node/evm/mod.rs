@@ -2,11 +2,9 @@
 
 use crate::{chainspec::BerachainChainSpec, node::BerachainNode};
 use alloy_primitives::Bytes;
-use reth_chainspec::ChainSpec;
 use reth_evm::EthEvmFactory;
 use reth_node_builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder};
 use reth_node_ethereum::EthEvmConfig;
-use std::sync::Arc;
 
 /// Default extra data for Berachain blocks
 fn default_extra_data() -> String {
