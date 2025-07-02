@@ -7,3 +7,4 @@ pub mod engine;
 pub mod genesis;
 pub mod hardforks;
 pub mod node;
+pub mod transaction;

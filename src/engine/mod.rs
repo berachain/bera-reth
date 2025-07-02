@@ -6,7 +6,7 @@
 //!
 //! Key components:
 //! - [`BerachainEngineTypes`]: Main engine type configuration
-//! - [`payload::BerachainPayloadAttributes`]: Berachain-specific payload attributes
+//! - [`BerachainPayloadAttributes`]: Berachain-specific payload attributes
 //! - [`builder::BerachainPayloadServiceBuilder`]: Service builder for payload integration
 //! - [`builder::BerachainPayloadBuilder`]: Actual payload building implementation
 //! - [`validator::BerachainEngineValidator`]: Engine validation logic
