@@ -17,6 +17,7 @@ derive_more = "2.0.1"
 eyre = "0.6"
 jsonrpsee-core = "0.25.1"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "fcf58cb5acc2825e7c046f6741e90a8c5dab7847" }
+reth-codecs = { git = "https://github.com/paradigmxyz/reth", rev = "fcf58cb5acc2825e7c046f6741e90a8c5dab7847" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "fcf58cb5acc2825e7c046f6741e90a8c5dab7847" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", rev = "fcf58cb5acc2825e7c046f6741e90a8c5dab7847" }
 reth-cli = { git = "https://github.com/paradigmxyz/reth", rev = "fcf58cb5acc2825e7c046f6741e90a8c5dab7847" }
@@ -82,3 +83,4 @@ reth-node-ethereum = { path = "../reth/crates/ethereum/node" }
 reth-payload-primitives = { path = "../reth/crates/payload/primitives" }
 reth-primitives-traits = { path = "../reth/crates/primitives-traits" }
 reth-tracing = { path = "../reth/crates/tracing" }
+reth-codecs = { path = "../reth/crates/storage/codecs" }

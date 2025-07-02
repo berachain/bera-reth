@@ -1,10 +1,14 @@
-use alloy_consensus::{Transaction, TxEnvelope};
+use alloy_consensus::{
+    Transaction, TxEnvelope, crypto::RecoveryError, transaction::SignerRecoverable,
+};
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
     eip7702::SignedAuthorization,
 };
-use alloy_primitives::{Address, B256, Bytes, ChainId, TxKind, U256, bytes::BufMut};
+use alloy_primitives::{Address, B256, Bytes, ChainId, TxHash, TxKind, U256, bytes::BufMut};
+use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
+use reth_primitives_traits::{InMemorySize, SignedTransaction, serde_bincode_compat::RlpBincode};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -109,6 +113,41 @@ impl Typed2718 for PoLTx {
     }
 }
 
+impl Encodable for PoLTx {
+    fn encode(&self, out: &mut dyn BufMut) {
+        todo!()
+    }
+}
+
+impl Decodable for PoLTx {
+    fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        todo!()
+    }
+}
+
+impl InMemorySize for PoLTx {
+    fn size(&self) -> usize {
+        todo!()
+    }
+}
+
+impl SignerRecoverable for PoLTx {
+    fn recover_signer(&self) -> Result<Address, RecoveryError> {
+        todo!()
+    }
+
+    fn recover_signer_unchecked(&self) -> Result<Address, RecoveryError> {
+        todo!()
+    }
+}
+
+impl SignedTransaction for PoLTx {
+    fn tx_hash(&self) -> &TxHash {
+        // /Users/rezbera/Code/reth/crates/primitives-traits/src/transaction/signed.rs
+        todo!()
+    }
+}
+
 #[derive(Debug, Clone, alloy_consensus::TransactionEnvelope)]
 #[envelope(tx_type_name = TxTypeCustom)]
 #[allow(clippy::large_enum_variant)]
@@ -120,4 +159,58 @@ pub enum BerachainTxEnvelope {
     /// Your 0-gas system transaction
     #[envelope(ty = 190)] // equivalent to 0xBE
     SystemRewards(PoLTx),
+}
+
+impl InMemorySize for BerachainTxEnvelope {
+    fn size(&self) -> usize {
+        todo!()
+    }
+}
+
+impl SignerRecoverable for BerachainTxEnvelope {
+    fn recover_signer(&self) -> Result<Address, RecoveryError> {
+        todo!()
+    }
+
+    fn recover_signer_unchecked(&self) -> Result<Address, RecoveryError> {
+        todo!()
+    }
+}
+
+impl SignedTransaction for BerachainTxEnvelope {
+    fn tx_hash(&self) -> &TxHash {
+        match self {
+            Self::Ethereum(tx) => tx.tx_hash(),
+            Self::SystemRewards(tx) => tx.tx_hash(),
+        }
+    }
+}
+
+impl RlpBincode for BerachainTxEnvelope {}
+impl RlpBincode for PoLTx {}
+
+impl reth_codecs::Compact for BerachainTxEnvelope {
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: BufMut + AsMut<[u8]>,
+    {
+        todo!()
+    }
+
+    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
+        todo!()
+    }
+}
+
+impl reth_codecs::Compact for PoLTx {
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: BufMut + AsMut<[u8]>,
+    {
+        todo!()
+    }
+
+    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
+        todo!()
+    }
 }
