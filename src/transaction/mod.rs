@@ -1,18 +1,27 @@
 use alloy_consensus::{
-    EthereumTxEnvelope, Transaction, TxEip4844Variant, TxEnvelope, crypto::RecoveryError,
-    transaction::SignerRecoverable,
+    Transaction, TxEnvelope,
+    crypto::RecoveryError,
+    transaction::{Recovered, SignerRecoverable},
 };
 use alloy_eips::{
-    Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
-    eip4844::BlobTransactionSidecar, eip7702::SignedAuthorization,
+    Decodable2718, Encodable2718, Typed2718,
+    eip2718::Eip2718Result,
+    eip2930::AccessList,
+    eip4844::{BlobTransactionValidationError, env_settings::KzgSettings},
+    eip7594::BlobTransactionSidecarVariant,
+    eip7702::SignedAuthorization,
 };
 use alloy_primitives::{Address, B256, Bytes, ChainId, TxHash, TxKind, U256, bytes::BufMut};
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
-use reth::revm::context::TxEnv;
+use reth::{
+    revm::context::TxEnv,
+    transaction_pool::{EthPoolTransaction, PoolTransaction},
+};
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{InMemorySize, SignedTransaction, serde_bincode_compat::RlpBincode};
 use serde::Deserialize;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PoLTx {
@@ -227,5 +236,95 @@ impl FromRecoveredTx<PoLTx> for TxEnv {
 impl FromTxWithEncoded<PoLTx> for TxEnv {
     fn from_encoded_tx(tx: &PoLTx, sender: Address, _encoded: Bytes) -> Self {
         todo!()
+    }
+}
+
+impl FromRecoveredTx<BerachainTxEnvelope> for TxEnv {
+    fn from_recovered_tx(tx: &BerachainTxEnvelope, sender: Address) -> Self {
+        match tx {
+            BerachainTxEnvelope::Ethereum(tx) => Self::from_recovered_tx(tx, sender),
+            BerachainTxEnvelope::SystemRewards(tx) => Self::from_recovered_tx(tx, sender),
+        }
+    }
+}
+
+impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
+    fn from_encoded_tx(tx: &BerachainTxEnvelope, sender: Address, encoded: Bytes) -> Self {
+        match tx {
+            BerachainTxEnvelope::Ethereum(tx) => Self::from_encoded_tx(tx, sender, encoded),
+            BerachainTxEnvelope::SystemRewards(tx) => Self::from_encoded_tx(tx, sender, encoded),
+        }
+    }
+}
+
+impl PoolTransaction for BerachainTxEnvelope {
+    type TryFromConsensusError = String;
+    type Consensus = BerachainTxEnvelope;
+    type Pooled = BerachainTxEnvelope;
+
+    fn hash(&self) -> &TxHash {
+        self.tx_hash()
+    }
+
+    fn sender(&self) -> Address {
+        todo!("Implement sender recovery")
+    }
+
+    fn sender_ref(&self) -> &Address {
+        todo!("Implement sender reference")
+    }
+
+    fn cost(&self) -> &U256 {
+        todo!("Implement transaction cost calculation")
+    }
+
+    fn encoded_length(&self) -> usize {
+        self.size()
+    }
+
+    fn try_from_consensus(
+        tx: Recovered<Self::Consensus>,
+    ) -> Result<Self, Self::TryFromConsensusError> {
+        Ok(tx.into_inner())
+    }
+
+    fn into_consensus(self) -> Recovered<Self::Consensus> {
+        todo!("Convert to consensus transaction")
+    }
+
+    fn from_pooled(pooled: Recovered<Self::Pooled>) -> Self {
+        pooled.into_inner()
+    }
+
+    fn try_into_pooled(self) -> Result<Recovered<Self::Pooled>, Self::TryFromConsensusError> {
+        todo!("Convert to pooled transaction")
+    }
+}
+
+impl EthPoolTransaction for BerachainTxEnvelope {
+    fn take_blob(&mut self) -> reth::transaction_pool::EthBlobTransactionSidecar {
+        reth::transaction_pool::EthBlobTransactionSidecar::None
+    }
+
+    fn try_into_pooled_eip4844(
+        self,
+        _sidecar: Arc<BlobTransactionSidecarVariant>,
+    ) -> Option<Recovered<Self::Pooled>> {
+        None
+    }
+
+    fn try_from_eip4844(
+        _tx: Recovered<Self::Consensus>,
+        _sidecar: BlobTransactionSidecarVariant,
+    ) -> Option<Self> {
+        None
+    }
+
+    fn validate_blob(
+        &self,
+        _sidecar: &BlobTransactionSidecarVariant,
+        _settings: &alloy_eips::eip4844::KzgSettings,
+    ) -> Result<(), BlobTransactionValidationError> {
+        Err(BlobTransactionValidationError::NotBlobTransaction(self.ty()))
     }
 }

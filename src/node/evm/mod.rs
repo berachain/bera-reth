@@ -3,7 +3,6 @@
 mod alloy;
 mod assembler;
 mod config;
-mod env;
 mod executor;
 
 use crate::{

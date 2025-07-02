@@ -10,6 +10,7 @@ use crate::{
         validator::BerachainEngineValidatorBuilder,
     },
     node::evm::BerachainExecutorBuilder,
+    pool::BerachainPoolBuilder,
     primitives::BerachainPrimitives,
 };
 use reth::api::{BlockTy, FullNodeTypes, NodeTypes};
@@ -75,7 +76,7 @@ where
     ///   - Manages fork choice and canonical chain determination
     type ComponentsBuilder = ComponentsBuilder<
         N,
-        EthereumPoolBuilder,
+        BerachainPoolBuilder,
         BasicPayloadServiceBuilder<BerachainPayloadServiceBuilder>,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
@@ -99,7 +100,7 @@ where
     fn components_builder(&self) -> Self::ComponentsBuilder {
         ComponentsBuilder::default()
             .node_types()
-            .pool(EthereumPoolBuilder::default())
+            .pool(BerachainPoolBuilder::default())
             .executor(BerachainExecutorBuilder)
             .payload(BasicPayloadServiceBuilder::new(BerachainPayloadServiceBuilder::default()))
             .network(EthereumNetworkBuilder::default())
