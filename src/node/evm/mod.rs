@@ -34,7 +34,7 @@ where
     Node: FullNodeTypes<Types = BerachainNode>,
 {
     /// The EVM configuration type that will be built
-    type EVM = BerachainEvmConfig<BerachainChainSpec, EthEvmFactory>;
+    type EVM = BerachainEvmConfig;
 
     /// Builds standard Ethereum EVM config with Berachain chain spec
     async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
