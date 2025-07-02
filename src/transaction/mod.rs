@@ -3,110 +3,115 @@ use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
     eip7702::SignedAuthorization,
 };
-use alloy_primitives::{B256, Bytes, ChainId, TxKind, U256, bytes::BufMut};
+use alloy_primitives::{Address, B256, Bytes, ChainId, TxKind, U256, bytes::BufMut};
 use jsonrpsee_core::Serialize;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
-pub struct PoLTx {}
+pub struct PoLTx {
+    #[serde(with = "alloy_serde::quantity", rename = "gas", alias = "gasLimit")]
+    pub gas_limit: u64,
+    pub to: Address,
+    pub input: Bytes,
+}
 impl Transaction for PoLTx {
     fn chain_id(&self) -> Option<ChainId> {
-        todo!()
+        // Same as Op Deposit Tx
+        None
     }
 
     fn nonce(&self) -> u64 {
-        todo!()
+        // Same as Op Deposit Tx
+        0u64
     }
 
     fn gas_limit(&self) -> u64 {
-        todo!()
+        self.gas_limit
     }
 
     fn gas_price(&self) -> Option<u128> {
-        todo!()
+        None
     }
 
     fn max_fee_per_gas(&self) -> u128 {
-        todo!()
+        0
     }
 
     fn max_priority_fee_per_gas(&self) -> Option<u128> {
-        todo!()
+        None
     }
 
     fn max_fee_per_blob_gas(&self) -> Option<u128> {
-        todo!()
+        None
     }
 
     fn priority_fee_or_price(&self) -> u128 {
-        todo!()
+        0
     }
 
-    fn effective_gas_price(&self, base_fee: Option<u64>) -> u128 {
-        todo!()
+    fn effective_gas_price(&self, _base_fee: Option<u64>) -> u128 {
+        0
     }
 
     fn is_dynamic_fee(&self) -> bool {
-        todo!()
+        false
     }
 
     fn kind(&self) -> TxKind {
-        todo!()
+        TxKind::Call(self.to)
     }
 
     fn is_create(&self) -> bool {
-        todo!()
+        false
     }
 
     fn value(&self) -> U256 {
-        todo!()
+        U256::from(0)
     }
 
     fn input(&self) -> &Bytes {
-        todo!()
+        &self.input
     }
 
     fn access_list(&self) -> Option<&AccessList> {
-        todo!()
+        None
     }
 
     fn blob_versioned_hashes(&self) -> Option<&[B256]> {
-        todo!()
+        None
     }
 
     fn authorization_list(&self) -> Option<&[SignedAuthorization]> {
+        None
+    }
+}
+impl Encodable2718 for PoLTx {
+    fn encode_2718_len(&self) -> usize {
+        todo!()
+    }
+
+    fn encode_2718(&self, _out: &mut dyn BufMut) {
         todo!()
     }
 }
-
 impl Decodable2718 for PoLTx {
-    fn typed_decode(ty: u8, buf: &mut &[u8]) -> Eip2718Result<Self> {
+    fn typed_decode(_ty: u8, _buf: &mut &[u8]) -> Eip2718Result<Self> {
         todo!()
     }
 
-    fn fallback_decode(buf: &mut &[u8]) -> Eip2718Result<Self> {
+    fn fallback_decode(_buf: &mut &[u8]) -> Eip2718Result<Self> {
         todo!()
     }
 }
-
 impl Typed2718 for PoLTx {
     fn ty(&self) -> u8 {
         todo!()
     }
 }
 
-impl Encodable2718 for PoLTx {
-    fn encode_2718_len(&self) -> usize {
-        todo!()
-    }
-
-    fn encode_2718(&self, out: &mut dyn BufMut) {
-        todo!()
-    }
-}
-
 #[derive(Debug, Clone, alloy_consensus::TransactionEnvelope)]
 #[envelope(tx_type_name = TxTypeCustom)]
+#[allow(clippy::large_enum_variant)]
 pub enum BerachainTxEnvelope {
     /// Existing Ethereum transactions (purely additive)
     #[envelope(flatten)]
