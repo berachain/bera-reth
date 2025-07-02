@@ -1,10 +1,13 @@
 use crate::{
     chainspec::BerachainChainSpec,
-    engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes},
+    engine::payload::{
+        BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
+    },
+    primitives::BerachainPrimitives,
+    transaction::BerachainTxEnvelope,
 };
 use reth::{
     api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, PrimitivesTy, TxTy},
-    primitives::{EthPrimitives, TransactionSigned},
     providers::StateProviderFactory,
     transaction_pool::{PoolTransaction, TransactionPool},
 };
@@ -13,7 +16,7 @@ use reth_basic_payload_builder::{
 };
 use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_ethereum_engine_primitives::{EthBuiltPayload, EthPayloadBuilderAttributes};
-use reth_ethereum_payload_builder::{EthereumBuilderConfig, default_ethereum_payload};
+use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_evm::{ConfigureEvm, NextBlockEnvAttributes};
 use reth_evm_ethereum::EthEvmConfig;
 use reth_node_builder::{BuilderContext, PayloadBuilderConfig, components::PayloadBuilderBuilder};
@@ -30,7 +33,7 @@ pub struct BerachainPayloadServiceBuilder;
 impl<Types, Node, Pool, Evm> PayloadBuilderBuilder<Node, Pool, Evm>
     for BerachainPayloadServiceBuilder
 where
-    Types: NodeTypes<ChainSpec = BerachainChainSpec, Primitives = EthPrimitives>,
+    Types: NodeTypes<ChainSpec = BerachainChainSpec, Primitives = BerachainPrimitives>,
     Node: FullNodeTypes<Types = Types>,
     Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TxTy<Node::Types>>>
         + Unpin
@@ -40,7 +43,7 @@ where
             NextBlockEnvCtx = reth_evm::NextBlockEnvAttributes,
         > + 'static,
     Types::Payload: PayloadTypes<
-            BuiltPayload = EthBuiltPayload,
+            BuiltPayload = BerachainBuiltPayload,
             PayloadAttributes = BerachainPayloadAttributes,
             PayloadBuilderAttributes = BerachainPayloadBuilderAttributes,
         >,
@@ -98,17 +101,18 @@ impl<Pool, Client, EvmConfig> BerachainPayloadBuilder<Pool, Client, EvmConfig> {
 
 impl<Pool, Client, EvmConfig> PayloadBuilder for BerachainPayloadBuilder<Pool, Client, EvmConfig>
 where
-    EvmConfig: ConfigureEvm<Primitives = EthPrimitives, NextBlockEnvCtx = NextBlockEnvAttributes>,
+    EvmConfig:
+        ConfigureEvm<Primitives = BerachainPrimitives, NextBlockEnvCtx = NextBlockEnvAttributes>,
     Client: StateProviderFactory + ChainSpecProvider<ChainSpec = BerachainChainSpec> + Clone,
-    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TransactionSigned>>,
+    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = BerachainTxEnvelope>>,
 {
     type Attributes = BerachainPayloadBuilderAttributes;
-    type BuiltPayload = EthBuiltPayload;
+    type BuiltPayload = BerachainBuiltPayload;
 
     fn try_build(
         &self,
-        args: BuildArguments<Self::Attributes, EthBuiltPayload>,
-    ) -> Result<BuildOutcome<EthBuiltPayload>, PayloadBuilderError> {
+        args: BuildArguments<Self::Attributes, BerachainBuiltPayload>,
+    ) -> Result<BuildOutcome<BerachainBuiltPayload>, PayloadBuilderError> {
         let eth_config = PayloadConfig {
             parent_header: args.config.parent_header,
             // TODO: Convert BerachainPayloadBuilderAttributes to EthPayloadBuilderAttributes for
@@ -126,14 +130,15 @@ where
             best_payload: args.best_payload,
         };
 
-        default_ethereum_payload(
-            self.evm_config.clone(),
-            self.client.clone(),
-            self.pool.clone(),
-            self.builder_config.clone(),
-            eth_args,
-            |attributes| self.pool.best_transactions_with_attributes(attributes),
-        )
+        todo!()
+        // default_ethereum_payload(
+        //     self.evm_config.clone(),
+        //     self.client.clone(),
+        //     self.pool.clone(),
+        //     self.builder_config.clone(),
+        //     eth_args,
+        //     |attributes| self.pool.best_transactions_with_attributes(attributes),
+        // )
     }
 
     fn on_missing_payload(
@@ -150,7 +155,7 @@ where
     fn build_empty_payload(
         &self,
         config: PayloadConfig<Self::Attributes>,
-    ) -> Result<EthBuiltPayload, PayloadBuilderError> {
+    ) -> Result<BerachainBuiltPayload, PayloadBuilderError> {
         let eth_config = PayloadConfig {
             parent_header: config.parent_header,
             attributes: EthPayloadBuilderAttributes::new(
@@ -159,18 +164,19 @@ where
             ),
         };
 
-        let args: BuildArguments<EthPayloadBuilderAttributes, EthBuiltPayload> =
+        let args: BuildArguments<EthPayloadBuilderAttributes, BerachainBuiltPayload> =
             BuildArguments::new(Default::default(), eth_config, Default::default(), None);
 
-        default_ethereum_payload(
-            self.evm_config.clone(),
-            self.client.clone(),
-            self.pool.clone(),
-            self.builder_config.clone(),
-            args,
-            |attributes| self.pool.best_transactions_with_attributes(attributes),
-        )?
-        .into_payload()
-        .ok_or_else(|| PayloadBuilderError::MissingPayload)
+        todo!()
+        // default_ethereum_payload(
+        //     self.evm_config.clone(),
+        //     self.client.clone(),
+        //     self.pool.clone(),
+        //     self.builder_config.clone(),
+        //     args,
+        //     |attributes| self.pool.best_transactions_with_attributes(attributes),
+        // )?
+        // .into_payload()
+        // .ok_or_else(|| PayloadBuilderError::MissingPayload)
     }
 }

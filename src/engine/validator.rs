@@ -1,10 +1,13 @@
 //! Berachain engine validation components
 
-use crate::{chainspec::BerachainChainSpec, engine::payload::BerachainPayloadAttributes};
+use crate::{
+    chainspec::BerachainChainSpec,
+    engine::payload::BerachainPayloadAttributes,
+    primitives::{BerachainPrimitives, Block},
+};
 use alloy_rpc_types::engine::ExecutionData;
 use reth_engine_primitives::{EngineTypes, EngineValidator, PayloadValidator};
 use reth_ethereum_payload_builder::EthereumExecutionPayloadValidator;
-use reth_ethereum_primitives::{Block, EthPrimitives};
 use reth_node_api::{AddOnsContext, FullNodeComponents, NodeTypes, PayloadTypes};
 use reth_node_builder::rpc::EngineValidatorBuilder;
 use reth_payload_primitives::{
@@ -90,7 +93,7 @@ where
             ChainSpec = BerachainChainSpec,
             Payload: EngineTypes<ExecutionData = ExecutionData>
                          + PayloadTypes<PayloadAttributes = BerachainPayloadAttributes>,
-            Primitives = EthPrimitives,
+            Primitives = BerachainPrimitives,
         >,
     Node: FullNodeComponents<Types = Types>,
 {

@@ -1,15 +1,20 @@
-use crate::chainspec::BerachainChainSpec;
-use alloy_eips::eip4895::{Withdrawal, Withdrawals};
-use alloy_primitives::{Address, B256};
-use alloy_rpc_types::engine::PayloadId;
+use crate::{chainspec::BerachainChainSpec, primitives::BerachainPrimitives};
+use alloy_eips::{
+    eip4895::{Withdrawal, Withdrawals},
+    eip7685::Requests,
+};
+use alloy_primitives::{Address, B256, U256};
+use alloy_rpc_types::engine::{ExecutionData, PayloadId};
 use reth::{
     api::PayloadAttributes,
     builder::{PayloadAttributesBuilder, PayloadBuilderAttributes},
     chainspec::EthereumHardforks,
 };
 use reth_engine_local::LocalPayloadAttributesBuilder;
-use reth_ethereum_engine_primitives::payload_id;
+use reth_ethereum_engine_primitives::{EthBuiltPayload, payload_id};
 use reth_node_ethereum::engine::EthPayloadAttributes;
+use reth_payload_primitives::{BuiltPayload, PayloadTypes};
+use reth_primitives_traits::{NodePrimitives, SealedBlock};
 use std::convert::Infallible;
 
 /// Berachain-specific payload attributes
@@ -152,6 +157,43 @@ impl PayloadAttributesBuilder<BerachainPayloadAttributes>
                     .then(B256::random),
             },
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BerachainPayloadTypes;
+
+impl PayloadTypes for BerachainPayloadTypes {
+    type ExecutionData = ExecutionData;
+    type BuiltPayload = BerachainBuiltPayload;
+    type PayloadAttributes = BerachainPayloadAttributes;
+    type PayloadBuilderAttributes = BerachainPayloadBuilderAttributes;
+
+    fn block_to_payload(
+        block: SealedBlock<
+            <<Self::BuiltPayload as BuiltPayload>::Primitives as NodePrimitives>::Block,
+        >,
+    ) -> Self::ExecutionData {
+        todo!()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BerachainBuiltPayload;
+
+impl BuiltPayload for BerachainBuiltPayload {
+    type Primitives = BerachainPrimitives;
+
+    fn block(&self) -> &SealedBlock<<Self::Primitives as NodePrimitives>::Block> {
+        todo!()
+    }
+
+    fn fees(&self) -> U256 {
+        todo!()
+    }
+
+    fn requests(&self) -> Option<Requests> {
+        todo!()
     }
 }
 

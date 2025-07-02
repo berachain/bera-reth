@@ -15,7 +15,12 @@ pub mod builder;
 pub mod payload;
 pub mod validator;
 
-use crate::engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes};
+use crate::engine::{
+    builder::BerachainPayloadBuilder,
+    payload::{
+        BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
+    },
+};
 use alloy_rpc_types::engine::{
     ExecutionData, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1,
@@ -38,7 +43,9 @@ pub struct BerachainEngineTypes;
 
 impl PayloadTypes for BerachainEngineTypes {
     type ExecutionData = <EthEngineTypes as PayloadTypes>::ExecutionData;
-    type BuiltPayload = <EthEngineTypes as PayloadTypes>::BuiltPayload;
+
+    // TODO: Change the built payload type to Berachain use BerachainPrimitives
+    type BuiltPayload = BerachainBuiltPayload;
     type PayloadAttributes = BerachainPayloadAttributes;
     type PayloadBuilderAttributes = BerachainPayloadBuilderAttributes;
 
@@ -59,4 +66,34 @@ impl EngineTypes for BerachainEngineTypes {
     type ExecutionPayloadEnvelopeV3 = ExecutionPayloadEnvelopeV3;
     type ExecutionPayloadEnvelopeV4 = ExecutionPayloadEnvelopeV4;
     type ExecutionPayloadEnvelopeV5 = ExecutionPayloadEnvelopeV5;
+}
+
+impl From<BerachainBuiltPayload> for ExecutionPayloadV1 {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        todo!()
+    }
+}
+
+impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV2 {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        todo!()
+    }
+}
+
+impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV3 {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        todo!()
+    }
+}
+
+impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV4 {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        todo!()
+    }
+}
+
+impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        todo!()
+    }
 }

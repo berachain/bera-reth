@@ -10,6 +10,7 @@ use crate::{
         validator::BerachainEngineValidatorBuilder,
     },
     node::evm::BerachainExecutorBuilder,
+    primitives::BerachainPrimitives,
 };
 use reth::api::{BlockTy, FullNodeTypes, NodeTypes};
 use reth_node_api::FullNodeComponents;
@@ -31,7 +32,7 @@ pub struct BerachainNode;
 
 // Same as ETH Except we use BerachainChainSpec
 impl NodeTypes for BerachainNode {
-    type Primitives = <EthereumNode as NodeTypes>::Primitives;
+    type Primitives = BerachainPrimitives;
     type ChainSpec = BerachainChainSpec;
     type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
     type Storage = <EthereumNode as NodeTypes>::Storage;
@@ -119,7 +120,8 @@ where
     type RpcBlock = alloy_rpc_types::Block;
 
     fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> BlockTy<Self> {
-        rpc_block.into_consensus().convert_transactions()
+        // rpc_block.into_consensus().convert_transactions()
+        todo!()
     }
 }
 

@@ -1,6 +1,15 @@
 //! Berachain EVM executor using standard Ethereum execution with Berachain chain spec
 
-use crate::{chainspec::BerachainChainSpec, node::BerachainNode};
+mod alloy;
+mod assembler;
+mod config;
+mod env;
+mod executor;
+
+use crate::{
+    chainspec::BerachainChainSpec,
+    node::{BerachainNode, evm::config::BerachainEvmConfig},
+};
 use alloy_primitives::Bytes;
 use reth_evm::EthEvmFactory;
 use reth_node_builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder};
@@ -25,13 +34,14 @@ where
     Node: FullNodeTypes<Types = BerachainNode>,
 {
     /// The EVM configuration type that will be built
-    type EVM = EthEvmConfig<BerachainChainSpec, EthEvmFactory>;
+    type EVM = BerachainEvmConfig<BerachainChainSpec, EthEvmFactory>;
 
     /// Builds standard Ethereum EVM config with Berachain chain spec
     async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
-        let evm_config =
-            EthEvmConfig::new_with_evm_factory(ctx.chain_spec(), EthEvmFactory::default())
-                .with_extra_data(default_extra_data_bytes());
-        Ok(evm_config)
+        // let evm_config =
+        //     EthEvmConfig::new_with_evm_factory(ctx.chain_spec(), EthEvmFactory::default())
+        //         .with_extra_data(default_extra_data_bytes());
+        // Ok(evm_config)
+        todo!()
     }
 }

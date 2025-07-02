@@ -1,13 +1,16 @@
 use alloy_consensus::{
-    Transaction, TxEnvelope, crypto::RecoveryError, transaction::SignerRecoverable,
+    EthereumTxEnvelope, Transaction, TxEip4844Variant, TxEnvelope, crypto::RecoveryError,
+    transaction::SignerRecoverable,
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
-    eip7702::SignedAuthorization,
+    eip4844::BlobTransactionSidecar, eip7702::SignedAuthorization,
 };
 use alloy_primitives::{Address, B256, Bytes, ChainId, TxHash, TxKind, U256, bytes::BufMut};
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
+use reth::revm::context::TxEnv;
+use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{InMemorySize, SignedTransaction, serde_bincode_compat::RlpBincode};
 use serde::Deserialize;
 
@@ -211,6 +214,18 @@ impl reth_codecs::Compact for PoLTx {
     }
 
     fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
+        todo!()
+    }
+}
+
+impl FromRecoveredTx<PoLTx> for TxEnv {
+    fn from_recovered_tx(tx: &PoLTx, caller: Address) -> Self {
+        todo!()
+    }
+}
+
+impl FromTxWithEncoded<PoLTx> for TxEnv {
+    fn from_encoded_tx(tx: &PoLTx, sender: Address, _encoded: Bytes) -> Self {
         todo!()
     }
 }
