@@ -10,4 +10,5 @@ pub mod hardforks;
 pub mod node;
 pub mod pool;
 pub mod primitives;
+pub mod rpc;
 pub mod transaction;

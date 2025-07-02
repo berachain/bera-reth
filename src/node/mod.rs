@@ -13,12 +13,17 @@ use crate::{
     node::evm::BerachainExecutorBuilder,
     pool::BerachainPoolBuilder,
     primitives::BerachainPrimitives,
+    rpc::{BerachainAddOns, BerachainEthApiBuilder},
+    transaction::BerachainTxEnvelope,
 };
+use alloy_consensus::error::ValueError;
+use alloy_rpc_types::TransactionRequest;
 use reth::{
     api::{BlockTy, FullNodeTypes, NodeTypes},
     beacon_consensus::EthBeaconConsensus,
     chainspec::EthereumHardforks,
     consensus::{ConsensusError, FullConsensus},
+    rpc::compat::TryIntoSimTx,
 };
 use reth_chainspec::EthChainSpec;
 use reth_ethereum_primitives::EthPrimitives;
@@ -47,6 +52,12 @@ impl NodeTypes for BerachainNode {
     type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
     type Storage = <EthereumNode as NodeTypes>::Storage;
     type Payload = BerachainEngineTypes;
+}
+
+impl TryIntoSimTx<BerachainTxEnvelope> for TransactionRequest {
+    fn try_into_sim_tx(self) -> Result<BerachainTxEnvelope, ValueError<Self>> {
+        todo!()
+    }
 }
 
 impl<N> Node<N> for BerachainNode
@@ -100,9 +111,9 @@ where
     ///   - Processes `forkchoice_updated` to trigger payload building
     ///   - Handles `new_payload` for block execution and validation
     ///   - Manages consensus-execution layer synchronization
-    type AddOns = EthereumAddOns<
+    type AddOns = BerachainAddOns<
         NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
-        EthereumEthApiBuilder,
+        BerachainEthApiBuilder,
         BerachainEngineValidatorBuilder,
     >;
 
@@ -117,7 +128,7 @@ where
     }
 
     fn add_ons(&self) -> Self::AddOns {
-        EthereumAddOns::default()
+        BerachainAddOns::default()
             .with_engine_validator(BerachainEngineValidatorBuilder::default())
             .with_engine_api(BasicEngineApiBuilder::<BerachainEngineValidatorBuilder>::default())
     }
