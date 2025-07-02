@@ -328,3 +328,40 @@ impl EthPoolTransaction for BerachainTxEnvelope {
         Err(BlobTransactionValidationError::NotBlobTransaction(self.ty()))
     }
 }
+
+// Lossy conversion - only converts Ethereum transactions, fails for Berachain-specific ones
+// impl TryFrom<BerachainTxEnvelope> for
+// alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844Variant> {     type Error =
+// &'static str;
+//
+//     fn try_from(berachain_tx: BerachainTxEnvelope) -> Result<Self, Self::Error> {
+//         match berachain_tx {
+//             BerachainTxEnvelope::Ethereum(eth_tx) => {
+//                 // Convert TxEnvelope to EthereumTxEnvelope
+//                 Ok(eth_tx.into())
+//             }
+//             BerachainTxEnvelope::SystemRewards(_) => {
+//                 Err("Cannot convert Berachain SystemRewards transaction to EthereumTxEnvelope")
+//             }
+//         }
+//     }
+// }
+
+// Enable FromConsensusTx for transactions that can be converted
+impl From<BerachainTxEnvelope>
+    for alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844Variant>
+{
+    fn from(berachain_tx: BerachainTxEnvelope) -> Self {
+        match berachain_tx {
+            BerachainTxEnvelope::Ethereum(eth_tx) => eth_tx.into(),
+            BerachainTxEnvelope::SystemRewards(_) => {
+                // This is a lossy conversion - we lose the SystemRewards transaction
+                // In a real implementation, you might want to:
+                // 1. Log a warning about losing transaction data
+                // 2. Create a dummy Ethereum transaction
+                // 3. Or panic if this case should never happen in your RPC layer
+                todo!("Handle conversion of SystemRewards to Ethereum transaction")
+            }
+        }
+    }
+}
