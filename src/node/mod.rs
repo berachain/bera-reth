@@ -5,6 +5,7 @@ pub mod evm;
 
 use crate::{
     chainspec::BerachainChainSpec,
+    consensus::BerachainConsensusBuilder,
     engine::{
         BerachainEngineTypes, builder::BerachainPayloadServiceBuilder,
         validator::BerachainEngineValidatorBuilder,
@@ -13,17 +14,25 @@ use crate::{
     pool::BerachainPoolBuilder,
     primitives::BerachainPrimitives,
 };
-use reth::api::{BlockTy, FullNodeTypes, NodeTypes};
+use reth::{
+    api::{BlockTy, FullNodeTypes, NodeTypes},
+    beacon_consensus::EthBeaconConsensus,
+    chainspec::EthereumHardforks,
+    consensus::{ConsensusError, FullConsensus},
+};
+use reth_chainspec::EthChainSpec;
+use reth_ethereum_primitives::EthPrimitives;
 use reth_node_api::FullNodeComponents;
 use reth_node_builder::{
-    DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
-    components::{BasicPayloadServiceBuilder, ComponentsBuilder},
+    BuilderContext, DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
+    components::{BasicPayloadServiceBuilder, ComponentsBuilder, ConsensusBuilder},
     rpc::BasicEngineApiBuilder,
 };
 use reth_node_ethereum::{
     EthereumAddOns, EthereumEthApiBuilder, EthereumNode,
     node::{EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPoolBuilder},
 };
+use std::sync::Arc;
 
 /// Type configuration for a regular Berachain node.
 
@@ -80,7 +89,7 @@ where
         BasicPayloadServiceBuilder<BerachainPayloadServiceBuilder>,
         EthereumNetworkBuilder,
         BerachainExecutorBuilder,
-        EthereumConsensusBuilder,
+        BerachainConsensusBuilder,
     >;
 
     /// Reth SDK AddOns providing RPC and Engine API interfaces.
@@ -104,7 +113,7 @@ where
             .executor(BerachainExecutorBuilder)
             .payload(BasicPayloadServiceBuilder::new(BerachainPayloadServiceBuilder::default()))
             .network(EthereumNetworkBuilder::default())
-            .consensus(EthereumConsensusBuilder::default())
+            .consensus(BerachainConsensusBuilder::default())
     }
 
     fn add_ons(&self) -> Self::AddOns {

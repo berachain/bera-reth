@@ -21,7 +21,7 @@ use reth::{
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{InMemorySize, SignedTransaction, serde_bincode_compat::RlpBincode};
 use serde::Deserialize;
-use std::sync::Arc;
+use std::{convert::Infallible, sync::Arc};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PoLTx {
@@ -258,9 +258,27 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
 }
 
 impl PoolTransaction for BerachainTxEnvelope {
-    type TryFromConsensusError = String;
+    type TryFromConsensusError = Infallible;
     type Consensus = BerachainTxEnvelope;
     type Pooled = BerachainTxEnvelope;
+
+    fn try_from_consensus(
+        tx: Recovered<Self::Consensus>,
+    ) -> Result<Self, Self::TryFromConsensusError> {
+        Ok(tx.into_inner())
+    }
+
+    fn into_consensus(self) -> Recovered<Self::Consensus> {
+        todo!("Convert to consensus transaction")
+    }
+
+    fn from_pooled(pooled: Recovered<Self::Pooled>) -> Self {
+        pooled.into_inner()
+    }
+
+    fn try_into_pooled(self) -> Result<Recovered<Self::Pooled>, Self::TryFromConsensusError> {
+        todo!("Convert to pooled transaction")
+    }
 
     fn hash(&self) -> &TxHash {
         self.tx_hash()
@@ -280,24 +298,6 @@ impl PoolTransaction for BerachainTxEnvelope {
 
     fn encoded_length(&self) -> usize {
         self.size()
-    }
-
-    fn try_from_consensus(
-        tx: Recovered<Self::Consensus>,
-    ) -> Result<Self, Self::TryFromConsensusError> {
-        Ok(tx.into_inner())
-    }
-
-    fn into_consensus(self) -> Recovered<Self::Consensus> {
-        todo!("Convert to consensus transaction")
-    }
-
-    fn from_pooled(pooled: Recovered<Self::Pooled>) -> Self {
-        pooled.into_inner()
-    }
-
-    fn try_into_pooled(self) -> Result<Recovered<Self::Pooled>, Self::TryFromConsensusError> {
-        todo!("Convert to pooled transaction")
     }
 }
 
@@ -323,7 +323,7 @@ impl EthPoolTransaction for BerachainTxEnvelope {
     fn validate_blob(
         &self,
         _sidecar: &BlobTransactionSidecarVariant,
-        _settings: &alloy_eips::eip4844::KzgSettings,
+        _settings: &KzgSettings,
     ) -> Result<(), BlobTransactionValidationError> {
         Err(BlobTransactionValidationError::NotBlobTransaction(self.ty()))
     }
