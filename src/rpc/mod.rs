@@ -1,21 +1,18 @@
 use crate::{
-    chainspec::BerachainChainSpec, engine::builder::BerachainPayloadBuilder,
-    primitives::BerachainPrimitives, transaction::BerachainTxEnvelope,
+    chainspec::BerachainChainSpec, engine::BerachainEngineTypes, primitives::BerachainPrimitives,
+    transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::transaction::TransactionInfo;
-use alloy_network::Ethereum;
 use alloy_rpc_types::engine::ExecutionData;
 use reth::{
     api::FullNodeComponents,
     chainspec::EthereumHardforks,
-    providers::{BlockReader, ProviderError, ReceiptProvider},
+    providers::{ProviderError, ReceiptProvider},
     revm::context::TxEnv,
     rpc::{
         api::eth::FromEvmError,
         compat::TxInfoMapper,
-        eth::{
-            EthApiFor, EthApiTypes, FullEthApiServer, RpcNodeCore, helpers::types::EthRpcConverter,
-        },
+        eth::{EthApiFor, RpcNodeCore},
         server_types::eth::EthApiError,
     },
 };
@@ -26,9 +23,8 @@ use reth_node_builder::rpc::{
     BasicEngineApiBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
     EthApiBuilder, EthApiCtx, RethRpcAddOns, RpcAddOns, RpcHandle,
 };
-use reth_optimism_rpc::{OpEthApi, eth::transaction::OpTxInfoMapper};
-use reth_payload_primitives::PayloadTypes;
-use std::{fmt, future::Future};
+use reth_optimism_rpc::eth::transaction::OpTxInfoMapper;
+use std::future::Future;
 
 /// Builds [`BerachainEthApi`] for Berachain.
 #[derive(Debug, Default)]
@@ -40,7 +36,7 @@ where
             Types: NodeTypes<
                 ChainSpec = BerachainChainSpec,
                 Primitives = BerachainPrimitives,
-                // Payload = BerachainTxEnvelope,
+                Payload = BerachainEngineTypes,
             >,
             Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
         >,
