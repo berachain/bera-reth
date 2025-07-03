@@ -20,24 +20,18 @@ use alloy_consensus::error::ValueError;
 use alloy_rpc_types::TransactionRequest;
 use reth::{
     api::{BlockTy, FullNodeTypes, NodeTypes},
-    beacon_consensus::EthBeaconConsensus,
     chainspec::EthereumHardforks,
-    consensus::{ConsensusError, FullConsensus},
+    consensus::FullConsensus,
+    providers::EthStorage,
     rpc::compat::TryIntoSimTx,
 };
-use reth_chainspec::EthChainSpec;
-use reth_ethereum_primitives::EthPrimitives;
 use reth_node_api::FullNodeComponents;
 use reth_node_builder::{
-    BuilderContext, DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
+    DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder, ConsensusBuilder},
-    rpc::BasicEngineApiBuilder,
+    rpc::{BasicEngineApiBuilder, RpcAddOns},
 };
-use reth_node_ethereum::{
-    EthereumAddOns, EthereumEthApiBuilder, EthereumNode,
-    node::{EthereumConsensusBuilder, EthereumNetworkBuilder, EthereumPoolBuilder},
-};
-use std::sync::Arc;
+use reth_node_ethereum::{EthereumEthApiBuilder, EthereumNode, node::EthereumNetworkBuilder};
 
 /// Type configuration for a regular Berachain node.
 
@@ -50,7 +44,7 @@ impl NodeTypes for BerachainNode {
     type Primitives = BerachainPrimitives;
     type ChainSpec = BerachainChainSpec;
     type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
-    type Storage = <EthereumNode as NodeTypes>::Storage;
+    type Storage = EthStorage<BerachainTxEnvelope>;
     type Payload = BerachainEngineTypes;
 }
 

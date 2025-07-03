@@ -1,4 +1,4 @@
-use crate::{primitives::Block, transaction::BerachainTxEnvelope};
+use crate::{primitives::BerachainBlock, transaction::BerachainTxEnvelope};
 use reth_evm::{
     block::{BlockExecutionError, BlockExecutorFactory},
     eth::EthBlockExecutionCtx,
@@ -16,7 +16,7 @@ where
             Receipt: Receipt,
         >,
 {
-    type Block = Block;
+    type Block = BerachainBlock;
 
     fn assemble_block(
         &self,

@@ -3,7 +3,7 @@
 use crate::{
     chainspec::BerachainChainSpec,
     engine::payload::BerachainPayloadAttributes,
-    primitives::{BerachainPrimitives, Block},
+    primitives::{BerachainBlock, BerachainPrimitives},
 };
 use alloy_rpc_types::engine::ExecutionData;
 use reth_engine_primitives::{EngineTypes, EngineValidator, PayloadValidator};
@@ -36,7 +36,7 @@ impl BerachainEngineValidator {
 }
 
 impl PayloadValidator for BerachainEngineValidator {
-    type Block = Block;
+    type Block = BerachainBlock;
     type ExecutionData = ExecutionData;
 
     fn ensure_well_formed_payload(

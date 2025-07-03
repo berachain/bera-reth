@@ -2,12 +2,14 @@ use crate::{
     chainspec::BerachainChainSpec, node::evm::assembler::BerachainAssembler,
     primitives::BerachainPrimitives,
 };
+use alloy_primitives::Bytes;
 use reth_evm::{
     ConfigureEvm, EthEvmFactory, EvmEnvFor, ExecutionCtxFor, NextBlockEnvAttributes,
-    eth::{receipt_builder::AlloyReceiptBuilder, spec::EthSpec},
+    eth::{EthBlockExecutorFactory, receipt_builder::AlloyReceiptBuilder, spec::EthSpec},
 };
+use reth_evm_ethereum::{EthBlockAssembler, EthEvmConfig, RethReceiptBuilder};
 use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
-use std::{convert::Infallible, fmt::Debug};
+use std::{convert::Infallible, fmt::Debug, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct BerachainEvmConfig<
@@ -22,6 +24,13 @@ pub struct BerachainEvmConfig<
     pub spec: Spec,
     /// EVM factory.
     pub evm_factory: EvmFactory,
+}
+
+impl<ChainSpec, EvmFactory> BerachainEvmConfig<ChainSpec, EvmFactory> {
+    /// Creates a new Ethereum EVM configuration with the given chain spec and EVM factory.
+    pub fn new_with_evm_factory(chain_spec: Arc<ChainSpec>, evm_factory: EvmFactory) -> Self {
+        todo!()
+    }
 }
 
 impl ConfigureEvm for BerachainEvmConfig {

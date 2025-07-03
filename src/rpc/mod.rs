@@ -37,7 +37,7 @@ where
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
-    type EthApi = EthApiFor<N>;
+    type EthApi = BerachainEthApi;
 
     fn build_eth_api(
         self,

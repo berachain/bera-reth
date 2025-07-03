@@ -1,5 +1,5 @@
 use alloy_consensus::{
-    Transaction, TxEnvelope,
+    Signed, Transaction, TxEnvelope,
     crypto::RecoveryError,
     transaction::{Recovered, SignerRecoverable},
 };
@@ -15,9 +15,11 @@ use alloy_primitives::{Address, B256, Bytes, ChainId, TxHash, TxKind, U256, byte
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
 use reth::{
+    providers::errors::db::DatabaseError,
     revm::context::TxEnv,
     transaction_pool::{EthPoolTransaction, PoolTransaction},
 };
+use reth_db::table::{Compress, Decompress};
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{InMemorySize, SignedTransaction, serde_bincode_compat::RlpBincode};
 use serde::Deserialize;
@@ -167,10 +169,24 @@ pub enum BerachainTxEnvelope {
     /// Existing Ethereum transactions (purely additive)
     #[envelope(flatten)]
     Ethereum(TxEnvelope),
+    // /// Your 0-gas system transaction
+    // #[envelope(ty = 190)] // equivalent to 0xBE
+    // SystemRewards(PoLTx),
+}
 
-    /// Your 0-gas system transaction
-    #[envelope(ty = 190)] // equivalent to 0xBE
-    SystemRewards(PoLTx),
+// impl Compress + Decompress + Serialize
+impl Compress for BerachainTxEnvelope {
+    type Compressed = Vec<u8>;
+
+    fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
+        todo!()
+    }
+}
+
+impl Decompress for BerachainTxEnvelope {
+    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
+        todo!()
+    }
 }
 
 impl InMemorySize for BerachainTxEnvelope {
@@ -191,10 +207,7 @@ impl SignerRecoverable for BerachainTxEnvelope {
 
 impl SignedTransaction for BerachainTxEnvelope {
     fn tx_hash(&self) -> &TxHash {
-        match self {
-            Self::Ethereum(tx) => tx.tx_hash(),
-            Self::SystemRewards(tx) => tx.tx_hash(),
-        }
+        todo!()
     }
 }
 
@@ -241,19 +254,13 @@ impl FromTxWithEncoded<PoLTx> for TxEnv {
 
 impl FromRecoveredTx<BerachainTxEnvelope> for TxEnv {
     fn from_recovered_tx(tx: &BerachainTxEnvelope, sender: Address) -> Self {
-        match tx {
-            BerachainTxEnvelope::Ethereum(tx) => Self::from_recovered_tx(tx, sender),
-            BerachainTxEnvelope::SystemRewards(tx) => Self::from_recovered_tx(tx, sender),
-        }
+        todo!()
     }
 }
 
 impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
     fn from_encoded_tx(tx: &BerachainTxEnvelope, sender: Address, encoded: Bytes) -> Self {
-        match tx {
-            BerachainTxEnvelope::Ethereum(tx) => Self::from_encoded_tx(tx, sender, encoded),
-            BerachainTxEnvelope::SystemRewards(tx) => Self::from_encoded_tx(tx, sender, encoded),
-        }
+        todo!()
     }
 }
 
@@ -329,6 +336,12 @@ impl EthPoolTransaction for BerachainTxEnvelope {
     }
 }
 
+impl<T> From<Signed<T>> for BerachainTxEnvelope {
+    fn from(value: Signed<T>) -> Self {
+        todo!()
+    }
+}
+
 // Lossy conversion - only converts Ethereum transactions, fails for Berachain-specific ones
 // impl TryFrom<BerachainTxEnvelope> for
 // alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844Variant> {     type Error =
@@ -352,16 +365,6 @@ impl From<BerachainTxEnvelope>
     for alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844Variant>
 {
     fn from(berachain_tx: BerachainTxEnvelope) -> Self {
-        match berachain_tx {
-            BerachainTxEnvelope::Ethereum(eth_tx) => eth_tx.into(),
-            BerachainTxEnvelope::SystemRewards(_) => {
-                // This is a lossy conversion - we lose the SystemRewards transaction
-                // In a real implementation, you might want to:
-                // 1. Log a warning about losing transaction data
-                // 2. Create a dummy Ethereum transaction
-                // 3. Or panic if this case should never happen in your RPC layer
-                todo!("Handle conversion of SystemRewards to Ethereum transaction")
-            }
-        }
+        todo!()
     }
 }

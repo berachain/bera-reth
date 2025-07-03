@@ -1,6 +1,6 @@
 use crate::{
     chainspec::{BerachainChainSpec, BerachainChainSpecParser},
-    node::BerachainNode,
+    node::{BerachainNode, evm::config::BerachainEvmConfig},
 };
 use clap::Parser;
 use reth::{
@@ -73,7 +73,7 @@ where
 
         let components = |spec: Arc<C::ChainSpec>| {
             (
-                EthEvmConfig::new_with_evm_factory(spec.clone(), EthEvmFactory::default()),
+                BerachainEvmConfig::new_with_evm_factory(spec.clone(), EthEvmFactory::default()),
                 EthBeaconConsensus::new(spec),
             )
         };
@@ -87,9 +87,9 @@ where
             Commands::InitState(command) => {
                 runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode>())
             }
-            Commands::Import(command) => {
-                runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode, _>(components))
-            }
+            // Commands::Import(command) => {
+            //     runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode, _>(components))
+            // }
             Commands::ImportEra(command) => {
                 runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode>())
             }
@@ -100,8 +100,9 @@ where
             Commands::Download(command) => {
                 runner.run_blocking_until_ctrl_c(command.execute::<BerachainNode>())
             }
-            Commands::Stage(command) => runner
-                .run_command_until_exit(|ctx| command.execute::<BerachainNode, _>(ctx, components)),
+            // Commands::Stage(command) => runner
+            //     .run_command_until_exit(|ctx| command.execute::<BerachainNode, _>(ctx,
+            // components)),
             Commands::P2P(command) => runner.run_until_ctrl_c(command.execute::<BerachainNode>()),
             Commands::Config(command) => runner.run_until_ctrl_c(command.execute()),
             Commands::Debug(_command) => {
@@ -116,6 +117,7 @@ where
                 runner.run_command_until_exit(|ctx| command.execute::<BerachainNode>(ctx))
             }
             Commands::Prune(command) => runner.run_until_ctrl_c(command.execute::<BerachainNode>()),
+            Commands::Import(_) | Commands::Stage(_) => todo!(),
         }
     }
     /// Initializes tracing with the configured options.

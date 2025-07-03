@@ -2,7 +2,7 @@
 
 mod alloy;
 mod assembler;
-mod config;
+pub mod config;
 mod executor;
 
 use crate::{
