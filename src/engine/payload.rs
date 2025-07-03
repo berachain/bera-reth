@@ -160,24 +160,6 @@ impl PayloadAttributesBuilder<BerachainPayloadAttributes>
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct BerachainPayloadTypes;
-
-impl PayloadTypes for BerachainPayloadTypes {
-    type ExecutionData = ExecutionData;
-    type BuiltPayload = BerachainBuiltPayload;
-    type PayloadAttributes = BerachainPayloadAttributes;
-    type PayloadBuilderAttributes = BerachainPayloadBuilderAttributes;
-
-    fn block_to_payload(
-        block: SealedBlock<
-            <<Self::BuiltPayload as BuiltPayload>::Primitives as NodePrimitives>::Block,
-        >,
-    ) -> Self::ExecutionData {
-        todo!()
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct BerachainBuiltPayload;
 
