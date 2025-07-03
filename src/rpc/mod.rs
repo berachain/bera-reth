@@ -1,7 +1,6 @@
 use crate::primitives::BerachainPrimitives;
 use alloy_network::Ethereum;
 use alloy_rpc_types::engine::ExecutionData;
-use derive_more::Deref;
 use reth::{
     api::FullNodeComponents,
     chainspec::EthereumHardforks,
@@ -9,7 +8,7 @@ use reth::{
     revm::context::TxEnv,
     rpc::{
         api::eth::FromEvmError,
-        eth::{EthApi, EthApiFor, EthApiTypes, helpers::types::EthRpcConverter},
+        eth::{EthApiFor, EthApiTypes, helpers::types::EthRpcConverter},
         server_types::eth::EthApiError,
     },
 };
