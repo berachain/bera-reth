@@ -1,4 +1,4 @@
-use crate::transaction::BerachainTxEnvelope;
+use crate::{chainspec::BerachainChainSpec, transaction::BerachainTxEnvelope};
 use alloy_consensus::transaction::Recovered;
 use alloy_eips::{
     eip4844::{BlobAndProofV1, BlobAndProofV2},
@@ -29,7 +29,7 @@ pub struct BerachainPoolBuilder;
 impl<Types, Node> PoolBuilder<Node> for BerachainPoolBuilder
 where
     Types: NodeTypes<
-            ChainSpec: EthereumHardforks,
+            ChainSpec = BerachainChainSpec,
             Primitives: NodePrimitives<SignedTx = BerachainTxEnvelope>,
         >,
     Node: FullNodeTypes<Types = Types>,

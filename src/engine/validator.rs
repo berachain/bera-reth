@@ -2,7 +2,7 @@
 
 use crate::{
     chainspec::BerachainChainSpec,
-    engine::payload::BerachainPayloadAttributes,
+    engine::payload::{BerachainPayloadAttributes, BerachainPayloadTypes},
     primitives::{BerachainBlock, BerachainPrimitives},
 };
 use alloy_rpc_types::engine::ExecutionData;

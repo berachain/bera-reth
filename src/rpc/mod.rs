@@ -1,6 +1,6 @@
 use crate::{
-    engine::builder::BerachainPayloadBuilder, primitives::BerachainPrimitives,
-    transaction::BerachainTxEnvelope,
+    chainspec::BerachainChainSpec, engine::builder::BerachainPayloadBuilder,
+    primitives::BerachainPrimitives, transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::transaction::TransactionInfo;
 use alloy_network::Ethereum;
@@ -13,7 +13,9 @@ use reth::{
     rpc::{
         api::eth::FromEvmError,
         compat::TxInfoMapper,
-        eth::{EthApiTypes, FullEthApiServer, RpcNodeCore, helpers::types::EthRpcConverter},
+        eth::{
+            EthApiFor, EthApiTypes, FullEthApiServer, RpcNodeCore, helpers::types::EthRpcConverter,
+        },
         server_types::eth::EthApiError,
     },
 };
@@ -25,6 +27,7 @@ use reth_node_builder::rpc::{
     EthApiBuilder, EthApiCtx, RethRpcAddOns, RpcAddOns, RpcHandle,
 };
 use reth_optimism_rpc::{OpEthApi, eth::transaction::OpTxInfoMapper};
+use reth_payload_primitives::PayloadTypes;
 use std::{fmt, future::Future};
 
 /// Builds [`BerachainEthApi`] for Berachain.
@@ -35,16 +38,16 @@ impl<N> EthApiBuilder<N> for BerachainEthApiBuilder
 where
     N: FullNodeComponents<
             Types: NodeTypes<
-                ChainSpec: EthChainSpec + EthereumHardforks,
+                ChainSpec = BerachainChainSpec,
                 Primitives = BerachainPrimitives,
+                // Payload = BerachainTxEnvelope,
             >,
             Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
         >,
-    OpEthApi<N, Ethereum>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
-    type EthApi = OpEthApi<N, Ethereum>;
+    type EthApi = EthApiFor<N>;
 
     fn build_eth_api(
         self,

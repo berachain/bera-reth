@@ -1,7 +1,8 @@
 use crate::transaction::BerachainTxEnvelope;
 use reth_primitives_traits::NodePrimitives;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct BerachainPrimitives;
 
 pub type BerachainBlock = alloy_consensus::Block<BerachainTxEnvelope, alloy_consensus::Header>;
