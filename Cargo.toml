@@ -12,6 +12,7 @@ alloy-primitives = "1.2.1"
 alloy-rlp = "0.3.12"
 alloy-rpc-types = "1.0.17"
 alloy-serde = "1.0.17"
+alloy-network = "1.0.17"
 clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6.12"

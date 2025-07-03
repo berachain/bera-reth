@@ -1,12 +1,15 @@
 use crate::primitives::BerachainPrimitives;
+use alloy_network::Ethereum;
 use alloy_rpc_types::engine::ExecutionData;
+use derive_more::Deref;
 use reth::{
     api::FullNodeComponents,
     chainspec::EthereumHardforks,
+    providers::BlockReader,
     revm::context::TxEnv,
     rpc::{
         api::eth::FromEvmError,
-        eth::{EthApiFor, FullEthApiServer},
+        eth::{EthApi, EthApiFor, EthApiTypes, helpers::types::EthRpcConverter},
         server_types::eth::EthApiError,
     },
 };
@@ -17,15 +20,23 @@ use reth_node_builder::rpc::{
     BasicEngineApiBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
     EthApiBuilder, EthApiCtx, RethRpcAddOns, RpcAddOns, RpcHandle,
 };
+use std::future::Future;
 
-/// Builds [`EthApi`](reth_rpc::EthApi) for Berachain.
+/// Builds [`BerachainEthApi`] for Berachain.
 #[derive(Debug, Default)]
 pub struct BerachainEthApiBuilder;
 
 impl<N> EthApiBuilder<N> for BerachainEthApiBuilder
 where
-    N: FullNodeComponents,
-    EthApiFor<N>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
+    N: FullNodeComponents<
+            Types: NodeTypes<
+                ChainSpec: EthChainSpec + EthereumHardforks,
+                Primitives = BerachainPrimitives,
+            >,
+            Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
+        >,
+    EthApiError: FromEvmError<N::Evm>,
+    EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
     type EthApi = EthApiFor<N>;
 
@@ -33,7 +44,36 @@ where
         self,
         ctx: EthApiCtx<'_, N>,
     ) -> impl Future<Output = eyre::Result<Self::EthApi>> + Send {
-        async { todo!() }
+        async move { todo!() }
+    }
+}
+
+#[derive(Debug)]
+struct BerachainEthApi<Provider, Pool, Network, EvmConfig>(Provider, Pool, Network, EvmConfig);
+
+impl<Provider, Pool, Network, EvmConfig> Clone
+    for BerachainEthApi<Provider, Pool, Network, EvmConfig>
+where
+    Provider: BlockReader,
+    Self: Send + Sync,
+{
+    fn clone(&self) -> Self {
+        todo!()
+    }
+}
+
+impl<Provider, Pool, Network, EvmConfig> EthApiTypes
+    for BerachainEthApi<Provider, Pool, Network, EvmConfig>
+where
+    Self: Send + Sync,
+    Provider: BlockReader,
+{
+    type Error = EthApiError;
+    type NetworkTypes = Ethereum;
+    type RpcConvert = EthRpcConverter;
+
+    fn tx_resp_builder(&self) -> &Self::RpcConvert {
+        todo!()
     }
 }
 
