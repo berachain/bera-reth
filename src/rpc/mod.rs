@@ -1,27 +1,30 @@
 use crate::{
-    engine::builder::BerachainPayloadBuilder, pool::BerachainPool, primitives::BerachainPrimitives,
+    engine::builder::BerachainPayloadBuilder, primitives::BerachainPrimitives,
+    transaction::BerachainTxEnvelope,
 };
+use alloy_consensus::transaction::TransactionInfo;
 use alloy_network::Ethereum;
 use alloy_rpc_types::engine::ExecutionData;
 use reth::{
     api::FullNodeComponents,
     chainspec::EthereumHardforks,
-    providers::BlockReader,
+    providers::{BlockReader, ProviderError, ReceiptProvider},
     revm::context::TxEnv,
     rpc::{
         api::eth::FromEvmError,
-        eth::{EthApiFor, EthApiTypes, RpcNodeCore, helpers::types::EthRpcConverter},
+        compat::TxInfoMapper,
+        eth::{EthApiTypes, FullEthApiServer, RpcNodeCore, helpers::types::EthRpcConverter},
         server_types::eth::EthApiError,
     },
 };
 use reth_chainspec::EthChainSpec;
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, NextBlockEnvAttributes};
-use reth_evm_ethereum::EthEvmConfig;
 use reth_node_api::{AddOnsContext, NodeAddOns, NodeTypes};
 use reth_node_builder::rpc::{
     BasicEngineApiBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
     EthApiBuilder, EthApiCtx, RethRpcAddOns, RpcAddOns, RpcHandle,
 };
+use reth_optimism_rpc::{OpEthApi, eth::transaction::OpTxInfoMapper};
 use std::{fmt, future::Future};
 
 /// Builds [`BerachainEthApi`] for Berachain.
@@ -37,10 +40,11 @@ where
             >,
             Evm: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes>,
         >,
+    OpEthApi<N, Ethereum>: FullEthApiServer<Provider = N::Provider, Pool = N::Pool>,
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
-    type EthApi = BerachainEthApi<N>;
+    type EthApi = OpEthApi<N, Ethereum>;
 
     fn build_eth_api(
         self,
@@ -50,70 +54,19 @@ where
     }
 }
 
-pub trait BerachainNodeCore: RpcNodeCore<Provider: BlockReader> {}
-
-impl<T> BerachainNodeCore for T where T: RpcNodeCore<Provider: BlockReader> {}
-
-impl<N: BerachainNodeCore> fmt::Debug for BerachainEthApi<N> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BscEthApi").finish_non_exhaustive()
-    }
-}
-
-impl<N> Clone for BerachainEthApi<N>
+impl<N> TxInfoMapper<&BerachainTxEnvelope> for OpTxInfoMapper<N>
 where
-    N: BerachainNodeCore,
+    N: FullNodeComponents,
+    N::Provider: ReceiptProvider,
 {
-    fn clone(&self) -> Self {
-        todo!()
-    }
-}
+    type Out = TransactionInfo;
+    type Err = ProviderError;
 
-impl<N> RpcNodeCore for BerachainEthApi<N>
-where
-    N: BerachainNodeCore,
-{
-    type Primitives = BerachainPrimitives;
-    type Provider = N::Provider;
-    type Pool = N::Pool;
-    type Evm = <N as RpcNodeCore>::Evm;
-    type Network = <N as RpcNodeCore>::Network;
-    type PayloadBuilder = BerachainPayloadBuilder<Self::Pool, Self::Provider>;
-
-    fn pool(&self) -> &Self::Pool {
-        todo!()
-    }
-
-    fn evm_config(&self) -> &Self::Evm {
-        todo!()
-    }
-
-    fn network(&self) -> &Self::Network {
-        todo!()
-    }
-
-    fn payload_builder(&self) -> &Self::PayloadBuilder {
-        todo!()
-    }
-
-    fn provider(&self) -> &Self::Provider {
-        todo!()
-    }
-}
-
-struct BerachainEthApi<N: BerachainNodeCore> {
-    _core: std::marker::PhantomData<N>,
-}
-
-impl<N> EthApiTypes for BerachainEthApi<N>
-where
-    N: BerachainNodeCore,
-{
-    type Error = EthApiError;
-    type NetworkTypes = Ethereum;
-    type RpcConvert = EthRpcConverter;
-
-    fn tx_resp_builder(&self) -> &Self::RpcConvert {
+    fn try_map(
+        &self,
+        tx: &BerachainTxEnvelope,
+        tx_info: TransactionInfo,
+    ) -> Result<Self::Out, Self::Err> {
         todo!()
     }
 }

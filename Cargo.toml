@@ -40,6 +40,7 @@ reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "60940
 reth-payload-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
+reth-optimism-rpc = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 thiserror = "2.0"
 tracing = "0.1.41"
@@ -86,3 +87,4 @@ reth-payload-primitives = { path = "../reth/crates/payload/primitives" }
 reth-primitives-traits = { path = "../reth/crates/primitives-traits" }
 reth-tracing = { path = "../reth/crates/tracing" }
 reth-codecs = { path = "../reth/crates/storage/codecs" }
+reth-optimism-rpc = { path = "../reth/crates/optimism/rpc" }
