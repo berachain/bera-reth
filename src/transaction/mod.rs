@@ -342,24 +342,6 @@ impl<T> From<Signed<T>> for BerachainTxEnvelope {
     }
 }
 
-// Lossy conversion - only converts Ethereum transactions, fails for Berachain-specific ones
-// impl TryFrom<BerachainTxEnvelope> for
-// alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844Variant> {     type Error =
-// &'static str;
-//
-//     fn try_from(berachain_tx: BerachainTxEnvelope) -> Result<Self, Self::Error> {
-//         match berachain_tx {
-//             BerachainTxEnvelope::Ethereum(eth_tx) => {
-//                 // Convert TxEnvelope to EthereumTxEnvelope
-//                 Ok(eth_tx.into())
-//             }
-//             BerachainTxEnvelope::SystemRewards(_) => {
-//                 Err("Cannot convert Berachain SystemRewards transaction to EthereumTxEnvelope")
-//             }
-//         }
-//     }
-// }
-
 // Enable FromConsensusTx for transactions that can be converted
 impl From<BerachainTxEnvelope>
     for alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844Variant>
