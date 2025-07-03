@@ -1,6 +1,5 @@
 //! Berachain EVM executor using standard Ethereum execution with Berachain chain spec
 
-mod alloy;
 mod assembler;
 pub mod config;
 mod executor;
