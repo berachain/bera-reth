@@ -18,7 +18,7 @@ pub struct BerachainEvmConfig {
     /// Chain specification.
     pub spec: Arc<BerachainChainSpec>,
     /// EVM factory.
-    pub evm_factory: EthEvmFactory,
+    evm_factory: EthEvmFactory,
 
     /// Inner [`EthBlockExecutorFactory`].
     pub executor_factory:

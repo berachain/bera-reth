@@ -37,6 +37,7 @@ where
     type Pool = BerachainPool<BerachainPooledTransaction>;
 
     async fn build_pool(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::Pool> {
+        // TODO: Rez
         todo!("Build BerachainPool with custom transaction validation")
     }
 }
