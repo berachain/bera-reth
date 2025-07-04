@@ -8,7 +8,8 @@ use bera_reth::{
     node::{BerachainNode, cli::Cli},
 };
 use clap::Parser;
-use reth::{args::RessArgs, ress::install_ress_subprotocol};
+// Removed RessArgs since ress subprotocol is disabled
+use reth_cli_commands::node::NoArgs;
 use reth_node_builder::NodeHandle;
 use tracing::info;
 
@@ -24,22 +25,10 @@ fn main() {
     }
 
     if let Err(err) =
-        Cli::<BerachainChainSpecParser, RessArgs>::parse().run(async move |builder, ress_args| {
+        Cli::<BerachainChainSpecParser, NoArgs>::parse().run(async move |builder, _| {
             info!(target: "reth::cli", "Launching Berachain node");
             let NodeHandle { node, node_exit_future } =
                 builder.node(BerachainNode::default()).launch_with_debug_capabilities().await?;
-
-            // Install ress subprotocol.
-            if ress_args.enabled {
-                install_ress_subprotocol(
-                    ress_args,
-                    node.provider,
-                    node.evm_config,
-                    node.network,
-                    node.task_executor,
-                    node.add_ons_handle.engine_events.new_listener(),
-                )?;
-            }
 
             node_exit_future.await
         })

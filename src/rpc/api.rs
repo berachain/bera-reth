@@ -5,13 +5,15 @@ use alloy_network::{
 use core::fmt;
 use derive_more::Deref;
 use reth::{
-    providers::BlockReader,
-    rpc::eth::{core::EthApiInner, helpers::types::EthRpcConverter},
-    transaction_pool::PoolTransaction,
+    providers::BlockReader, rpc::eth::core::EthApiInner, transaction_pool::PoolTransaction,
 };
+use reth_rpc_convert::RpcConverter;
 use reth_rpc_eth_api::{FullEthApiTypes, RpcReceipt};
 
-use crate::transaction::{BerachainTxEnvelope, TxTypeCustom};
+use crate::{
+    node::evm::config::BerachainEvmConfig,
+    transaction::{BerachainTxEnvelope, TxTypeCustom},
+};
 use alloy_consensus::transaction::TransactionMeta;
 use alloy_eips::{BlockId, eip2930::AccessList};
 use alloy_primitives::{Address, B256, Bytes, ChainId, TxKind, U256};
@@ -53,6 +55,9 @@ use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock, error::FromEvmError,
 };
 use std::sync::Arc;
+
+/// Berachain-specific RPC converter that handles BerachainPrimitives and BerachainNetwork
+pub type BerachainRpcConverter = RpcConverter<BerachainNetwork, BerachainEvmConfig, EthApiError>;
 
 impl fmt::Display for TxTypeCustom {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -251,7 +256,7 @@ pub struct BerachainApi<Provider: BlockReader, Pool, Network, EvmConfig> {
     #[deref]
     pub(super) inner: Arc<EthApiInner<Provider, Pool, Network, EvmConfig>>,
     /// Transaction RPC response builder.
-    pub tx_resp_builder: EthRpcConverter,
+    pub tx_resp_builder: BerachainRpcConverter,
 }
 
 impl<Provider, Pool, Network, EvmConfig> Clone for BerachainApi<Provider, Pool, Network, EvmConfig>
@@ -272,9 +277,8 @@ where
 {
     type Error = EthApiError;
 
-    // TODO: Change
     type NetworkTypes = BerachainNetwork;
-    type RpcConvert = EthRpcConverter;
+    type RpcConvert = BerachainRpcConverter;
 
     fn tx_resp_builder(&self) -> &Self::RpcConvert {
         &self.tx_resp_builder
