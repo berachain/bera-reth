@@ -16,13 +16,13 @@ use reth::{
 use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_evm::{
     ConfigureEvm, EthEvmFactory, EvmEnvFor, ExecutionCtxFor, NextBlockEnvAttributes,
-    eth::EthBlockExecutorFactory,
+    eth::{EthBlockExecutionCtx, EthBlockExecutorFactory},
 };
 use reth_evm_ethereum::{
     EthBlockAssembler, RethReceiptBuilder, revm_spec_by_timestamp_and_block_number,
 };
 use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
-use std::{convert::Infallible, fmt::Debug, sync::Arc};
+use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct BerachainEvmConfig {
@@ -31,7 +31,7 @@ pub struct BerachainEvmConfig {
     /// Chain specification.
     pub spec: Arc<BerachainChainSpec>,
     /// EVM factory.
-    evm_factory: EthEvmFactory,
+    pub evm_factory: EthEvmFactory,
 
     /// Ethereum block assembler.
     pub block_assembler: BerachainBlockAssembler,
@@ -145,7 +145,12 @@ impl ConfigureEvm for BerachainEvmConfig {
         &self,
         block: &'a SealedBlock<BlockTy<Self::Primitives>>,
     ) -> ExecutionCtxFor<'a, Self> {
-        todo!()
+        EthBlockExecutionCtx {
+            parent_hash: block.header().parent_hash,
+            parent_beacon_block_root: block.header().parent_beacon_block_root,
+            ommers: &block.body().ommers,
+            withdrawals: block.body().withdrawals.as_ref().map(Cow::Borrowed),
+        }
     }
 
     fn context_for_next_block(
@@ -153,6 +158,11 @@ impl ConfigureEvm for BerachainEvmConfig {
         parent: &SealedHeader<HeaderTy<Self::Primitives>>,
         attributes: Self::NextBlockEnvCtx,
     ) -> ExecutionCtxFor<'_, Self> {
-        todo!()
+        EthBlockExecutionCtx {
+            parent_hash: parent.hash(),
+            parent_beacon_block_root: attributes.parent_beacon_block_root,
+            ommers: &[],
+            withdrawals: attributes.withdrawals.map(Cow::Owned),
+        }
     }
 }

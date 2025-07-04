@@ -5,7 +5,8 @@ use reth::{
     revm::{Inspector, State, context::result::ExecutionResult},
 };
 use reth_evm::{
-    Database, EthEvmFactory, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, OnStateHook,
+    ConfigureEvm, Database, EthEvmFactory, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded,
+    OnStateHook,
     block::{
         BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor, CommitChanges,
         ExecutableTx, SystemCaller,
@@ -102,7 +103,7 @@ impl BlockExecutorFactory for BerachainEvmConfig {
     type Receipt = reth_ethereum_primitives::Receipt;
 
     fn evm_factory(&self) -> &Self::EvmFactory {
-        todo!()
+        &self.evm_factory
     }
 
     fn create_executor<'a, DB, I>(
