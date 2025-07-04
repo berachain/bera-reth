@@ -13,6 +13,7 @@ alloy-rlp = "0.3.12"
 alloy-rpc-types = "1.0.17"
 alloy-serde = "1.0.17"
 alloy-network = "1.0.17"
+alloy-rpc-types-eth = "1.0.17"
 clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6.12"
@@ -41,10 +42,13 @@ reth-payload-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-optimism-rpc = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
+reth-rpc-eth-api = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
+reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 thiserror = "2.0"
 tracing = "0.1.41"
 tokio = "1.46.0"
+parking_lot = "0.12.4"
 
 [features]
 default = ["jemalloc"]
@@ -88,3 +92,5 @@ reth-primitives-traits = { path = "../reth/crates/primitives-traits" }
 reth-tracing = { path = "../reth/crates/tracing" }
 reth-codecs = { path = "../reth/crates/storage/codecs" }
 reth-optimism-rpc = { path = "../reth/crates/optimism/rpc" }
+reth-rpc-eth-api = { path = "../reth/crates/rpc/rpc-eth-api" }
+reth-rpc-eth-types = { path = "../reth/crates/rpc/rpc-eth-types" }

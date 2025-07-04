@@ -1,6 +1,8 @@
+mod api;
+
 use crate::{
     chainspec::BerachainChainSpec, engine::BerachainEngineTypes, primitives::BerachainPrimitives,
-    transaction::BerachainTxEnvelope,
+    rpc::api::BerachainApi, transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::transaction::TransactionInfo;
 use alloy_rpc_types::engine::ExecutionData;
@@ -18,7 +20,7 @@ use reth::{
 };
 use reth_chainspec::EthChainSpec;
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, NextBlockEnvAttributes};
-use reth_node_api::{AddOnsContext, NodeAddOns, NodeTypes};
+use reth_node_api::{AddOnsContext, FullNodeTypes, NodeAddOns, NodeTypes};
 use reth_node_builder::rpc::{
     BasicEngineApiBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
     EthApiBuilder, EthApiCtx, RethRpcAddOns, RpcAddOns, RpcHandle,
@@ -43,7 +45,12 @@ where
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
-    type EthApi = EthApiFor<N>;
+    type EthApi = BerachainApi<
+        <N as FullNodeTypes>::Provider,
+        <N as FullNodeComponents>::Pool,
+        <N as FullNodeComponents>::Network,
+        <N as FullNodeComponents>::Evm,
+    >;
 
     fn build_eth_api(
         self,

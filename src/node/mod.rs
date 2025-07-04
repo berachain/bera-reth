@@ -20,7 +20,6 @@ use alloy_consensus::error::ValueError;
 use alloy_rpc_types::TransactionRequest;
 use reth::{
     api::{BlockTy, FullNodeTypes, NodeTypes},
-    chainspec::EthereumHardforks,
     consensus::FullConsensus,
     providers::EthStorage,
     rpc::compat::TryIntoSimTx,
@@ -29,9 +28,9 @@ use reth_node_api::FullNodeComponents;
 use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder, ConsensusBuilder},
-    rpc::{BasicEngineApiBuilder, RpcAddOns},
+    rpc::BasicEngineApiBuilder,
 };
-use reth_node_ethereum::{EthereumEthApiBuilder, EthereumNode, node::EthereumNetworkBuilder};
+use reth_node_ethereum::{EthereumNode, node::EthereumNetworkBuilder};
 
 /// Type configuration for a regular Berachain node.
 
