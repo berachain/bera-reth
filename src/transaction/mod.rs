@@ -1,7 +1,7 @@
 use alloy_consensus::{
-    Signed, Transaction, TxEnvelope,
+    Signed, Transaction, TxEip4844, TxEip4844Variant, TxEnvelope,
     crypto::RecoveryError,
-    transaction::{Recovered, SignerRecoverable},
+    transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718,
@@ -172,6 +172,20 @@ pub enum BerachainTxEnvelope {
     // /// Your 0-gas system transaction
     // #[envelope(ty = 190)] // equivalent to 0xBE
     // SystemRewards(PoLTx),
+}
+
+impl BerachainTxEnvelope {
+    /// Returns the [`TxEip4844`] variant if the transaction is an EIP-4844 transaction.
+    pub fn as_eip4844(&self) -> Option<Signed<TxEip4844>> {
+        match self {
+            Self::Ethereum(tx) => match tx {
+                TxEnvelope::Eip4844(tx) => Some(tx.clone().map(|variant| variant.into())),
+                _ => None,
+            },
+            // TODO: Rez extend after adding SystemRewards
+            // _ => None,
+        }
+    }
 }
 
 // impl Compress + Decompress + Serialize

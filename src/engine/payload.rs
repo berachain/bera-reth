@@ -1,4 +1,7 @@
-use crate::{chainspec::BerachainChainSpec, primitives::BerachainPrimitives};
+use crate::{
+    chainspec::BerachainChainSpec,
+    primitives::{BerachainBlock, BerachainPrimitives},
+};
 use alloy_eips::{
     eip4895::{Withdrawal, Withdrawals},
     eip7685::Requests,
@@ -11,11 +14,12 @@ use reth::{
     chainspec::EthereumHardforks,
 };
 use reth_engine_local::LocalPayloadAttributesBuilder;
-use reth_ethereum_engine_primitives::{EthBuiltPayload, payload_id};
+use reth_ethereum_engine_primitives::{BlobSidecars, EthBuiltPayload, payload_id};
+use reth_ethereum_primitives::Block;
 use reth_node_ethereum::engine::EthPayloadAttributes;
 use reth_payload_primitives::{BuiltPayload, PayloadTypes};
 use reth_primitives_traits::{NodePrimitives, SealedBlock};
-use std::convert::Infallible;
+use std::{convert::Infallible, sync::Arc};
 
 /// Berachain-specific payload attributes
 ///
@@ -161,7 +165,39 @@ impl PayloadAttributesBuilder<BerachainPayloadAttributes>
 }
 
 #[derive(Debug, Clone)]
-pub struct BerachainBuiltPayload;
+pub struct BerachainBuiltPayload {
+    /// Identifier of the payload
+    pub id: PayloadId,
+    /// The built block
+    pub block: Arc<SealedBlock<BerachainBlock>>,
+    /// The fees of the block
+    pub fees: U256,
+    /// The blobs, proofs, and commitments in the block. If the block is pre-cancun, this will be
+    /// empty.
+    pub sidecars: BlobSidecars,
+    /// The requests of the payload
+    pub requests: Option<Requests>,
+}
+
+impl BerachainBuiltPayload {
+    /// Initializes the payload with the given initial block
+    ///
+    /// Caution: This does not set any [`BlobSidecars`].
+    pub const fn new(
+        id: PayloadId,
+        block: Arc<SealedBlock<BerachainBlock>>,
+        fees: U256,
+        requests: Option<Requests>,
+    ) -> Self {
+        Self { id, block, fees, requests, sidecars: BlobSidecars::Empty }
+    }
+
+    /// Sets blob transactions sidecars on the payload.
+    pub fn with_sidecars(mut self, sidecars: impl Into<BlobSidecars>) -> Self {
+        self.sidecars = sidecars.into();
+        self
+    }
+}
 
 impl BuiltPayload for BerachainBuiltPayload {
     type Primitives = BerachainPrimitives;
