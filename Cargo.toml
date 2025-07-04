@@ -41,6 +41,7 @@ reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "60940
 reth-payload-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
+reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-optimism-rpc = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-rpc-eth-api = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
@@ -96,3 +97,4 @@ reth-optimism-rpc = { path = "../reth/crates/optimism/rpc" }
 reth-rpc-eth-api = { path = "../reth/crates/rpc/rpc-eth-api" }
 reth-rpc-eth-types = { path = "../reth/crates/rpc/rpc-eth-types" }
 reth-rpc-convert = { path = "../reth/crates/rpc/rpc-convert" }
+reth-transaction-pool = { path = "../reth/crates/transaction-pool" }

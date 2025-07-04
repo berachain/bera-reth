@@ -1471,6 +1471,7 @@ dependencies = [
  "reth-rpc-eth-api",
  "reth-rpc-eth-types",
  "reth-tracing",
+ "reth-transaction-pool",
  "serde",
  "thiserror 2.0.12",
  "tokio",
