@@ -19,6 +19,7 @@ derive_more = "2.0.1"
 eyre = "0.6.12"
 jsonrpsee-core = "0.25.1"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
+reth-rpc = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
 reth-cli = { git = "https://github.com/paradigmxyz/reth", rev = "60940dd243918a1ba55f5cce5046a443bc75611d" }
@@ -71,6 +72,7 @@ strip = "none"
 
 [patch."https://github.com/paradigmxyz/reth"]
 reth = { path = "../reth/bin/reth" }
+reth-rpc = { path = "../reth/crates/rpc/rpc" }
 reth-basic-payload-builder = { path = "../reth/crates/payload/basic" }
 reth-chainspec = { path = "../reth/crates/chainspec" }
 reth-cli = { path = "../reth/crates/cli/cli" }

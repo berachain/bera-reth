@@ -1467,6 +1467,7 @@ dependencies = [
  "reth-optimism-rpc",
  "reth-payload-primitives",
  "reth-primitives-traits",
+ "reth-rpc",
  "reth-rpc-convert",
  "reth-rpc-eth-api",
  "reth-rpc-eth-types",

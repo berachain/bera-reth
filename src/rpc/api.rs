@@ -250,11 +250,9 @@ impl Network for BerachainNetwork {
     type BlockResponse = alloy_rpc_types_eth::Block<Transaction<BerachainTxEnvelope>>;
 }
 
-#[derive(Deref)]
 pub struct BerachainApi<Provider: BlockReader, Pool, Network, EvmConfig> {
     /// All nested fields bundled together.
-    #[deref]
-    pub(super) inner: Arc<EthApiInner<Provider, Pool, Network, EvmConfig>>,
+    pub(super) inner: reth_rpc::EthApi<Provider, Pool, Network, EvmConfig>,
     /// Transaction RPC response builder.
     pub tx_resp_builder: BerachainRpcConverter,
 }
@@ -265,7 +263,7 @@ where
     Self: Send + Sync,
 {
     fn clone(&self) -> Self {
-        todo!()
+        Self { inner: self.inner.clone(), tx_resp_builder: self.tx_resp_builder.clone() }
     }
 }
 

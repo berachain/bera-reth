@@ -1,8 +1,11 @@
 mod api;
 
 use crate::{
-    chainspec::BerachainChainSpec, engine::BerachainEngineTypes, primitives::BerachainPrimitives,
-    rpc::api::BerachainApi, transaction::BerachainTxEnvelope,
+    chainspec::BerachainChainSpec,
+    engine::BerachainEngineTypes,
+    primitives::BerachainPrimitives,
+    rpc::api::{BerachainApi, BerachainRpcConverter},
+    transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::transaction::TransactionInfo;
 use alloy_rpc_types::engine::ExecutionData;
@@ -25,6 +28,7 @@ use reth_node_builder::rpc::{
     BasicEngineApiBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
     EthApiBuilder, EthApiCtx, RethRpcAddOns, RpcAddOns, RpcHandle,
 };
+use reth_node_ethereum::EthereumEthApiBuilder;
 use reth_optimism_rpc::eth::transaction::OpTxInfoMapper;
 use std::future::Future;
 
@@ -52,11 +56,24 @@ where
         <N as FullNodeComponents>::Evm,
     >;
 
-    fn build_eth_api(
-        self,
-        ctx: EthApiCtx<'_, N>,
-    ) -> impl Future<Output = eyre::Result<Self::EthApi>> + Send {
-        async move { todo!() }
+    async fn build_eth_api(self, ctx: EthApiCtx<'_, N>) -> eyre::Result<Self::EthApi> {
+        let api = reth_rpc::EthApiBuilder::new(
+            ctx.components.provider().clone(),
+            ctx.components.pool().clone(),
+            ctx.components.network().clone(),
+            ctx.components.evm_config().clone(),
+        )
+        .eth_cache(ctx.cache)
+        .task_spawner(ctx.components.task_executor().clone())
+        .gas_cap(ctx.config.rpc_gas_cap.into())
+        .max_simulate_blocks(ctx.config.rpc_max_simulate_blocks)
+        .eth_proof_window(ctx.config.eth_proof_window)
+        .fee_history_cache_config(ctx.config.fee_history_cache)
+        .proof_permits(ctx.config.proof_permits)
+        .gas_oracle_config(ctx.config.gas_oracle)
+        .build();
+
+        Ok(BerachainApi { inner: api, tx_resp_builder: Default::default() })
     }
 }
 
