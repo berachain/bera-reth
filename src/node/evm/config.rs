@@ -5,31 +5,51 @@ use crate::{
 use alloy_primitives::Bytes;
 use reth_evm::{
     ConfigureEvm, EthEvmFactory, EvmEnvFor, ExecutionCtxFor, NextBlockEnvAttributes,
-    eth::{EthBlockExecutorFactory, receipt_builder::AlloyReceiptBuilder, spec::EthSpec},
+    eth::EthBlockExecutorFactory,
 };
-use reth_evm_ethereum::{EthBlockAssembler, EthEvmConfig, RethReceiptBuilder};
+use reth_evm_ethereum::{EthBlockAssembler, RethReceiptBuilder};
 use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
 use std::{convert::Infallible, fmt::Debug, sync::Arc};
 
 #[derive(Debug, Clone)]
-pub struct BerachainEvmConfig<
-    // TODO: ReceiptBuilder envelope
-    R = AlloyReceiptBuilder,
-    Spec = BerachainChainSpec,
-    EvmFactory = EthEvmFactory,
-> {
+pub struct BerachainEvmConfig {
     /// Receipt builder.
-    pub receipt_builder: R,
+    pub receipt_builder: RethReceiptBuilder,
     /// Chain specification.
-    pub spec: Spec,
+    pub spec: Arc<BerachainChainSpec>,
     /// EVM factory.
-    pub evm_factory: EvmFactory,
+    pub evm_factory: EthEvmFactory,
+
+    /// Inner [`EthBlockExecutorFactory`].
+    pub executor_factory:
+        EthBlockExecutorFactory<RethReceiptBuilder, Arc<BerachainChainSpec>, EthEvmFactory>,
+    /// Ethereum block assembler.
+    pub block_assembler: EthBlockAssembler<BerachainChainSpec>,
 }
 
-impl<ChainSpec, EvmFactory> BerachainEvmConfig<ChainSpec, EvmFactory> {
+impl BerachainEvmConfig {
     /// Creates a new Ethereum EVM configuration with the given chain spec and EVM factory.
-    pub fn new_with_evm_factory(chain_spec: Arc<ChainSpec>, evm_factory: EvmFactory) -> Self {
-        todo!()
+    pub fn new_with_evm_factory(
+        chain_spec: Arc<BerachainChainSpec>,
+        evm_factory: EthEvmFactory,
+    ) -> Self {
+        Self {
+            receipt_builder: RethReceiptBuilder::default(),
+            spec: chain_spec.clone(),
+            block_assembler: EthBlockAssembler::new(chain_spec.clone()),
+            executor_factory: EthBlockExecutorFactory::new(
+                RethReceiptBuilder::default(),
+                chain_spec,
+                evm_factory,
+            ),
+            evm_factory,
+        }
+    }
+
+    /// Sets the extra data for the block assembler.
+    pub fn with_extra_data(mut self, extra_data: Bytes) -> Self {
+        self.block_assembler.extra_data = extra_data;
+        self
     }
 }
 
