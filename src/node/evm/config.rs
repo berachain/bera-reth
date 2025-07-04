@@ -1,5 +1,5 @@
 use crate::{
-    chainspec::BerachainChainSpec, node::evm::assembler::BerachainAssembler,
+    chainspec::BerachainChainSpec, node::evm::assembler::BerachainBlockAssembler,
     primitives::BerachainPrimitives,
 };
 use alloy_consensus::BlockHeader;
@@ -33,11 +33,8 @@ pub struct BerachainEvmConfig {
     /// EVM factory.
     evm_factory: EthEvmFactory,
 
-    /// Inner [`EthBlockExecutorFactory`].
-    pub executor_factory:
-        EthBlockExecutorFactory<RethReceiptBuilder, Arc<BerachainChainSpec>, EthEvmFactory>,
     /// Ethereum block assembler.
-    pub block_assembler: EthBlockAssembler<BerachainChainSpec>,
+    pub block_assembler: BerachainBlockAssembler,
 }
 
 impl BerachainEvmConfig {
@@ -49,12 +46,7 @@ impl BerachainEvmConfig {
         Self {
             receipt_builder: RethReceiptBuilder::default(),
             spec: chain_spec.clone(),
-            block_assembler: EthBlockAssembler::new(chain_spec.clone()),
-            executor_factory: EthBlockExecutorFactory::new(
-                RethReceiptBuilder::default(),
-                chain_spec,
-                evm_factory,
-            ),
+            block_assembler: BerachainBlockAssembler::new(chain_spec.clone()),
             evm_factory,
         }
     }
@@ -71,14 +63,14 @@ impl ConfigureEvm for BerachainEvmConfig {
     type Error = Infallible;
     type NextBlockEnvCtx = NextBlockEnvAttributes;
     type BlockExecutorFactory = Self;
-    type BlockAssembler = BerachainAssembler;
+    type BlockAssembler = BerachainBlockAssembler;
 
     fn block_executor_factory(&self) -> &Self::BlockExecutorFactory {
-        todo!()
+        self
     }
 
     fn block_assembler(&self) -> &Self::BlockAssembler {
-        todo!()
+        &self.block_assembler
     }
 
     fn evm_env(&self, header: &HeaderTy<Self::Primitives>) -> EvmEnvFor<Self> {
