@@ -1,7 +1,7 @@
 use alloy_consensus::{
-    Signed, Transaction, TxEip4844, TxEnvelope,
+    EthereumTxEnvelope, SignableTransaction, Signed, Transaction, TxEip4844, TxEnvelope,
     crypto::RecoveryError,
-    transaction::{Recovered, SignerRecoverable},
+    transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718,
@@ -11,7 +11,9 @@ use alloy_eips::{
     eip7594::BlobTransactionSidecarVariant,
     eip7702::SignedAuthorization,
 };
-use alloy_primitives::{Address, B256, Bytes, ChainId, TxHash, TxKind, U256, bytes::BufMut};
+use alloy_primitives::{
+    Address, B256, Bytes, ChainId, Signature, TxHash, TxKind, U256, bytes::BufMut,
+};
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
 use reth::{
@@ -21,7 +23,9 @@ use reth::{
 };
 use reth_db::table::{Compress, Decompress};
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
-use reth_primitives_traits::{InMemorySize, SignedTransaction, serde_bincode_compat::RlpBincode};
+use reth_primitives_traits::{
+    InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
+};
 use serde::Deserialize;
 use std::{convert::Infallible, sync::Arc};
 
@@ -218,17 +222,26 @@ impl InMemorySize for BerachainTxEnvelope {
 
 impl SignerRecoverable for BerachainTxEnvelope {
     fn recover_signer(&self) -> Result<Address, RecoveryError> {
-        todo!()
+        match self {
+            Self::Ethereum(tx) => tx.recover_signer(),
+        }
     }
 
     fn recover_signer_unchecked(&self) -> Result<Address, RecoveryError> {
-        todo!()
+        match self {
+            Self::Ethereum(tx) => tx.recover_signer_unchecked(),
+        }
     }
 }
 
-impl SignedTransaction for BerachainTxEnvelope {
+impl SignedTransaction for BerachainTxEnvelope
+where
+    Self: Clone + PartialEq + Eq + Decodable + Decodable2718 + MaybeSerde + InMemorySize,
+{
     fn tx_hash(&self) -> &TxHash {
-        todo!()
+        match self {
+            Self::Ethereum(tx) => tx.hash(),
+        }
     }
 }
 
