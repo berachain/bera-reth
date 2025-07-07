@@ -22,9 +22,7 @@ use reth_basic_payload_builder::{
 };
 use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_ethereum_engine_primitives::{BlobSidecars, EthBuiltPayload, EthPayloadBuilderAttributes};
-use reth_ethereum_payload_builder::{
-    BestTransactionsIter, EthereumBuilderConfig, default_ethereum_payload,
-};
+use reth_ethereum_payload_builder::{EthereumBuilderConfig, default_ethereum_payload};
 use reth_ethereum_primitives::{EthPrimitives, TransactionSigned};
 use reth_evm::{
     ConfigureEvm, Evm, NextBlockEnvAttributes,
@@ -36,11 +34,15 @@ use reth_node_builder::{BuilderContext, PayloadBuilderConfig, components::Payloa
 use reth_payload_primitives::PayloadBuilderAttributes;
 use reth_primitives_traits::transaction::error::InvalidTransactionError;
 use reth_transaction_pool::{
-    BestTransactionsAttributes,
+    BestTransactions, BestTransactionsAttributes, ValidPoolTransaction,
     error::{Eip4844PoolTransactionError, InvalidPoolTransactionError},
 };
 use std::sync::Arc;
 use tracing::{debug, trace, warn};
+
+type BestTransactionsIter<Pool> = Box<
+    dyn BestTransactions<Item = Arc<ValidPoolTransaction<<Pool as TransactionPool>::Transaction>>>,
+>;
 
 /// Service builder for creating Berachain payload builders
 ///
