@@ -5,7 +5,7 @@ use alloy_consensus::{
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718,
-    eip2718::Eip2718Result,
+    eip2718::{Eip2718Error, Eip2718Result},
     eip2930::AccessList,
     eip4844::{BlobTransactionValidationError, env_settings::KzgSettings},
     eip7594::BlobTransactionSidecarVariant,
@@ -20,8 +20,12 @@ use reth::{
     transaction_pool::{EthPoolTransaction, PoolTransaction},
 };
 use reth_db::table::{Compress, Decompress};
+use reth_ethereum_primitives::ReceiptTxType;
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
-use reth_primitives_traits::{InMemorySize, SignedTransaction, serde_bincode_compat::RlpBincode};
+use reth_primitives_traits::{
+    InMemorySize, SignedTransaction,
+    serde_bincode_compat::{RlpBincode, SerdeBincodeCompat},
+};
 use serde::Deserialize;
 use std::{convert::Infallible, sync::Arc};
 
@@ -194,6 +198,55 @@ impl BerachainTxEnvelope {
     }
 }
 
+impl RlpBincode for TxTypeCustom {}
+
+// First implement the required traits for TxTypeCustom
+impl InMemorySize for TxTypeCustom {
+    fn size(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+}
+
+impl reth_codecs::Compact for TxTypeCustom {
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: alloy_primitives::bytes::BufMut + AsMut<[u8]>,
+    {
+        let value = self.as_u8();
+        value.to_compact(buf)
+    }
+
+    fn from_compact(buf: &[u8], _len: usize) -> (Self, &[u8]) {
+        let (value, buf) = u8::from_compact(buf, 1);
+        (Self::try_from(value).unwrap_or_else(|_| Self::try_from(0u8).unwrap()), buf)
+    }
+}
+
+impl ReceiptTxType for TxTypeCustom {
+    fn is_legacy(&self) -> bool {
+        // Check if this is a legacy transaction (type 0)
+        match self.as_u8() {
+            0 => true, // Legacy transaction
+            _ => false,
+        }
+    }
+
+    fn as_u8(&self) -> u8 {
+        // The macro should generate this, but let's use the cast for now
+        u8::from(*self)
+    }
+
+    fn try_from_u8(value: u8) -> Result<Self, Eip2718Error> {
+        // The macro should generate TryFrom<u8>
+        Self::try_from(value).map_err(|_| Eip2718Error::UnexpectedType(value))
+    }
+
+    fn legacy() -> Self {
+        // Create legacy variant - type 0
+        Self::try_from(0u8).unwrap()
+    }
+}
+
 // impl Compress + Decompress + Serialize
 impl Compress for BerachainTxEnvelope {
     type Compressed = Vec<u8>;
@@ -233,6 +286,7 @@ impl SignedTransaction for BerachainTxEnvelope {
 
 impl RlpBincode for BerachainTxEnvelope {}
 impl RlpBincode for PoLTx {}
+impl RlpBincode for TxTypeCustom {}
 
 impl reth_codecs::Compact for BerachainTxEnvelope {
     fn to_compact<B>(&self, buf: &mut B) -> usize
