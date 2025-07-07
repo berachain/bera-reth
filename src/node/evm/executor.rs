@@ -1,22 +1,35 @@
-use crate::{node::evm::config::BerachainEvmConfig, transaction::BerachainTxEnvelope};
-use alloy_consensus::TxReceipt;
+use crate::{
+    chainspec::BerachainChainSpec,
+    node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
+    transaction::BerachainTxEnvelope,
+};
+use alloy_consensus::{Transaction, TxReceipt};
+use alloy_eips::Encodable2718;
 use reth::{
+    chainspec::EthereumHardforks,
     providers::BlockExecutionResult,
-    revm::{Inspector, State, context::result::ExecutionResult},
+    revm::{
+        DatabaseCommit, Inspector, State,
+        context::result::{ExecutionResult, ResultAndState},
+    },
 };
 use reth_evm::{
     ConfigureEvm, Database, EthEvmFactory, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded,
     OnStateHook,
     block::{
-        BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor, CommitChanges,
-        ExecutableTx, SystemCaller,
+        BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor,
+        BlockValidationError, CommitChanges, ExecutableTx, StateChangeSource, SystemCaller,
     },
-    eth::EthBlockExecutionCtx,
+    eth::{
+        EthBlockExecutionCtx,
+        receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
+    },
 };
 use reth_evm_ethereum::RethReceiptBuilder;
 
 #[derive(Debug)]
 pub struct BerachainBlockExecutor<'a, Evm, Spec> {
+    spec: Spec,
     /// Context for block execution.
     pub ctx: EthBlockExecutionCtx<'a>,
     /// Inner EVM.
@@ -24,10 +37,10 @@ pub struct BerachainBlockExecutor<'a, Evm, Spec> {
     /// Utility to call system smart contracts.
     system_caller: SystemCaller<Spec>,
     /// Receipt builder.
-    receipt_builder: RethReceiptBuilder,
+    receipt_builder: BerachainReceiptBuilder,
 
     /// Receipts of executed transactions.
-    receipts: Vec<RethReceiptBuilder>,
+    receipts: Vec<BerachainReceiptBuilder::Receipt>,
     /// Total gas used by transactions in this block.
     gas_used: u64,
 }
@@ -40,9 +53,10 @@ where
         evm: Evm,
         ctx: EthBlockExecutionCtx<'a>,
         spec: Spec,
-        receipt_builder: RethReceiptBuilder,
+        receipt_builder: BerachainReceiptBuilder,
     ) -> Self {
         Self {
+            spec: spec.clone(),
             evm,
             ctx,
             receipts: Vec::new(),
@@ -53,7 +67,7 @@ where
     }
 }
 
-impl<'db, DB, E, Spec> BlockExecutor for BerachainBlockExecutor<'_, E, Spec>
+impl<'db, DB, E, Spec: EthereumHardforks> BlockExecutor for BerachainBlockExecutor<'_, E, Spec>
 where
     DB: Database + 'db,
     E: Evm<
@@ -66,7 +80,15 @@ where
     type Evm = E;
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
-        todo!()
+        // Set state clear flag if the block is after the Spurious Dragon hardfork.
+        let state_clear_flag =
+            self.spec.is_spurious_dragon_active_at_block(self.evm.block().number.saturating_to());
+        self.evm.db_mut().set_state_clear_flag(state_clear_flag);
+
+        self.system_caller.apply_blockhashes_contract_call(self.ctx.parent_hash, &mut self.evm)?;
+        self.system_caller
+            .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
+        Ok(())
     }
 
     fn execute_transaction_with_commit_condition(
@@ -74,7 +96,48 @@ where
         tx: impl ExecutableTx<Self>,
         f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>) -> CommitChanges,
     ) -> Result<Option<u64>, BlockExecutionError> {
-        todo!()
+        // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
+        // must be no greater than the block's gasLimit.
+        let block_available_gas = self.evm.block().gas_limit - self.gas_used;
+
+        if tx.tx().gas_limit() > block_available_gas {
+            return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
+                transaction_gas_limit: tx.tx().gas_limit(),
+                block_available_gas,
+            }
+            .into());
+        }
+
+        // Execute transaction.
+        let ResultAndState { result, state } = self
+            .evm
+            .transact(tx)
+            .map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))?;
+
+        if !f(&result).should_commit() {
+            return Ok(None);
+        }
+
+        self.system_caller.on_state(StateChangeSource::Transaction(self.receipts.len()), &state);
+
+        let gas_used = result.gas_used();
+
+        // append gas used
+        self.gas_used += gas_used;
+
+        // Push transaction changeset and calculate header bloom filter for receipt.
+        self.receipts.push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
+            tx: tx.tx(),
+            evm: &self.evm,
+            result,
+            state: &state,
+            cumulative_gas_used: self.gas_used,
+        }));
+
+        // Commit the state changes.
+        self.evm.db_mut().commit(state);
+
+        Ok(Some(gas_used))
     }
 
     fn finish(

@@ -4,6 +4,7 @@ use reth_node_builder::PayloadBuilderConfig;
 mod assembler;
 pub mod config;
 mod executor;
+mod receipt;
 
 use crate::{
     chainspec::BerachainChainSpec,

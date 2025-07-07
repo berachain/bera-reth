@@ -1,5 +1,6 @@
 use crate::{
-    chainspec::BerachainChainSpec, node::evm::assembler::BerachainBlockAssembler,
+    chainspec::BerachainChainSpec,
+    node::evm::{assembler::BerachainBlockAssembler, receipt::BerachainReceiptBuilder},
     primitives::BerachainPrimitives,
 };
 use alloy_consensus::BlockHeader;
@@ -27,7 +28,7 @@ use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 #[derive(Debug, Clone)]
 pub struct BerachainEvmConfig {
     /// Receipt builder.
-    pub receipt_builder: RethReceiptBuilder,
+    pub receipt_builder: BerachainReceiptBuilder,
     /// Chain specification.
     pub spec: Arc<BerachainChainSpec>,
     /// EVM factory.
@@ -44,7 +45,7 @@ impl BerachainEvmConfig {
         evm_factory: EthEvmFactory,
     ) -> Self {
         Self {
-            receipt_builder: RethReceiptBuilder::default(),
+            receipt_builder: BerachainReceiptBuilder::default(),
             spec: chain_spec.clone(),
             block_assembler: BerachainBlockAssembler::new(chain_spec.clone()),
             evm_factory,

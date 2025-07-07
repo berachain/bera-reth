@@ -1,5 +1,5 @@
 use alloy_consensus::{
-    Signed, Transaction, TxEip4844, TxEip4844Variant, TxEnvelope,
+    Signed, Transaction, TxEip4844, TxEip4844Variant, TxEnvelope, TxType,
     crypto::RecoveryError,
     transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
 };
@@ -184,6 +184,11 @@ impl BerachainTxEnvelope {
             },
             // TODO: Rez extend after adding SystemRewards
             // _ => None,
+        }
+    }
+    pub const fn tx_type(&self) -> TxTypeCustom {
+        match self {
+            Self::Ethereum(tx) => tx.tx_type(),
         }
     }
 }
