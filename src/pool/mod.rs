@@ -1,3 +1,5 @@
+mod transaction;
+
 use crate::{chainspec::BerachainChainSpec, transaction::BerachainTxEnvelope};
 use alloy_eips::{eip7840::BlobParams, merge::EPOCH_SLOTS};
 use reth::{

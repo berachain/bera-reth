@@ -1,5 +1,6 @@
 use alloy_consensus::{
-    EthereumTxEnvelope, SignableTransaction, Signed, Transaction, TxEip4844, TxEnvelope,
+    EthereumTxEnvelope, SignableTransaction, Signed, Transaction, TxEip4844, TxEip4844WithSidecar,
+    TxEnvelope,
     crypto::RecoveryError,
     transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
 };
@@ -22,10 +23,12 @@ use reth::{
     transaction_pool::{EthPoolTransaction, PoolTransaction},
 };
 use reth_db::table::{Compress, Decompress};
+use reth_ethereum_primitives::PooledTransactionVariant;
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
 };
+use reth_transaction_pool::{EthBlobTransactionSidecar, EthPooledTransaction};
 use serde::Deserialize;
 use std::{convert::Infallible, sync::Arc};
 
@@ -310,16 +313,16 @@ impl PoolTransaction for BerachainTxEnvelope {
     }
 
     fn into_consensus(self) -> Recovered<Self::Consensus> {
-        todo!("Convert to consensus transaction")
+        TransactionSigned::from(tx)
     }
 
     fn from_pooled(pooled: Recovered<Self::Pooled>) -> Self {
         pooled.into_inner()
     }
 
-    fn try_into_pooled(self) -> Result<Recovered<Self::Pooled>, Self::TryFromConsensusError> {
-        todo!("Convert to pooled transaction")
-    }
+    // fn try_into_pooled(self) -> Result<Recovered<Self::Pooled>, Self::TryFromConsensusError> {
+    //     todo!("Convert to pooled transaction")
+    // }
 
     fn hash(&self) -> &TxHash {
         self.tx_hash()
@@ -382,5 +385,57 @@ impl From<BerachainTxEnvelope>
 {
     fn from(berachain_tx: BerachainTxEnvelope) -> Self {
         todo!()
+    }
+}
+
+impl From<EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>>
+    for BerachainTxEnvelope
+{
+    fn from(
+        ethereum_tx: EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>,
+    ) -> Self {
+        match ethereum_tx {
+            EthereumTxEnvelope::Legacy(tx) => Self::Ethereum(TxEnvelope::Legacy(tx)),
+            EthereumTxEnvelope::Eip2930(tx) => Self::Ethereum(TxEnvelope::Eip2930(tx)),
+            EthereumTxEnvelope::Eip1559(tx) => Self::Ethereum(TxEnvelope::Eip1559(tx)),
+            EthereumTxEnvelope::Eip4844(tx) => {
+                // Convert the EIP-4844 transaction with sidecar to consensus format
+                let (tx, sig, hash) = tx.into_parts();
+                let (base_tx, _sidecar) = tx.into_parts();
+                let consensus_tx = Signed::new_unchecked(base_tx, sig, hash);
+                Self::Ethereum(TxEnvelope::Eip4844(
+                    consensus_tx.map(alloy_consensus::TxEip4844Variant::TxEip4844),
+                ))
+            }
+            EthereumTxEnvelope::Eip7702(tx) => Self::Ethereum(TxEnvelope::Eip7702(tx)),
+        }
+    }
+}
+
+impl From<BerachainTxEnvelope>
+    for EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>
+{
+    fn from(berachain_tx: BerachainTxEnvelope) -> Self {
+        match berachain_tx {
+            BerachainTxEnvelope::Ethereum(tx) => match tx {
+                TxEnvelope::Legacy(tx) => EthereumTxEnvelope::Legacy(tx),
+                TxEnvelope::Eip2930(tx) => EthereumTxEnvelope::Eip2930(tx),
+                TxEnvelope::Eip1559(tx) => EthereumTxEnvelope::Eip1559(tx),
+                TxEnvelope::Eip4844(tx) => {
+                    // For consensus transactions without sidecars, we can't convert to pooled
+                    // format This should only be called in contexts where we
+                    // have the sidecar available
+                    panic!(
+                        "Cannot convert EIP-4844 consensus transaction to pooled format without sidecar"
+                    )
+                }
+                TxEnvelope::Eip7702(tx) => EthereumTxEnvelope::Eip7702(tx),
+                _ => panic!("Unsupported transaction type"),
+            },
+            // TODO: Handle custom transaction types when they're implemented
+            // BerachainTxEnvelope::SystemRewards(_) => {
+            //     panic!("System reward transactions cannot be converted to Ethereum format")
+            // }
+        }
     }
 }
