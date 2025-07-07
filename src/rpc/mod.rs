@@ -67,23 +67,6 @@ where
     }
 }
 
-impl<N> TxInfoMapper<&BerachainTxEnvelope> for OpTxInfoMapper<N>
-where
-    N: FullNodeComponents,
-    N::Provider: ReceiptProvider,
-{
-    type Out = TransactionInfo;
-    type Err = ProviderError;
-
-    fn try_map(
-        &self,
-        tx: &BerachainTxEnvelope,
-        tx_info: TransactionInfo,
-    ) -> Result<Self::Out, Self::Err> {
-        todo!()
-    }
-}
-
 /// Add-ons w.r.t. Berachain.
 #[derive(Debug)]
 pub struct BerachainAddOns<
