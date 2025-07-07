@@ -16,11 +16,11 @@ use reth::{
 };
 use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_evm::{
-    ConfigureEvm, EthEvmFactory, EvmEnvFor, ExecutionCtxFor, NextBlockEnvAttributes,
+    ConfigureEvm, EthEvmFactory, EvmEnv, EvmEnvFor, ExecutionCtxFor, NextBlockEnvAttributes,
     eth::{EthBlockExecutionCtx, EthBlockExecutorFactory},
 };
 use reth_evm_ethereum::{
-    EthBlockAssembler, RethReceiptBuilder, revm_spec_by_timestamp_and_block_number,
+    EthBlockAssembler, RethReceiptBuilder, revm_spec, revm_spec_by_timestamp_and_block_number,
 };
 use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
 use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
@@ -57,6 +57,10 @@ impl BerachainEvmConfig {
         self.block_assembler.extra_data = extra_data;
         self
     }
+
+    pub fn chain_spec(&self) -> &BerachainChainSpec {
+        &self.spec
+    }
 }
 
 impl ConfigureEvm for BerachainEvmConfig {
@@ -75,9 +79,38 @@ impl ConfigureEvm for BerachainEvmConfig {
     }
 
     fn evm_env(&self, header: &HeaderTy<Self::Primitives>) -> EvmEnvFor<Self> {
-        todo!()
-    }
+        let blob_params = self.chain_spec().blob_params_at_timestamp(header.timestamp);
+        let spec = revm_spec(self.chain_spec(), header);
 
+        // configure evm env based on parent block
+        let mut cfg_env =
+            CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec);
+
+        if let Some(blob_params) = &blob_params {
+            cfg_env.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
+        }
+
+        // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
+        // blobparams
+        let blob_excess_gas_and_price =
+            header.excess_blob_gas.zip(blob_params).map(|(excess_blob_gas, params)| {
+                let blob_gasprice = params.calc_blob_fee(excess_blob_gas);
+                BlobExcessGasAndPrice { excess_blob_gas, blob_gasprice }
+            });
+
+        let block_env = BlockEnv {
+            number: U256::from(header.number()),
+            beneficiary: header.beneficiary(),
+            timestamp: U256::from(header.timestamp()),
+            difficulty: if spec >= SpecId::MERGE { U256::ZERO } else { header.difficulty() },
+            prevrandao: if spec >= SpecId::MERGE { header.mix_hash() } else { None },
+            gas_limit: header.gas_limit(),
+            basefee: header.base_fee_per_gas().unwrap_or_default(),
+            blob_excess_gas_and_price,
+        };
+
+        EvmEnv { cfg_env, block_env }
+    }
     fn next_evm_env(
         &self,
         parent: &HeaderTy<Self::Primitives>,
