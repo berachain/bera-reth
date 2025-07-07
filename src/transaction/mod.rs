@@ -186,9 +186,10 @@ impl BerachainTxEnvelope {
             // _ => None,
         }
     }
-    pub const fn tx_type(&self) -> TxTypeCustom {
+    pub fn tx_type(&self) -> TxTypeCustom {
         match self {
-            Self::Ethereum(tx) => tx.tx_type(),
+            // TODO: Rez, is there a better way?
+            Self::Ethereum(tx) => TxTypeCustom::try_from(tx.tx_type() as u8).unwrap(),
         }
     }
 }

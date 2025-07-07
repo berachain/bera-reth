@@ -40,7 +40,7 @@ pub struct BerachainBlockExecutor<'a, Evm, Spec> {
     receipt_builder: BerachainReceiptBuilder,
 
     /// Receipts of executed transactions.
-    receipts: Vec<BerachainReceiptBuilder::Receipt>,
+    receipts: Vec<<BerachainReceiptBuilder as ReceiptBuilder>::Receipt>,
     /// Total gas used by transactions in this block.
     gas_used: u64,
 }
