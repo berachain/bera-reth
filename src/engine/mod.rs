@@ -29,6 +29,7 @@ use reth::{
     api::{BuiltPayload, EngineTypes, NodePrimitives, PayloadTypes},
     core::primitives::SealedBlock,
 };
+use reth_ethereum_engine_primitives::{BuiltPayloadConversionError, EthBuiltPayload};
 use reth_node_ethereum::EthEngineTypes;
 
 /// Berachain engine types configuration
@@ -66,34 +67,4 @@ impl EngineTypes for BerachainEngineTypes {
     type ExecutionPayloadEnvelopeV3 = ExecutionPayloadEnvelopeV3;
     type ExecutionPayloadEnvelopeV4 = ExecutionPayloadEnvelopeV4;
     type ExecutionPayloadEnvelopeV5 = ExecutionPayloadEnvelopeV5;
-}
-
-impl From<BerachainBuiltPayload> for ExecutionPayloadV1 {
-    fn from(value: BerachainBuiltPayload) -> Self {
-        todo!()
-    }
-}
-
-impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV2 {
-    fn from(value: BerachainBuiltPayload) -> Self {
-        todo!()
-    }
-}
-
-impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV3 {
-    fn from(value: BerachainBuiltPayload) -> Self {
-        todo!()
-    }
-}
-
-impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV4 {
-    fn from(value: BerachainBuiltPayload) -> Self {
-        todo!()
-    }
-}
-
-impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
-    fn from(value: BerachainBuiltPayload) -> Self {
-        todo!()
-    }
 }

@@ -7,14 +7,20 @@ use alloy_eips::{
     eip7685::Requests,
 };
 use alloy_primitives::{Address, B256, U256};
-use alloy_rpc_types::engine::{ExecutionData, PayloadId};
+use alloy_rpc_types::engine::{
+    BlobsBundleV1, ExecutionData, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
+    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1, ExecutionPayloadV3,
+    PayloadId,
+};
 use reth::{
     api::PayloadAttributes,
     builder::{PayloadAttributesBuilder, PayloadBuilderAttributes},
     chainspec::EthereumHardforks,
 };
 use reth_engine_local::LocalPayloadAttributesBuilder;
-use reth_ethereum_engine_primitives::{BlobSidecars, EthBuiltPayload, payload_id};
+use reth_ethereum_engine_primitives::{
+    BlobSidecars, BuiltPayloadConversionError, EthBuiltPayload, payload_id,
+};
 use reth_ethereum_primitives::Block;
 use reth_node_ethereum::engine::EthPayloadAttributes;
 use reth_payload_primitives::{BuiltPayload, PayloadTypes};
@@ -196,6 +202,80 @@ impl BerachainBuiltPayload {
     pub fn with_sidecars(mut self, sidecars: impl Into<BlobSidecars>) -> Self {
         self.sidecars = sidecars.into();
         self
+    }
+
+    /// Try converting built payload into [`ExecutionPayloadEnvelopeV3`].
+    ///
+    /// Returns an error if the payload contains non EIP-4844 sidecar.
+    pub fn try_into_v3(self) -> Result<ExecutionPayloadEnvelopeV3, BuiltPayloadConversionError> {
+        let Self { block, fees, sidecars, .. } = self;
+
+        let blobs_bundle = match sidecars {
+            BlobSidecars::Empty => BlobsBundleV1::empty(),
+            BlobSidecars::Eip4844(sidecars) => BlobsBundleV1::from(sidecars),
+            BlobSidecars::Eip7594(_) => {
+                return Err(BuiltPayloadConversionError::UnexpectedEip7594Sidecars)
+            }
+        };
+
+        Ok(ExecutionPayloadEnvelopeV3 {
+            execution_payload: ExecutionPayloadV3::from_block_unchecked(
+                block.hash(),
+                &Arc::unwrap_or_clone(block).into_block(),
+            ),
+            block_value: fees,
+            // From the engine API spec:
+            //
+            // > Client software **MAY** use any heuristics to decide whether to set
+            // `shouldOverrideBuilder` flag or not. If client software does not implement any
+            // heuristic this flag **SHOULD** be set to `false`.
+            //
+            // Spec:
+            // <https://github.com/ethereum/execution-apis/blob/fe8e13c288c592ec154ce25c534e26cb7ce0530d/src/engine/cancun.md#specification-2>
+            should_override_builder: false,
+            blobs_bundle,
+        })
+    }
+
+    pub fn try_into_v4(self) -> Result<ExecutionPayloadEnvelopeV4, BuiltPayloadConversionError> {
+        Ok(ExecutionPayloadEnvelopeV4 {
+            execution_requests: self.requests.clone().unwrap_or_default(),
+            envelope_inner: self.try_into()?,
+        })
+    }
+}
+
+impl From<BerachainBuiltPayload> for ExecutionPayloadV1 {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        todo!()
+    }
+}
+
+impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV2 {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        todo!()
+    }
+}
+
+impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV3 {
+    type Error = BuiltPayloadConversionError;
+
+    fn try_from(value: BerachainBuiltPayload) -> Result<Self, Self::Error> {
+        value.try_into_v3()
+    }
+}
+
+impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV4 {
+    type Error = BuiltPayloadConversionError;
+
+    fn try_from(value: BerachainBuiltPayload) -> Result<Self, Self::Error> {
+        value.try_into_v4()
+    }
+}
+
+impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        todo!()
     }
 }
 
