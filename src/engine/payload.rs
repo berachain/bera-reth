@@ -203,15 +203,15 @@ impl BuiltPayload for BerachainBuiltPayload {
     type Primitives = BerachainPrimitives;
 
     fn block(&self) -> &SealedBlock<<Self::Primitives as NodePrimitives>::Block> {
-        todo!()
+        &self.block
     }
 
     fn fees(&self) -> U256 {
-        todo!()
+        self.fees
     }
 
     fn requests(&self) -> Option<Requests> {
-        todo!()
+        self.requests.clone()
     }
 }
 
