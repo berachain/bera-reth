@@ -1,15 +1,8 @@
 use crate::{chainspec::BerachainChainSpec, transaction::BerachainTxEnvelope};
 use alloy_eips::{eip7840::BlobParams, merge::EPOCH_SLOTS};
-use alloy_primitives::{Address, B256, TxHash, U256};
 use reth::{
     api::NodeTypes,
-    transaction_pool::{
-        AllPoolTransactions, AllTransactionsEvents, BestTransactions, BestTransactionsAttributes,
-        BlobStoreError, BlockInfo, EthTransactionPool, GetPooledTransactionLimit, NewBlobSidecar,
-        NewTransactionEvent, PoolResult, PoolSize, PoolTransaction, Priority,
-        PropagatedTransactions, TransactionEvents, TransactionListenerKind, TransactionOrdering,
-        TransactionOrigin, TransactionPool, ValidPoolTransaction, blobstore::DiskFileBlobStore,
-    },
+    transaction_pool::{EthTransactionPool, blobstore::DiskFileBlobStore},
 };
 use reth_chainspec::EthChainSpec;
 use reth_node_api::FullNodeTypes;
@@ -17,11 +10,9 @@ use reth_node_builder::{
     BuilderContext,
     components::{PoolBuilder, TxPoolBuilder},
 };
-use reth_node_ethereum::EthereumPoolBuilder;
 use reth_primitives_traits::NodePrimitives;
 use reth_transaction_pool::TransactionValidationTaskExecutor;
-use std::{collections::HashSet, fmt::Debug, future::Future, sync::Arc, time::SystemTime};
-use tokio::sync::mpsc::Receiver;
+use std::{fmt::Debug, time::SystemTime};
 use tracing::{debug, info};
 
 #[derive(Debug, Default)]

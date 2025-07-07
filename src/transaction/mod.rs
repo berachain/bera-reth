@@ -1,7 +1,7 @@
 use alloy_consensus::{
-    Signed, Transaction, TxEip4844, TxEip4844Variant, TxEnvelope, TxType,
+    Signed, Transaction, TxEip4844, TxEnvelope,
     crypto::RecoveryError,
-    transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
+    transaction::{Recovered, SignerRecoverable},
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718,
@@ -108,16 +108,16 @@ impl Encodable2718 for PoLTx {
         todo!()
     }
 
-    fn encode_2718(&self, _out: &mut dyn BufMut) {
+    fn encode_2718(&self, out: &mut dyn BufMut) {
         todo!()
     }
 }
 impl Decodable2718 for PoLTx {
-    fn typed_decode(_ty: u8, _buf: &mut &[u8]) -> Eip2718Result<Self> {
+    fn typed_decode(ty: u8, buf: &mut &[u8]) -> Eip2718Result<Self> {
         todo!()
     }
 
-    fn fallback_decode(_buf: &mut &[u8]) -> Eip2718Result<Self> {
+    fn fallback_decode(buf: &mut &[u8]) -> Eip2718Result<Self> {
         todo!()
     }
 }
@@ -195,6 +195,7 @@ impl BerachainTxEnvelope {
 }
 
 // impl Compress + Decompress + Serialize
+
 impl Compress for BerachainTxEnvelope {
     type Compressed = Vec<u8>;
 
@@ -267,7 +268,7 @@ impl FromRecoveredTx<PoLTx> for TxEnv {
 }
 
 impl FromTxWithEncoded<PoLTx> for TxEnv {
-    fn from_encoded_tx(tx: &PoLTx, sender: Address, _encoded: Bytes) -> Self {
+    fn from_encoded_tx(tx: &PoLTx, sender: Address, encoded: Bytes) -> Self {
         todo!()
     }
 }

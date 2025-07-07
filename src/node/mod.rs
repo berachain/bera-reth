@@ -20,14 +20,13 @@ use alloy_consensus::error::ValueError;
 use alloy_rpc_types::TransactionRequest;
 use reth::{
     api::{BlockTy, FullNodeTypes, NodeTypes},
-    consensus::FullConsensus,
     providers::EthStorage,
     rpc::compat::TryIntoSimTx,
 };
 use reth_node_api::FullNodeComponents;
 use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
-    components::{BasicPayloadServiceBuilder, ComponentsBuilder, ConsensusBuilder},
+    components::{BasicPayloadServiceBuilder, ComponentsBuilder},
     rpc::BasicEngineApiBuilder,
 };
 use reth_node_ethereum::{EthereumNode, node::EthereumNetworkBuilder};

@@ -15,11 +15,8 @@ pub mod builder;
 pub mod payload;
 pub mod validator;
 
-use crate::engine::{
-    builder::BerachainPayloadBuilder,
-    payload::{
-        BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
-    },
+use crate::engine::payload::{
+    BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
 };
 use alloy_rpc_types::engine::{
     ExecutionData, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
@@ -29,7 +26,6 @@ use reth::{
     api::{BuiltPayload, EngineTypes, NodePrimitives, PayloadTypes},
     core::primitives::SealedBlock,
 };
-use reth_ethereum_engine_primitives::{BuiltPayloadConversionError, EthBuiltPayload};
 use reth_node_ethereum::EthEngineTypes;
 
 /// Berachain engine types configuration

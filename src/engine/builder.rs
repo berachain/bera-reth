@@ -10,7 +10,7 @@ use crate::{
 use alloy_consensus::Transaction;
 use alloy_primitives::U256;
 use reth::{
-    api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, PrimitivesTy, TxTy},
+    api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, TxTy},
     chainspec::EthereumHardforks,
     providers::StateProviderFactory,
     revm::{State, context::Block, database::StateProviderDatabase},
@@ -21,15 +21,13 @@ use reth_basic_payload_builder::{
     is_better_payload,
 };
 use reth_chainspec::{ChainSpecProvider, EthChainSpec};
-use reth_ethereum_engine_primitives::{BlobSidecars, EthBuiltPayload, EthPayloadBuilderAttributes};
-use reth_ethereum_payload_builder::{EthereumBuilderConfig, default_ethereum_payload};
-use reth_ethereum_primitives::{EthPrimitives, TransactionSigned};
+use reth_ethereum_engine_primitives::BlobSidecars;
+use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_evm::{
     ConfigureEvm, Evm, NextBlockEnvAttributes,
     block::{BlockExecutionError, BlockValidationError},
     execute::{BlockBuilder, BlockBuilderOutcome},
 };
-use reth_evm_ethereum::EthEvmConfig;
 use reth_node_builder::{BuilderContext, PayloadBuilderConfig, components::PayloadBuilderBuilder};
 use reth_payload_primitives::PayloadBuilderAttributes;
 use reth_primitives_traits::transaction::error::InvalidTransactionError;

@@ -16,7 +16,6 @@ use reth_cli_commands::{launcher::FnLauncher, node::NoArgs};
 use reth_db::DatabaseEnv;
 use reth_ethereum_cli::interface::Commands;
 use reth_evm::EthEvmFactory;
-use reth_evm_ethereum::EthEvmConfig;
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
 use reth_tracing::FileWorkerGuard;
 use std::{fmt, future::Future, sync::Arc};

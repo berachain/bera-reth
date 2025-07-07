@@ -1,11 +1,8 @@
 mod api;
 
 use crate::{
-    chainspec::BerachainChainSpec,
-    engine::BerachainEngineTypes,
-    primitives::BerachainPrimitives,
-    rpc::api::{BerachainApi, BerachainRpcConverter},
-    transaction::BerachainTxEnvelope,
+    chainspec::BerachainChainSpec, engine::BerachainEngineTypes, primitives::BerachainPrimitives,
+    rpc::api::BerachainApi, transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::transaction::TransactionInfo;
 use alloy_rpc_types::engine::ExecutionData;
@@ -14,12 +11,7 @@ use reth::{
     chainspec::EthereumHardforks,
     providers::{ProviderError, ReceiptProvider},
     revm::context::TxEnv,
-    rpc::{
-        api::eth::FromEvmError,
-        compat::TxInfoMapper,
-        eth::{EthApiFor, RpcNodeCore},
-        server_types::eth::EthApiError,
-    },
+    rpc::{api::eth::FromEvmError, compat::TxInfoMapper, server_types::eth::EthApiError},
 };
 use reth_chainspec::EthChainSpec;
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, NextBlockEnvAttributes};
@@ -28,9 +20,7 @@ use reth_node_builder::rpc::{
     BasicEngineApiBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
     EthApiBuilder, EthApiCtx, RethRpcAddOns, RpcAddOns, RpcHandle,
 };
-use reth_node_ethereum::EthereumEthApiBuilder;
 use reth_optimism_rpc::eth::transaction::OpTxInfoMapper;
-use std::future::Future;
 
 /// Builds [`BerachainEthApi`] for Berachain.
 #[derive(Debug, Default)]

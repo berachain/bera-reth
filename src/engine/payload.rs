@@ -8,7 +8,7 @@ use alloy_eips::{
 };
 use alloy_primitives::{Address, B256, U256};
 use alloy_rpc_types::engine::{
-    BlobsBundleV1, ExecutionData, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
+    BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1, ExecutionPayloadV3,
     PayloadId,
 };
@@ -18,12 +18,9 @@ use reth::{
     chainspec::EthereumHardforks,
 };
 use reth_engine_local::LocalPayloadAttributesBuilder;
-use reth_ethereum_engine_primitives::{
-    BlobSidecars, BuiltPayloadConversionError, EthBuiltPayload, payload_id,
-};
-use reth_ethereum_primitives::Block;
+use reth_ethereum_engine_primitives::{BlobSidecars, BuiltPayloadConversionError, payload_id};
 use reth_node_ethereum::engine::EthPayloadAttributes;
-use reth_payload_primitives::{BuiltPayload, PayloadTypes};
+use reth_payload_primitives::BuiltPayload;
 use reth_primitives_traits::{NodePrimitives, SealedBlock};
 use std::{convert::Infallible, sync::Arc};
 

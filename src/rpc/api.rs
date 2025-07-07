@@ -1,12 +1,9 @@
 use alloy_consensus::BlockHeader;
 use alloy_network::{
-    BuildResult, Ethereum, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
+    BuildResult, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
 };
 use core::fmt;
-use derive_more::Deref;
-use reth::{
-    providers::BlockReader, rpc::eth::core::EthApiInner, transaction_pool::PoolTransaction,
-};
+use reth::{providers::BlockReader, transaction_pool::PoolTransaction};
 use reth_rpc_convert::RpcConverter;
 use reth_rpc_eth_api::{FullEthApiTypes, RpcReceipt};
 
@@ -26,7 +23,7 @@ use reth::{
         ProviderHeader, ProviderReceipt, ProviderTx, ReceiptProvider, StageCheckpointReader,
         StateProviderFactory, TransactionsProvider,
     },
-    revm::{context::TxEnv, interpreter::Host},
+    revm::context::TxEnv,
     rpc::{
         compat::{RpcConvert, RpcTypes},
         eth::DevSigner,
@@ -54,7 +51,6 @@ use reth_rpc_eth_api::{
 use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock, error::FromEvmError,
 };
-use std::sync::Arc;
 
 /// Berachain-specific RPC converter that handles BerachainPrimitives and BerachainNetwork
 pub type BerachainRpcConverter = RpcConverter<BerachainNetwork, BerachainEvmConfig, EthApiError>;

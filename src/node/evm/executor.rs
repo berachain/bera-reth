@@ -1,13 +1,11 @@
 use crate::{
-    chainspec::BerachainChainSpec,
     node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
     transaction::BerachainTxEnvelope,
 };
-use alloy_consensus::{Transaction, TxReceipt};
+use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
-use alloy_primitives::Log;
 use reth::{
-    chainspec::{EthereumHardfork, EthereumHardforks},
+    chainspec::EthereumHardfork,
     providers::BlockExecutionResult,
     revm::{
         DatabaseCommit, Inspector, State,
@@ -15,8 +13,7 @@ use reth::{
     },
 };
 use reth_evm::{
-    ConfigureEvm, Database, EthEvmFactory, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded,
-    OnStateHook,
+    Database, EthEvmFactory, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, OnStateHook,
     block::{
         BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor,
         BlockValidationError, CommitChanges, ExecutableTx, StateChangePostBlockSource,
@@ -29,7 +26,6 @@ use reth_evm::{
     },
     state_change::{balance_increment_state, post_block_balance_increments},
 };
-use reth_evm_ethereum::RethReceiptBuilder;
 use std::borrow::Cow;
 
 #[derive(Debug)]
