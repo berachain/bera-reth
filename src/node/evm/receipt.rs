@@ -1,5 +1,6 @@
-use crate::transaction::{BerachainTxEnvelope, TxTypeCustom};
-use reth_ethereum_primitives::{Receipt, TransactionSigned};
+use crate::transaction::BerachainTxEnvelope;
+use alloy_consensus::TxType;
+use reth_ethereum_primitives::Receipt;
 use reth_evm::{
     Evm,
     eth::receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
@@ -13,7 +14,7 @@ pub struct BerachainReceiptBuilder;
 
 impl ReceiptBuilder for BerachainReceiptBuilder {
     type Transaction = BerachainTxEnvelope;
-    type Receipt = Receipt<TxTypeCustom>;
+    type Receipt = Receipt;
 
     fn build_receipt<E: Evm>(
         &self,
@@ -21,8 +22,8 @@ impl ReceiptBuilder for BerachainReceiptBuilder {
     ) -> Self::Receipt {
         let ReceiptBuilderCtx { tx, result, cumulative_gas_used, .. } = ctx;
         Receipt {
-            // TODO: bit sussy
-            tx_type: tx.tx_type(),
+            // TODO: @Rez TODO: fix this to not use default
+            tx_type: TxType::default(),
             // Success flag was added in `EIP-658: Embedding transaction status code in
             // receipts`.
             success: result.is_success(),
