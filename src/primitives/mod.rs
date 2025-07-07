@@ -1,4 +1,4 @@
-use crate::transaction::{BerachainTxEnvelope, TxTypeCustom};
+use crate::transaction::BerachainTxEnvelope;
 use reth_primitives_traits::NodePrimitives;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -16,5 +16,5 @@ impl NodePrimitives for BerachainPrimitives {
     type BlockHeader = alloy_consensus::Header; // Standard Ethereum header
     type BlockBody = BerachainBlockBody; // Uses your transaction type
     type SignedTx = BerachainTxEnvelope; // Your custom transaction envelope
-    type Receipt = reth_ethereum_primitives::Receipt<TxTypeCustom>; // Standard Ethereum receipts
+    type Receipt = reth_ethereum_primitives::Receipt; // Standard Ethereum receipts
 }

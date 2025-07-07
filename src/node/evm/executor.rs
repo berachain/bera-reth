@@ -1,12 +1,12 @@
 use crate::{
     chainspec::BerachainChainSpec,
     node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
-    transaction::{BerachainTxEnvelope, TxTypeCustom},
+    transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::{Transaction, TxReceipt};
-use alloy_eips::{Encodable2718, eip7685::Requests};
+use alloy_eips::Encodable2718;
 use reth::{
-    chainspec::{EthereumHardfork, EthereumHardforks},
+    chainspec::EthereumHardforks,
     providers::BlockExecutionResult,
     revm::{
         DatabaseCommit, Inspector, State,
@@ -18,18 +18,14 @@ use reth_evm::{
     OnStateHook,
     block::{
         BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor,
-        BlockValidationError, CommitChanges, ExecutableTx, StateChangePostBlockSource,
-        StateChangeSource, SystemCaller,
+        BlockValidationError, CommitChanges, ExecutableTx, StateChangeSource, SystemCaller,
     },
     eth::{
-        EthBlockExecutionCtx, dao_fork, eip6110,
+        EthBlockExecutionCtx,
         receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
-        spec::EthExecutorSpec,
     },
-    state_change::{balance_increment_state, post_block_balance_increments},
 };
 use reth_evm_ethereum::RethReceiptBuilder;
-use std::borrow::Cow;
 
 #[derive(Debug)]
 pub struct BerachainBlockExecutor<'a, Evm, Spec> {
@@ -71,17 +67,16 @@ where
     }
 }
 
-impl<'db, DB, E, Spec> BlockExecutor for BerachainBlockExecutor<'_, E, Spec>
+impl<'db, DB, E, Spec: EthereumHardforks> BlockExecutor for BerachainBlockExecutor<'_, E, Spec>
 where
     DB: Database + 'db,
     E: Evm<
             DB = &'db mut State<DB>,
             Tx: FromRecoveredTx<BerachainTxEnvelope> + FromTxWithEncoded<BerachainTxEnvelope>,
         >,
-    Spec: EthExecutorSpec,
 {
     type Transaction = BerachainTxEnvelope;
-    type Receipt = reth_ethereum_primitives::Receipt<TxTypeCustom>;
+    type Receipt = reth_ethereum_primitives::Receipt;
     type Evm = E;
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
@@ -146,74 +141,9 @@ where
     }
 
     fn finish(
-        mut self,
+        self,
     ) -> Result<(Self::Evm, BlockExecutionResult<Self::Receipt>), BlockExecutionError> {
-        let requests = if self
-            .spec
-            .is_prague_active_at_timestamp(self.evm.block().timestamp.saturating_to())
-        {
-            // Collect all EIP-6110 deposits
-            let deposit_requests =
-                eip6110::parse_deposits_from_receipts(&self.spec, &self.receipts)?;
-
-            let mut requests = Requests::default();
-
-            if !deposit_requests.is_empty() {
-                requests.push_request_with_type(eip6110::DEPOSIT_REQUEST_TYPE, deposit_requests);
-            }
-
-            requests.extend(self.system_caller.apply_post_execution_changes(&mut self.evm)?);
-            requests
-        } else {
-            Requests::default()
-        };
-
-        let mut balance_increments = post_block_balance_increments(
-            &self.spec,
-            self.evm.block(),
-            self.ctx.ommers,
-            self.ctx.withdrawals.as_deref(),
-        );
-
-        // Irregular state change at Ethereum DAO hardfork
-        if self
-            .spec
-            .ethereum_fork_activation(EthereumHardfork::Dao)
-            .transitions_at_block(self.evm.block().number.saturating_to())
-        {
-            // drain balances from hardcoded addresses.
-            let drained_balance: u128 = self
-                .evm
-                .db_mut()
-                .drain_balances(dao_fork::DAO_HARDFORK_ACCOUNTS)
-                .map_err(|_| BlockValidationError::IncrementBalanceFailed)?
-                .into_iter()
-                .sum();
-
-            // return balance to DAO beneficiary.
-            *balance_increments.entry(dao_fork::DAO_HARDFORK_BENEFICIARY).or_default() +=
-                drained_balance;
-        }
-        // increment balances
-        self.evm
-            .db_mut()
-            .increment_balances(balance_increments.clone())
-            .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
-
-        // call state hook with changes due to balance increments.
-        self.system_caller.try_on_state_with(|| {
-            balance_increment_state(&balance_increments, self.evm.db_mut()).map(|state| {
-                (
-                    StateChangeSource::PostBlock(StateChangePostBlockSource::BalanceIncrements),
-                    Cow::Owned(state),
-                )
-            })
-        })?;
-
-        Ok((
-            self.evm,
-            BlockExecutionResult { receipts: self.receipts, requests, gas_used: self.gas_used },
-        ))
+        todo!()
     }
 
     fn set_state_hook(&mut self, hook: Option<Box<dyn OnStateHook>>) {
@@ -233,7 +163,7 @@ impl BlockExecutorFactory for BerachainEvmConfig {
     type EvmFactory = EthEvmFactory;
     type ExecutionCtx<'a> = EthBlockExecutionCtx<'a>;
     type Transaction = BerachainTxEnvelope;
-    type Receipt = reth_ethereum_primitives::Receipt<TxTypeCustom>;
+    type Receipt = reth_ethereum_primitives::Receipt;
 
     fn evm_factory(&self) -> &Self::EvmFactory {
         &self.evm_factory

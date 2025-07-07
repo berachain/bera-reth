@@ -1,7 +1,5 @@
 use crate::{
-    chainspec::BerachainChainSpec,
-    primitives::BerachainBlock,
-    transaction::{BerachainTxEnvelope, TxTypeCustom},
+    chainspec::BerachainChainSpec, primitives::BerachainBlock, transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::{
     Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, Header, Transaction, TxReceipt, proofs,
@@ -38,7 +36,7 @@ where
     F: for<'a> BlockExecutorFactory<
             ExecutionCtx<'a> = EthBlockExecutionCtx<'a>,
             Transaction = BerachainTxEnvelope,
-            Receipt = Receipt<TxTypeCustom>,
+            Receipt = Receipt,
         >,
 {
     type Block = BerachainBlock;
