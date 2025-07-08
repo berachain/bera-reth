@@ -351,6 +351,19 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
     }
 }
 
+impl From<TxTypeCustom> for alloy_consensus::TxType {
+    fn from(custom: TxTypeCustom) -> Self {
+        match u8::from(custom) {
+            0 => Self::Legacy,
+            1 => Self::Eip2930,
+            2 => Self::Eip1559,
+            3 => Self::Eip4844,
+            4 => Self::Eip7702,
+            _ => Self::Legacy, // fallback for unknown types
+        }
+    }
+}
+
 impl<T> From<Signed<T>> for BerachainTxEnvelope {
     fn from(value: Signed<T>) -> Self {
         todo!()

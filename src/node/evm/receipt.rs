@@ -1,5 +1,4 @@
 use crate::transaction::BerachainTxEnvelope;
-use alloy_consensus::TxType;
 use reth_ethereum_primitives::Receipt;
 use reth_evm::{
     Evm,
@@ -23,7 +22,7 @@ impl ReceiptBuilder for BerachainReceiptBuilder {
         let ReceiptBuilderCtx { tx, result, cumulative_gas_used, .. } = ctx;
         Receipt {
             // TODO: @Rez TODO: fix this to not use default
-            tx_type: TxType::default(),
+            tx_type: tx.tx_type().into(),
             // Success flag was added in `EIP-658: Embedding transaction status code in
             // receipts`.
             success: result.is_success(),
