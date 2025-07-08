@@ -333,13 +333,21 @@ impl FromTxWithEncoded<PoLTx> for TxEnv {
 
 impl FromRecoveredTx<BerachainTxEnvelope> for TxEnv {
     fn from_recovered_tx(tx: &BerachainTxEnvelope, sender: Address) -> Self {
-        todo!()
+        match tx {
+            BerachainTxEnvelope::Ethereum(ethereum_tx) => {
+                TxEnv::from_recovered_tx(ethereum_tx, sender)
+            }
+        }
     }
 }
 
 impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
     fn from_encoded_tx(tx: &BerachainTxEnvelope, sender: Address, encoded: Bytes) -> Self {
-        todo!()
+        match tx {
+            BerachainTxEnvelope::Ethereum(ethereum_tx) => {
+                TxEnv::from_encoded_tx(ethereum_tx, sender, encoded)
+            }
+        }
     }
 }
 
