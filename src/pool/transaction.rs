@@ -1,19 +1,23 @@
 use crate::transaction::BerachainTxEnvelope;
 use alloy_consensus::{
-    Signed, Transaction, TxEip4844WithSidecar,
+    EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar,
     error::ValueError,
     transaction::{PooledTransaction, Recovered},
 };
 use alloy_eips::{
-    Encodable2718, Typed2718, eip2930::AccessList, eip7594::BlobTransactionSidecarVariant,
+    Encodable2718, Typed2718,
+    eip2930::AccessList,
+    eip4844::{
+        BlobAndProofV1, BlobAndProofV2, BlobTransactionValidationError, env_settings::KzgSettings,
+    },
+    eip7594::BlobTransactionSidecarVariant,
     eip7702::SignedAuthorization,
 };
 use alloy_primitives::{Address, B256, Bytes, TxHash, TxKind, U256};
-use reth::revm::interpreter::Host;
 use reth_ethereum_primitives::{PooledTransactionVariant, TransactionSigned};
 use reth_primitives_traits::{InMemorySize, SignedTransaction};
-use reth_transaction_pool::{EthBlobTransactionSidecar, EthPooledTransaction, PoolTransaction};
-use std::convert::Infallible;
+use reth_transaction_pool::{EthBlobTransactionSidecar, EthPoolTransaction, PoolTransaction};
+use std::{convert::Infallible, sync::Arc};
 
 /// The default [`PoolTransaction`] for the [Pool](crate::Pool) for Ethereum.
 ///
@@ -28,7 +32,7 @@ use std::convert::Infallible;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BerachainPooledTransaction {
     /// `EcRecovered` transaction, the consensus format.
-    pub transaction: Recovered<BerachainTxEnvelope>,
+    pub transaction: Recovered<TransactionSigned>,
 
     /// For EIP-1559 transactions: `max_fee_per_gas * gas_limit + tx_value`.
     /// For legacy transactions: `gas_price * gas_limit + tx_value`.
@@ -124,12 +128,21 @@ impl Transaction for BerachainPooledTransaction {
 pub type BerachainPooledTransactionVariant =
     alloy_consensus::EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>;
 
+impl From<Recovered<BerachainPooledTransactionVariant>> for BerachainPooledTransaction {
+    fn from(value: Recovered<BerachainPooledTransactionVariant>) -> Self {
+        todo!()
+    }
+}
+
 impl BerachainPooledTransaction {
     /// Create new instance of [Self].
     ///
     /// Caution: In case of blob transactions, this does marks the blob sidecar as
     /// [`EthBlobTransactionSidecar::Missing`]
-    pub fn new(transaction: Recovered<BerachainTxEnvelope>, encoded_length: usize) -> Self {
+    pub fn new(
+        transaction: Recovered<EthereumTxEnvelope<TxEip4844>>,
+        encoded_length: usize,
+    ) -> Self {
         let mut blob_sidecar = EthBlobTransactionSidecar::None;
 
         let gas_cost = U256::from(transaction.max_fee_per_gas())
@@ -154,7 +167,7 @@ impl BerachainPooledTransaction {
     }
 
     /// Return the reference to the underlying transaction.
-    pub const fn transaction(&self) -> &Recovered<BerachainTxEnvelope> {
+    pub const fn transaction(&self) -> &Recovered<TransactionSigned> {
         &self.transaction
     }
 }
@@ -174,11 +187,11 @@ impl PoolTransaction for BerachainPooledTransaction {
     type Pooled = BerachainPooledTransactionVariant;
 
     fn clone_into_consensus(&self) -> Recovered<Self::Consensus> {
-        self.transaction().clone()
+        todo!()
     }
 
     fn into_consensus(self) -> Recovered<Self::Consensus> {
-        self.transaction
+        todo!()
     }
 
     fn from_pooled(tx: Recovered<Self::Pooled>) -> Self {
@@ -232,5 +245,33 @@ impl PoolTransaction for BerachainPooledTransaction {
     /// Returns the length of the rlp encoded object
     fn encoded_length(&self) -> usize {
         self.encoded_length
+    }
+}
+
+impl EthPoolTransaction for BerachainPooledTransaction {
+    fn take_blob(&mut self) -> EthBlobTransactionSidecar {
+        todo!()
+    }
+
+    fn try_into_pooled_eip4844(
+        self,
+        sidecar: Arc<BlobTransactionSidecarVariant>,
+    ) -> Option<Recovered<Self::Pooled>> {
+        todo!()
+    }
+
+    fn try_from_eip4844(
+        tx: Recovered<Self::Consensus>,
+        sidecar: BlobTransactionSidecarVariant,
+    ) -> Option<Self> {
+        todo!()
+    }
+
+    fn validate_blob(
+        &self,
+        blob: &BlobTransactionSidecarVariant,
+        settings: &KzgSettings,
+    ) -> Result<(), BlobTransactionValidationError> {
+        todo!()
     }
 }

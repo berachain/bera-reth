@@ -1,6 +1,9 @@
 mod transaction;
 
-use crate::{chainspec::BerachainChainSpec, transaction::BerachainTxEnvelope};
+use crate::{
+    chainspec::BerachainChainSpec, pool::transaction::BerachainPooledTransaction,
+    transaction::BerachainTxEnvelope,
+};
 use alloy_eips::{eip7840::BlobParams, merge::EPOCH_SLOTS};
 use reth::{
     api::NodeTypes,
@@ -28,7 +31,7 @@ where
         >,
     Node: FullNodeTypes<Types = Types>,
 {
-    type Pool = EthTransactionPool<Node::Provider, DiskFileBlobStore, BerachainTxEnvelope>;
+    type Pool = EthTransactionPool<Node::Provider, DiskFileBlobStore, BerachainPooledTransaction>;
 
     async fn build_pool(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::Pool> {
         let pool_config = ctx.pool_config();
