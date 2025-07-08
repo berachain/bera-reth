@@ -35,24 +35,22 @@ use std::{convert::Infallible, sync::Arc};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PoLTx {
-    #[serde(with = "alloy_serde::quantity", rename = "gas", alias = "gasLimit")]
-    pub gas_limit: u64,
+    pub chain_id: Option<ChainId>,
+    pub nonce: u64,
     pub to: Address,
-    pub input: Bytes,
+    pub data: Bytes,
 }
 impl Transaction for PoLTx {
     fn chain_id(&self) -> Option<ChainId> {
-        // Same as Op Deposit Tx
-        None
+        self.chain_id
     }
 
     fn nonce(&self) -> u64 {
-        // Same as Op Deposit Tx
-        0u64
+        self.nonce
     }
 
     fn gas_limit(&self) -> u64 {
-        self.gas_limit
+        0u64 // No gas limit for system transactions
     }
 
     fn gas_price(&self) -> Option<u128> {
@@ -96,7 +94,7 @@ impl Transaction for PoLTx {
     }
 
     fn input(&self) -> &Bytes {
-        &self.input
+        &self.data
     }
 
     fn access_list(&self) -> Option<&AccessList> {
@@ -113,60 +111,119 @@ impl Transaction for PoLTx {
 }
 impl Encodable2718 for PoLTx {
     fn encode_2718_len(&self) -> usize {
-        todo!()
+        use alloy_rlp::Encodable;
+        let chain_id_len = match &self.chain_id {
+            Some(id) => id.length(),
+            None => 1, // Empty bytes
+        };
+        chain_id_len + self.nonce.length() + self.to.length() + self.data.length()
     }
 
     fn encode_2718(&self, out: &mut dyn BufMut) {
-        todo!()
+        use alloy_rlp::Encodable;
+        match &self.chain_id {
+            Some(id) => id.encode(out),
+            None => {
+                // Encode as empty bytes for None
+                out.put_u8(0x80); // RLP encoding for empty string
+            }
+        }
+        self.nonce.encode(out);
+        self.to.encode(out);
+        self.data.encode(out);
     }
 }
 impl Decodable2718 for PoLTx {
     fn typed_decode(ty: u8, buf: &mut &[u8]) -> Eip2718Result<Self> {
-        todo!()
+        if ty != 190u8 {
+            return Err(alloy_eips::eip2718::Eip2718Error::UnexpectedType(ty));
+        }
+        Ok(Self::decode(buf)?)
     }
 
     fn fallback_decode(buf: &mut &[u8]) -> Eip2718Result<Self> {
-        todo!()
+        Ok(Self::decode(buf)?)
     }
 }
 impl Typed2718 for PoLTx {
     fn ty(&self) -> u8 {
-        todo!()
+        190u8 // 0xBE
     }
 }
 
 impl Encodable for PoLTx {
     fn encode(&self, out: &mut dyn BufMut) {
-        todo!()
+        // RLP encode the transaction fields as a list
+        use alloy_rlp::{Encodable, Header};
+        let mut buffer = Vec::new();
+
+        match &self.chain_id {
+            Some(id) => id.encode(&mut buffer),
+            None => {
+                // Encode as empty bytes for None
+                buffer.push(0x80); // RLP encoding for empty string
+            }
+        }
+        self.nonce.encode(&mut buffer);
+        self.to.encode(&mut buffer);
+        self.data.encode(&mut buffer);
+
+        Header { list: true, payload_length: buffer.len() }.encode(out);
+        out.put_slice(&buffer);
     }
 }
 
 impl Decodable for PoLTx {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        todo!()
+        // RLP decode the transaction fields from a list
+        use alloy_rlp::{Decodable, Header};
+        let header = Header::decode(buf)?;
+        if !header.list {
+            return Err(alloy_rlp::Error::Custom("expected list"));
+        }
+
+        // Decode chain_id manually
+        let chain_id = if buf.is_empty() || buf[0] == 0x80 {
+            // Empty bytes means None
+            if !buf.is_empty() && buf[0] == 0x80 {
+                *buf = &buf[1..]; // consume the empty byte
+            }
+            None
+        } else {
+            Some(ChainId::decode(buf)?)
+        };
+
+        let nonce = u64::decode(buf)?;
+        let to = Address::decode(buf)?;
+        let data = Bytes::decode(buf)?;
+
+        Ok(PoLTx { chain_id, nonce, to, data })
     }
 }
 
 impl InMemorySize for PoLTx {
     fn size(&self) -> usize {
-        todo!()
+        std::mem::size_of::<Self>() + self.data.len()
     }
 }
 
 impl SignerRecoverable for PoLTx {
     fn recover_signer(&self) -> Result<Address, RecoveryError> {
-        todo!()
+        // System transactions are pre-signed by the system
+        Ok(Address::ZERO)
     }
 
     fn recover_signer_unchecked(&self) -> Result<Address, RecoveryError> {
-        todo!()
+        // System transactions are pre-signed by the system
+        Ok(Address::ZERO)
     }
 }
 
 impl SignedTransaction for PoLTx {
     fn tx_hash(&self) -> &TxHash {
-        // /Users/rezbera/Code/reth/crates/primitives-traits/src/transaction/signed.rs
-        todo!()
+        // For system transactions, hash is deterministic based on content
+        static ZERO_HASH: TxHash = TxHash::ZERO;
+        &ZERO_HASH
     }
 }
 
@@ -177,9 +234,9 @@ pub enum BerachainTxEnvelope {
     /// Existing Ethereum transactions (purely additive)
     #[envelope(flatten)]
     Ethereum(TxEnvelope),
-    // /// Your 0-gas system transaction
-    // #[envelope(ty = 190)] // equivalent to 0xBE
-    // SystemRewards(PoLTx),
+    /// Your 0-gas system transaction
+    #[envelope(ty = 190)] // equivalent to 0xBE
+    SystemRewards(PoLTx),
 }
 
 impl BerachainTxEnvelope {
@@ -190,14 +247,13 @@ impl BerachainTxEnvelope {
                 TxEnvelope::Eip4844(tx) => Some(tx.clone().map(|variant| variant.into())),
                 _ => None,
             },
-            // TODO: Rez extend after adding SystemRewards
-            // _ => None,
+            Self::SystemRewards(_) => None,
         }
     }
     pub fn tx_type(&self) -> BerachainTxType {
         match self {
-            // TODO: Rez, is there a better way?
             Self::Ethereum(tx) => BerachainTxType::try_from(tx.tx_type() as u8).unwrap(),
+            Self::SystemRewards(_) => BerachainTxType::try_from(190u8).unwrap(),
         }
     }
 
@@ -235,6 +291,10 @@ impl BerachainTxEnvelope {
                 }
                 _ => Err(ValueError::new_static(Self::Ethereum(tx), "Expected 4844 transaction")),
             },
+            Self::SystemRewards(_) => Err(ValueError::new_static(
+                self,
+                "SystemRewards transactions cannot be converted to pooled EIP-4844",
+            )),
         }
     }
 
@@ -266,6 +326,7 @@ impl InMemorySize for BerachainTxEnvelope {
     fn size(&self) -> usize {
         match self {
             Self::Ethereum(tx) => tx.size(),
+            Self::SystemRewards(tx) => tx.size(),
         }
     }
 }
@@ -274,12 +335,14 @@ impl SignerRecoverable for BerachainTxEnvelope {
     fn recover_signer(&self) -> Result<Address, RecoveryError> {
         match self {
             Self::Ethereum(tx) => tx.recover_signer(),
+            Self::SystemRewards(tx) => tx.recover_signer(),
         }
     }
 
     fn recover_signer_unchecked(&self) -> Result<Address, RecoveryError> {
         match self {
             Self::Ethereum(tx) => tx.recover_signer_unchecked(),
+            Self::SystemRewards(tx) => tx.recover_signer_unchecked(),
         }
     }
 }
@@ -291,6 +354,7 @@ where
     fn tx_hash(&self) -> &TxHash {
         match self {
             Self::Ethereum(tx) => tx.hash(),
+            Self::SystemRewards(tx) => tx.tx_hash(),
         }
     }
 }
@@ -348,6 +412,10 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                     _ => 0,
                 }
             }
+            Self::SystemRewards(tx) => {
+                buf.put_u8(190u8); // 0xBE
+                tx.to_compact(buf)
+            }
         }
     }
 
@@ -356,6 +424,12 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
         use alloy_primitives::bytes::Buf;
 
         let tx_type_byte = buf.get_u8();
+        if tx_type_byte == 190 {
+            // SystemRewards transaction
+            let (tx, remaining_buf) = PoLTx::from_compact(buf, len);
+            return (Self::SystemRewards(tx), remaining_buf);
+        }
+
         let tx_type = match tx_type_byte {
             0 => TxType::Legacy,
             1 => TxType::Eip2930,
@@ -418,23 +492,45 @@ impl reth_codecs::Compact for PoLTx {
     where
         B: BufMut + AsMut<[u8]>,
     {
-        todo!()
+        let mut length = 0;
+        length += self.chain_id.to_compact(buf);
+        length += self.nonce.to_compact(buf);
+        length += self.to.to_compact(buf);
+        length += self.data.to_compact(buf);
+        length
     }
 
     fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
-        todo!()
+        let (chain_id, buf) = Option::<ChainId>::from_compact(buf, len);
+        let (nonce, buf) = u64::from_compact(buf, len);
+        let (to, buf) = Address::from_compact(buf, len);
+        let (data, buf) = Bytes::from_compact(buf, len);
+
+        (PoLTx { chain_id, nonce, to, data }, buf)
     }
 }
 
 impl FromRecoveredTx<PoLTx> for TxEnv {
     fn from_recovered_tx(tx: &PoLTx, caller: Address) -> Self {
-        todo!()
+        TxEnv {
+            tx_type: tx.ty(),
+            caller,
+            gas_limit: 0u64,  // No gas limit for system transactions
+            gas_price: 0u128, // No gas cost for system transactions
+            gas_priority_fee: Some(0u128),
+            kind: TxKind::Call(tx.to),
+            value: U256::ZERO,
+            nonce: tx.nonce,
+            data: tx.data.clone(),
+            chain_id: tx.chain_id,
+            ..Default::default() // Use defaults for remaining fields
+        }
     }
 }
 
 impl FromTxWithEncoded<PoLTx> for TxEnv {
-    fn from_encoded_tx(tx: &PoLTx, sender: Address, encoded: Bytes) -> Self {
-        todo!()
+    fn from_encoded_tx(tx: &PoLTx, sender: Address, _encoded: Bytes) -> Self {
+        Self::from_recovered_tx(tx, sender)
     }
 }
 
@@ -444,6 +540,7 @@ impl FromRecoveredTx<BerachainTxEnvelope> for TxEnv {
             BerachainTxEnvelope::Ethereum(ethereum_tx) => {
                 TxEnv::from_recovered_tx(ethereum_tx, sender)
             }
+            BerachainTxEnvelope::SystemRewards(pol_tx) => TxEnv::from_recovered_tx(pol_tx, sender),
         }
     }
 }
@@ -453,6 +550,9 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
         match tx {
             BerachainTxEnvelope::Ethereum(ethereum_tx) => {
                 TxEnv::from_encoded_tx(ethereum_tx, sender, encoded)
+            }
+            BerachainTxEnvelope::SystemRewards(pol_tx) => {
+                TxEnv::from_encoded_tx(pol_tx, sender, encoded)
             }
         }
     }
@@ -466,7 +566,8 @@ impl From<BerachainTxType> for alloy_consensus::TxType {
             2 => Self::Eip1559,
             3 => Self::Eip4844,
             4 => Self::Eip7702,
-            _ => Self::Legacy, // fallback for unknown types
+            190 => Self::Legacy, // SystemRewards -> fallback to Legacy for consensus
+            _ => Self::Legacy,   // fallback for unknown types
         }
     }
 }
@@ -538,10 +639,9 @@ impl From<BerachainTxEnvelope>
                 TxEnvelope::Eip7702(tx) => EthereumTxEnvelope::Eip7702(tx),
                 _ => panic!("Unsupported transaction type"),
             },
-            // TODO: Handle custom transaction types when they're implemented
-            // BerachainTxEnvelope::SystemRewards(_) => {
-            //     panic!("System reward transactions cannot be converted to Ethereum format")
-            // }
+            BerachainTxEnvelope::SystemRewards(_) => {
+                panic!("System reward transactions cannot be converted to Ethereum format")
+            }
         }
     }
 }

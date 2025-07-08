@@ -68,6 +68,61 @@ where
     }
 }
 
+impl<'db, DB, E, Spec> BerachainBlockExecutor<'_, E, Spec>
+where
+    DB: Database + 'db,
+    E: Evm<
+            DB = &'db mut State<DB>,
+            Tx: FromRecoveredTx<BerachainTxEnvelope> + FromTxWithEncoded<BerachainTxEnvelope>,
+        >,
+    Spec: EthExecutorSpec,
+{
+    /// Execute PoL system transaction at the start of every block
+    /// This generates a proper transaction receipt that will be included in the block
+    ///
+    /// TODO: Modify to accept PoL transactions from payload attributes
+    /// Following DepositTx pattern, PoL transactions should be:
+    /// 1. Sourced from payload attributes (not generated here)
+    /// 2. Passed as parameter to this method
+    /// 3. Executed deterministically before regular transactions
+    fn apply_pol_system_transaction(&mut self) -> Result<(), BlockExecutionError> {
+        use crate::transaction::PoLTx;
+        use alloy_consensus::transaction::Recovered;
+        use alloy_primitives::{Address, Bytes};
+
+        // Fixed PoL Distributor contract address (replace with actual address)
+        const POL_DISTRIBUTOR_ADDRESS: Address = Address::ZERO; // TODO: Set actual contract address
+
+        // PoL contract call data (replace with actual ABI encoding)
+        let call_data = Bytes::new(); // TODO: ABI encode "distributeFor(bytes calldata pubkey)"
+
+        // Create PoL system transaction
+        let pol_tx = PoLTx {
+            chain_id: None, // System transactions don't need chain ID
+            nonce: 0,
+            to: POL_DISTRIBUTOR_ADDRESS,
+            data: call_data,
+        };
+
+        // Wrap in envelope
+        let pol_envelope = BerachainTxEnvelope::SystemRewards(pol_tx);
+
+        // Create recovered transaction with system signer
+        let recovered_pol_tx = Recovered::new_unchecked(pol_envelope, Address::ZERO);
+
+        // Execute through proper transaction pipeline to generate receipt
+        let _gas_used = self.execute_transaction_with_commit_condition(
+            &recovered_pol_tx,
+            |_result| reth_evm::block::CommitChanges::Yes, // Always commit system transactions
+        )?;
+
+        // Note: Receipt is automatically generated and added to self.receipts
+        // in execute_transaction_with_commit_condition()
+
+        Ok(())
+    }
+}
+
 impl<'db, DB, E, Spec> BlockExecutor for BerachainBlockExecutor<'_, E, Spec>
 where
     DB: Database + 'db,
@@ -90,6 +145,10 @@ where
         self.system_caller.apply_blockhashes_contract_call(self.ctx.parent_hash, &mut self.evm)?;
         self.system_caller
             .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
+
+        // Execute PoL system transaction at start of every block
+        self.apply_pol_system_transaction()?;
+
         Ok(())
     }
 
