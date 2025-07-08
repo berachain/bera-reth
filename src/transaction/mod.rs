@@ -311,6 +311,14 @@ impl<T> From<Signed<T>> for BerachainTxEnvelope {
     }
 }
 
+impl From<reth_ethereum_primitives::TransactionSigned> for BerachainTxEnvelope {
+    fn from(tx_signed: reth_ethereum_primitives::TransactionSigned) -> Self {
+        // Convert to EthereumTxEnvelope first, then wrap in BerachainTxEnvelope
+        let ethereum_tx: EthereumTxEnvelope<TxEip4844> = tx_signed.into();
+        Self::Ethereum(ethereum_tx.into())
+    }
+}
+
 // Enable FromConsensusTx for transactions that can be converted
 impl From<BerachainTxEnvelope>
     for alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844Variant>
