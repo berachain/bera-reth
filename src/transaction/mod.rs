@@ -261,7 +261,9 @@ impl Decompress for BerachainTxEnvelope {
 
 impl InMemorySize for BerachainTxEnvelope {
     fn size(&self) -> usize {
-        todo!()
+        match self {
+            Self::Ethereum(tx) => tx.size(),
+        }
     }
 }
 
