@@ -8,7 +8,8 @@ use reth_rpc_convert::RpcConverter;
 use reth_rpc_eth_api::{FromEthApiError, FullEthApiTypes, RpcReceipt};
 
 use crate::{
-    node::evm::config::BerachainEvmConfig,
+    node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
+    rpc::receipt::BerachainEthReceiptBuilder,
     transaction::{BerachainTxEnvelope, TxTypeCustom},
 };
 use alloy_consensus::transaction::TransactionMeta;
@@ -50,8 +51,8 @@ use reth_rpc_eth_api::{
     },
 };
 use reth_rpc_eth_types::{
-    EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock, error::FromEvmError,
-    utils::recover_raw_transaction,
+    EthApiError, EthReceiptBuilder, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
+    error::FromEvmError, utils::recover_raw_transaction,
 };
 use reth_transaction_pool::TransactionOrigin;
 
@@ -424,7 +425,7 @@ impl<Provider, Pool, Network, EvmConfig> LoadReceipt
 where
     Self: RpcNodeCoreExt<
         Provider: TransactionsProvider<Transaction = BerachainTxEnvelope>
-                      + ReceiptProvider<Receipt = reth_ethereum_primitives::Receipt>,
+                      + ReceiptProvider<Receipt = Receipt>,
     >,
     Provider: BlockReader + ChainSpecProvider,
 {
@@ -434,7 +435,18 @@ where
         meta: TransactionMeta,
         receipt: Receipt,
     ) -> Result<RpcReceipt<Self::NetworkTypes>, Self::Error> {
-        todo!()
+        let hash = meta.block_hash;
+        // get all receipts for the block
+        let all_receipts = self
+            .cache()
+            .get_receipts(hash)
+            .await
+            .map_err(Self::Error::from_eth_err)?
+            .ok_or(EthApiError::HeaderNotFound(hash.into()))?;
+        let blob_params = self.provider().chain_spec().blob_params_at_timestamp(meta.timestamp);
+
+        Ok(BerachainEthReceiptBuilder::new(&tx, meta, &receipt, &all_receipts, blob_params)?
+            .build())
     }
 }
 

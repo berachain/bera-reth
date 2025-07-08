@@ -3,7 +3,7 @@
 mod assembler;
 pub mod config;
 mod executor;
-mod receipt;
+pub mod receipt;
 
 use crate::node::{BerachainNode, evm::config::BerachainEvmConfig};
 use alloy_primitives::Bytes;

@@ -1,4 +1,5 @@
 mod api;
+mod receipt;
 
 use crate::{
     chainspec::BerachainChainSpec, engine::BerachainEngineTypes, primitives::BerachainPrimitives,
