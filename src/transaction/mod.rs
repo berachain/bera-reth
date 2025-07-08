@@ -213,17 +213,33 @@ impl BerachainTxEnvelope {
         self,
         sidecar: T,
     ) -> Result<EthereumTxEnvelope<TxEip4844WithSidecar<T>>, ValueError<Self>> {
+        // TODO: Rez sus
         match self {
             Self::Ethereum(tx) => match tx {
-                Self::Eip4844(tx) => {
-                    Ok(EthereumTxEnvelope::Eip4844(tx.map(|tx| tx.with_sidecar(sidecar))))
+                TxEnvelope::Eip4844(tx) => {
+                    let (tx_variant, sig, hash) = tx.into_parts();
+                    let tx_with_sidecar = match tx_variant {
+                        alloy_consensus::TxEip4844Variant::TxEip4844(tx) => {
+                            tx.with_sidecar(sidecar)
+                        }
+                        alloy_consensus::TxEip4844Variant::TxEip4844WithSidecar(
+                            tx_with_sidecar,
+                        ) => {
+                            // If it already has a sidecar, replace it with the new one
+                            let (base_tx, _old_sidecar) = tx_with_sidecar.into_parts();
+                            base_tx.with_sidecar(sidecar)
+                        }
+                    };
+                    let signed = Signed::new_unchecked(tx_with_sidecar, sig, hash);
+                    Ok(EthereumTxEnvelope::Eip4844(signed))
                 }
+                _ => Err(ValueError::new_static(Self::Ethereum(tx), "Expected 4844 transaction")),
             },
-            Self::Eip4844(tx) => {
-                Ok(EthereumTxEnvelope::Eip4844(tx.map(|tx| tx.with_sidecar(sidecar))))
-            }
-            this => Err(ValueError::new_static(this, "Expected 4844 transaction")),
         }
+    }
+
+    pub fn with_signer<T>(self, signer: Address) -> Recovered<Self> {
+        Recovered::new_unchecked(self, signer)
     }
 }
 
