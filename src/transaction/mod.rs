@@ -2,6 +2,7 @@ use alloy_consensus::{
     EthereumTxEnvelope, SignableTransaction, Signed, Transaction, TxEip4844, TxEip4844WithSidecar,
     TxEnvelope,
     crypto::RecoveryError,
+    error::ValueError,
     transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
 };
 use alloy_eips::{
@@ -202,6 +203,27 @@ impl BerachainTxEnvelope {
 
     pub fn hash(&self) -> &TxHash {
         self.tx_hash()
+    }
+    /// Converts from an EIP-4844 transaction to a [`EthereumTxEnvelope<TxEip4844WithSidecar<T>>`]
+    /// with the given sidecar.
+    ///
+    /// Returns an `Err` containing the original [`EthereumTxEnvelope`] if the transaction is not an
+    /// EIP-4844 variant.
+    pub fn try_into_pooled_eip4844<T>(
+        self,
+        sidecar: T,
+    ) -> Result<EthereumTxEnvelope<TxEip4844WithSidecar<T>>, ValueError<Self>> {
+        match self {
+            Self::Ethereum(tx) => match tx {
+                Self::Eip4844(tx) => {
+                    Ok(EthereumTxEnvelope::Eip4844(tx.map(|tx| tx.with_sidecar(sidecar))))
+                }
+            },
+            Self::Eip4844(tx) => {
+                Ok(EthereumTxEnvelope::Eip4844(tx.map(|tx| tx.with_sidecar(sidecar))))
+            }
+            this => Err(ValueError::new_static(this, "Expected 4844 transaction")),
+        }
     }
 }
 

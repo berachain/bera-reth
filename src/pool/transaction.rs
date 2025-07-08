@@ -254,28 +254,43 @@ impl PoolTransaction for BerachainPooledTransaction {
 
 impl EthPoolTransaction for BerachainPooledTransaction {
     fn take_blob(&mut self) -> EthBlobTransactionSidecar {
-        todo!()
+        if self.is_eip4844() {
+            std::mem::replace(&mut self.blob_sidecar, EthBlobTransactionSidecar::Missing)
+        } else {
+            EthBlobTransactionSidecar::None
+        }
     }
 
     fn try_into_pooled_eip4844(
         self,
         sidecar: Arc<BlobTransactionSidecarVariant>,
     ) -> Option<Recovered<Self::Pooled>> {
-        todo!()
+        let (signed_transaction, signer) = self.into_consensus().into_parts();
+        let pooled_transaction =
+            signed_transaction.try_into_pooled_eip4844(Arc::unwrap_or_clone(sidecar)).ok()?;
+
+        Some(Recovered::new_unchecked(pooled_transaction, signer))
     }
 
     fn try_from_eip4844(
         tx: Recovered<Self::Consensus>,
         sidecar: BlobTransactionSidecarVariant,
     ) -> Option<Self> {
-        todo!()
+        let (tx, signer) = tx.into_parts();
+        tx.try_into_pooled_eip4844(sidecar)
+            .ok()
+            .map(|tx| tx.with_signer(signer))
+            .map(Self::from_pooled)
     }
 
     fn validate_blob(
         &self,
-        blob: &BlobTransactionSidecarVariant,
+        sidecar: &BlobTransactionSidecarVariant,
         settings: &KzgSettings,
     ) -> Result<(), BlobTransactionValidationError> {
-        todo!()
+        match self.transaction.inner().as_eip4844() {
+            Some(tx) => tx.tx().validate_blob(sidecar, settings),
+            _ => Err(BlobTransactionValidationError::NotBlobTransaction(self.ty())),
+        }
     }
 }
