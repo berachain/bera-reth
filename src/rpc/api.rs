@@ -423,11 +423,15 @@ where
 impl<Provider, Pool, Network, EvmConfig> LoadReceipt
     for BerachainApi<Provider, Pool, Network, EvmConfig>
 where
-    Self: RpcNodeCoreExt<
-        Provider: TransactionsProvider<Transaction = BerachainTxEnvelope>
-                      + ReceiptProvider<Receipt = Receipt>,
-    >,
-    Provider: BlockReader + ChainSpecProvider,
+    Self: RpcNodeCore<
+            Provider: ChainSpecProvider<ChainSpec: EthereumHardforks>
+                          + BlockNumReader
+                          + StageCheckpointReader
+                          + TransactionsProvider<Transaction = BerachainTxEnvelope>
+                          + ReceiptProvider<Receipt = Receipt>,
+            Network: NetworkInfo,
+        > + RpcNodeCoreExt,
+    Provider: BlockReader,
 {
     async fn build_transaction_receipt(
         &self,
@@ -478,16 +482,21 @@ where
 impl<Provider, Pool, Network, EvmConfig> EthBlocks
     for BerachainApi<Provider, Pool, Network, EvmConfig>
 where
-    Self: LoadBlock<
-            Error = EthApiError,
-            NetworkTypes: RpcTypes<Receipt = TransactionReceipt>,
-            RpcConvert: RpcConvert<Network = Self::NetworkTypes>,
-            Provider: BlockReader<
+    Self: RpcNodeCore<
+            Provider: ChainSpecProvider<ChainSpec: EthereumHardforks>
+                          + BlockNumReader
+                          + StageCheckpointReader
+                          + BlockReader<
                 Transaction = BerachainTxEnvelope,
                 Receipt = reth_ethereum_primitives::Receipt,
             >,
+            Network: NetworkInfo,
+        > + LoadBlock<
+            Error = EthApiError,
+            NetworkTypes: RpcTypes<Receipt = TransactionReceipt>,
+            RpcConvert: RpcConvert<Network = Self::NetworkTypes>,
         >,
-    Provider: BlockReader + ChainSpecProvider,
+    Provider: BlockReader,
 {
     async fn block_receipts(
         &self,
