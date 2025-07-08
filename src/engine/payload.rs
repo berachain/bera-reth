@@ -243,14 +243,14 @@ impl BerachainBuiltPayload {
 }
 
 impl From<BerachainBuiltPayload> for ExecutionPayloadV1 {
-    fn from(value: BerachainBuiltPayload) -> Self {
-        todo!()
+    fn from(_value: BerachainBuiltPayload) -> Self {
+        unimplemented!("execution payload envelope v1 support is not needed for berachain")
     }
 }
 
 impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV2 {
-    fn from(value: BerachainBuiltPayload) -> Self {
-        todo!()
+    fn from(_value: BerachainBuiltPayload) -> Self {
+        unimplemented!("execution payload envelope v2 support is not needed for berachain")
     }
 }
 
@@ -271,8 +271,8 @@ impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV4 {
 }
 
 impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
-    fn from(value: BerachainBuiltPayload) -> Self {
-        todo!()
+    fn from(_value: BerachainBuiltPayload) -> Self {
+        todo!("execution payload envelope v5 is not needed for berachain yet")
     }
 }
 
