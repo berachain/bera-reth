@@ -187,7 +187,7 @@ impl PoolTransaction for BerachainPooledTransaction {
     type Pooled = BerachainPooledTransactionVariant;
 
     fn clone_into_consensus(&self) -> Recovered<Self::Consensus> {
-        todo!()
+        self.transaction().clone()
     }
 
     fn into_consensus(self) -> Recovered<Self::Consensus> {

@@ -199,6 +199,10 @@ impl BerachainTxEnvelope {
             Self::Ethereum(tx) => TxTypeCustom::try_from(tx.tx_type() as u8).unwrap(),
         }
     }
+
+    pub fn hash(&self) -> &TxHash {
+        self.tx_hash()
+    }
 }
 
 // impl Compress + Decompress + Serialize
