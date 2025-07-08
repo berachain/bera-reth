@@ -193,7 +193,9 @@ impl PoolTransaction for BerachainPooledTransaction {
     }
 
     fn into_consensus(self) -> Recovered<Self::Consensus> {
-        todo!()
+        let (tx_signed, signer) = self.transaction.into_parts();
+        let berachain_tx = BerachainTxEnvelope::from(tx_signed);
+        Recovered::new_unchecked(berachain_tx, signer)
     }
 
     fn from_pooled(tx: Recovered<Self::Pooled>) -> Self {
