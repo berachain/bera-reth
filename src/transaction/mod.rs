@@ -243,19 +243,22 @@ impl BerachainTxEnvelope {
     }
 }
 
-// impl Compress + Decompress + Serialize
-
 impl Compress for BerachainTxEnvelope {
     type Compressed = Vec<u8>;
 
     fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
-        todo!()
+        // TODO: sus
+        // Use the compact encoding for compression
+        reth_codecs::Compact::to_compact(self, buf);
     }
 }
 
 impl Decompress for BerachainTxEnvelope {
     fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
-        todo!()
+        // TODO: sus
+        // Use the compact decoding for decompression
+        let (tx, _) = reth_codecs::Compact::from_compact(value, value.len());
+        Ok(tx)
     }
 }
 
