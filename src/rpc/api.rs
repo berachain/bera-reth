@@ -5,7 +5,7 @@ use alloy_network::{
 use core::fmt;
 use reth::{providers::BlockReader, transaction_pool::PoolTransaction};
 use reth_rpc_convert::RpcConverter;
-use reth_rpc_eth_api::{FullEthApiTypes, RpcReceipt};
+use reth_rpc_eth_api::{FromEthApiError, FullEthApiTypes, RpcReceipt};
 
 use crate::{
     node::evm::config::BerachainEvmConfig,
@@ -15,6 +15,7 @@ use alloy_consensus::transaction::TransactionMeta;
 use alloy_eips::{BlockId, eip2930::AccessList};
 use alloy_primitives::{Address, B256, Bytes, ChainId, TxKind, U256};
 use alloy_rpc_types_eth::{Transaction, TransactionReceipt, TransactionRequest};
+use derive_more::Deref;
 use reth::{
     chainspec::EthereumHardforks,
     network::NetworkInfo,
@@ -50,7 +51,9 @@ use reth_rpc_eth_api::{
 };
 use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock, error::FromEvmError,
+    utils::recover_raw_transaction,
 };
+use reth_transaction_pool::TransactionOrigin;
 
 /// Berachain-specific RPC converter that handles BerachainPrimitives and BerachainNetwork
 pub type BerachainRpcConverter = RpcConverter<BerachainNetwork, BerachainEvmConfig, EthApiError>;
@@ -246,8 +249,10 @@ impl Network for BerachainNetwork {
     type BlockResponse = alloy_rpc_types_eth::Block<Transaction<BerachainTxEnvelope>>;
 }
 
+#[derive(Deref)]
 pub struct BerachainApi<Provider: BlockReader, Pool, Network, EvmConfig> {
     /// All nested fields bundled together.
+    #[deref]
     pub(super) inner: reth_rpc::EthApi<Provider, Pool, Network, EvmConfig>,
     /// Transaction RPC response builder.
     pub tx_resp_builder: BerachainRpcConverter,
@@ -386,7 +391,21 @@ where
     ///
     /// Returns the hash of the transaction.
     async fn send_raw_transaction(&self, tx: Bytes) -> Result<B256, Self::Error> {
-        todo!()
+        let recovered = recover_raw_transaction(&tx)?;
+
+        // broadcast raw transaction to subscribers if there is any.
+        self.broadcast_raw_transaction(tx);
+
+        let pool_transaction = <Self::Pool as TransactionPool>::Transaction::from_pooled(recovered);
+
+        // submit the transaction to the pool with a `Local` origin
+        let hash = self
+            .pool()
+            .add_transaction(TransactionOrigin::Local, pool_transaction)
+            .await
+            .map_err(Self::Error::from_eth_err)?;
+
+        Ok(hash)
     }
 }
 
