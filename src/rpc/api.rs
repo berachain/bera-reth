@@ -10,7 +10,7 @@ use reth_rpc_eth_api::{FromEthApiError, FullEthApiTypes, RpcReceipt};
 use crate::{
     node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
     rpc::receipt::BerachainEthReceiptBuilder,
-    transaction::{BerachainTxEnvelope, TxTypeCustom},
+    transaction::{BerachainTxEnvelope, BerachainTxType},
 };
 use alloy_consensus::transaction::TransactionMeta;
 use alloy_eips::{BlockId, eip2930::AccessList};
@@ -59,7 +59,7 @@ use reth_transaction_pool::TransactionOrigin;
 /// Berachain-specific RPC converter that handles BerachainPrimitives and BerachainNetwork
 pub type BerachainRpcConverter = RpcConverter<BerachainNetwork, BerachainEvmConfig, EthApiError>;
 
-impl fmt::Display for TxTypeCustom {
+impl fmt::Display for BerachainTxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }
@@ -229,7 +229,7 @@ pub struct BerachainNetwork {
 }
 
 impl Network for BerachainNetwork {
-    type TxType = TxTypeCustom;
+    type TxType = BerachainTxType;
 
     type TxEnvelope = BerachainTxEnvelope;
 

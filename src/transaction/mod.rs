@@ -171,7 +171,7 @@ impl SignedTransaction for PoLTx {
 }
 
 #[derive(Debug, Clone, alloy_consensus::TransactionEnvelope)]
-#[envelope(tx_type_name = TxTypeCustom)]
+#[envelope(tx_type_name = BerachainTxType)]
 #[allow(clippy::large_enum_variant)]
 pub enum BerachainTxEnvelope {
     /// Existing Ethereum transactions (purely additive)
@@ -194,10 +194,10 @@ impl BerachainTxEnvelope {
             // _ => None,
         }
     }
-    pub fn tx_type(&self) -> TxTypeCustom {
+    pub fn tx_type(&self) -> BerachainTxType {
         match self {
             // TODO: Rez, is there a better way?
-            Self::Ethereum(tx) => TxTypeCustom::try_from(tx.tx_type() as u8).unwrap(),
+            Self::Ethereum(tx) => BerachainTxType::try_from(tx.tx_type() as u8).unwrap(),
         }
     }
 
@@ -458,8 +458,8 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
     }
 }
 
-impl From<TxTypeCustom> for alloy_consensus::TxType {
-    fn from(custom: TxTypeCustom) -> Self {
+impl From<BerachainTxType> for alloy_consensus::TxType {
+    fn from(custom: BerachainTxType) -> Self {
         match u8::from(custom) {
             0 => Self::Legacy,
             1 => Self::Eip2930,
