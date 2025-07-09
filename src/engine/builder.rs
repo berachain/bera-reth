@@ -8,7 +8,7 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::Transaction;
-use alloy_primitives::{Address, Bytes, U256, address};
+use alloy_primitives::{Address, B256, Bytes, U256, address, aliases::B32};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
 use reth::{
@@ -434,14 +434,19 @@ fn execute_pol_transaction(
     // Check if Prague1 hardfork is active at this timestamp
     if !chain_spec.is_prague_active_at_timestamp(attributes.timestamp()) {
         // Prague1 not active yet, skip PoL transaction
+        warn!(target: "payload_builder", "Prague1 hardfork not active yet, skipping PoL transaction");
         return Ok(());
     }
 
     // Get validator public key from consensus layer
-    let Some(validator_pubkey) = attributes.prev_validator_pubkey() else {
-        // No validator pubkey provided, skip PoL transaction
-        return Ok(());
-    };
+    // TODO: Enable once we get val pubkey from consensus
+    let validator_pubkey: B256 = B256::from_slice(&[0u8; 32]);
+    // let Some(validator_pubkey) = attributes.prev_validator_pubkey() else {
+    //     // No validator pubkey provided, skip PoL transaction
+    //     warn!(target: "payload_builder", "No validator pubkey provided, skipping PoL
+    // transaction");
+    //     return Ok(());
+    // };
 
     // Construct ABI-encoded calldata for distributeFor(bytes calldata pubkey)
     let distribute_call =
@@ -449,11 +454,8 @@ fn execute_pol_transaction(
     let calldata = distribute_call.abi_encode();
 
     // Construct PoL transaction
-    let pol_tx = PoLTx {
-        gas_limit: 1_000_000_000, // System transactions use nonce 0
-        to: POL_DISTRIBUTOR_ADDRESS,
-        input: Bytes::from(calldata),
-    };
+    let pol_tx =
+        PoLTx { gas_limit: 10_000_000, to: POL_DISTRIBUTOR_ADDRESS, input: Bytes::from(calldata) };
 
     // Wrap in Berachain transaction envelope
     let pol_envelope = BerachainTxEnvelope::Berachain(pol_tx);
@@ -465,7 +467,8 @@ fn execute_pol_transaction(
     match builder.execute_transaction(recovered_pol_tx.clone()) {
         Ok(_gas_used) => {
             // PoL transaction executed successfully
-            trace!(target: "payload_builder", ?recovered_pol_tx, "PoL transaction executed successfully");
+            // TODO: Remove warn later
+            warn!(target: "payload_builder", ?recovered_pol_tx, "PoL transaction executed successfully");
         }
         Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx { error, .. })) => {
             // Log validation errors but continue (similar to Optimism's approach)

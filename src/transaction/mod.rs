@@ -1,6 +1,6 @@
 use alloy_consensus::{
     EthereumTxEnvelope, SignableTransaction, Signed, Transaction, TxEip4844, TxEip4844WithSidecar,
-    TxEnvelope,
+    TxEnvelope, TxType,
     crypto::RecoveryError,
     error::ValueError,
     transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
@@ -134,7 +134,7 @@ impl Decodable2718 for PoLTx {
 }
 impl Typed2718 for PoLTx {
     fn ty(&self) -> u8 {
-        todo!()
+        u8::from(BerachainTxType::Berachain)
     }
 }
 
@@ -200,7 +200,7 @@ impl BerachainTxEnvelope {
         match self {
             // TODO: Rez, is there a better way?
             Self::Ethereum(tx) => BerachainTxType::try_from(tx.tx_type() as u8).unwrap(),
-            Self::Berachain(_) => todo!(),
+            Self::Berachain(_) => BerachainTxType::Berachain,
         }
     }
 
@@ -343,7 +343,7 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                             alloy_consensus::TxEip4844Variant::TxEip4844WithSidecar(
                                 tx_with_sidecar,
                             ) => {
-                                buf.put_u8(1); // variant flag  
+                                buf.put_u8(1); // variant flag
                                 let (base_tx, _sidecar) = tx_with_sidecar.clone().into_parts();
                                 // For sidecars, we just store the base transaction
                                 // The sidecar is handled separately in pooled transactions
@@ -439,7 +439,23 @@ impl reth_codecs::Compact for PoLTx {
 
 impl FromRecoveredTx<PoLTx> for TxEnv {
     fn from_recovered_tx(tx: &PoLTx, caller: Address) -> Self {
-        todo!()
+        Self {
+            // TODO: Maybe clean up?
+            tx_type: tx.ty(),
+            caller,
+            gas_limit: tx.gas_limit(),
+            gas_price: tx.gas_price().unwrap_or_default(),
+            kind: tx.kind(),
+            value: tx.value(),
+            data: tx.input.clone(),
+            nonce: tx.nonce(),
+            chain_id: None,
+            access_list: Default::default(),
+            gas_priority_fee: None,
+            blob_hashes: vec![],
+            max_fee_per_blob_gas: 0,
+            authorization_list: vec![],
+        }
     }
 }
 
@@ -455,7 +471,9 @@ impl FromRecoveredTx<BerachainTxEnvelope> for TxEnv {
             BerachainTxEnvelope::Ethereum(ethereum_tx) => {
                 TxEnv::from_recovered_tx(ethereum_tx, sender)
             }
-            _ => todo!(),
+            BerachainTxEnvelope::Berachain(berachain_tx) => {
+                TxEnv::from_recovered_tx(berachain_tx, sender)
+            }
         }
     }
 }

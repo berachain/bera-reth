@@ -33,7 +33,7 @@ use std::{convert::Infallible, sync::Arc};
 pub struct BerachainPayloadAttributes {
     #[serde(flatten)]
     pub inner: EthPayloadAttributes,
-    pub prev_validator_pubkey: Option<B32>,
+    pub prev_validator_pubkey: Option<B256>,
 }
 
 impl PayloadAttributes for BerachainPayloadAttributes {
@@ -50,7 +50,7 @@ impl PayloadAttributes for BerachainPayloadAttributes {
 }
 
 impl BerachainPayloadAttributes {
-    pub fn prev_validator_pubkey(&self) -> Option<B32> {
+    pub fn prev_validator_pubkey(&self) -> Option<B256> {
         self.prev_validator_pubkey
     }
 }
@@ -78,7 +78,7 @@ pub struct BerachainPayloadBuilderAttributes {
     pub withdrawals: Withdrawals,
     /// Root of the parent beacon block
     pub parent_beacon_block_root: Option<B256>,
-    pub prev_validator_pubkey: Option<B32>,
+    pub prev_validator_pubkey: Option<B256>,
 }
 
 impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
@@ -136,7 +136,7 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
 }
 
 impl BerachainPayloadBuilderAttributes {
-    pub fn prev_validator_pubkey(&self) -> Option<B32> {
+    pub fn prev_validator_pubkey(&self) -> Option<B256> {
         self.prev_validator_pubkey
     }
 }
