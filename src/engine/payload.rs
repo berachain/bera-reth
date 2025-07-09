@@ -6,7 +6,7 @@ use alloy_eips::{
     eip4895::{Withdrawal, Withdrawals},
     eip7685::Requests,
 };
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{Address, B256, U256, aliases::B32};
 use alloy_rpc_types::engine::{
     BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1, ExecutionPayloadV3,
@@ -33,8 +33,7 @@ use std::{convert::Infallible, sync::Arc};
 pub struct BerachainPayloadAttributes {
     #[serde(flatten)]
     pub inner: EthPayloadAttributes,
-    // TODO: Add Berachain-specific fields here as needed
-    // Example: pub system_transactions: Option<Vec<SystemTransaction>>,
+    pub prev_validator_pubkey: Option<B32>,
 }
 
 impl PayloadAttributes for BerachainPayloadAttributes {
@@ -47,6 +46,12 @@ impl PayloadAttributes for BerachainPayloadAttributes {
 
     fn parent_beacon_block_root(&self) -> Option<B256> {
         self.inner.parent_beacon_block_root
+    }
+}
+
+impl BerachainPayloadAttributes {
+    pub fn prev_validator_pubkey(&self) -> Option<B32> {
+        self.prev_validator_pubkey
     }
 }
 
@@ -163,6 +168,7 @@ impl PayloadAttributesBuilder<BerachainPayloadAttributes>
                     .is_cancun_active_at_timestamp(timestamp)
                     .then(B256::random),
             },
+            prev_validator_pubkey: None,
         }
     }
 }
@@ -307,6 +313,7 @@ mod tests {
                 withdrawals: Some(vec![]),
                 parent_beacon_block_root: Some(B256::from([3u8; 32])),
             },
+            prev_validator_pubkey: None,
         }
     }
 
