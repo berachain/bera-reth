@@ -38,7 +38,7 @@ use reth_transaction_pool::{
     error::{Eip4844PoolTransactionError, InvalidPoolTransactionError},
 };
 use std::sync::Arc;
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 type BestTransactionsIter<Pool> = Box<
     dyn BestTransactions<Item = Arc<ValidPoolTransaction<<Pool as TransactionPool>::Transaction>>>,
@@ -467,8 +467,7 @@ fn execute_pol_transaction(
     match builder.execute_transaction(recovered_pol_tx.clone()) {
         Ok(_gas_used) => {
             // PoL transaction executed successfully
-            // TODO: Remove warn later
-            warn!(target: "payload_builder", ?recovered_pol_tx, "PoL transaction executed successfully");
+            info!(target: "payload_builder", ?recovered_pol_tx, "PoL transaction executed successfully");
         }
         Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx { error, .. })) => {
             // Log validation errors but continue (similar to Optimism's approach)

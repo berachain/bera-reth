@@ -34,7 +34,7 @@ use reth_primitives_traits::{
 };
 use reth_transaction_pool::{EthBlobTransactionSidecar, EthPooledTransaction};
 use serde::Deserialize;
-use std::{convert::Infallible, sync::Arc};
+use std::{convert::Infallible, mem::size_of, sync::Arc};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PoLTx {
@@ -114,22 +114,57 @@ impl Transaction for PoLTx {
         None
     }
 }
+
+impl PoLTx {
+    fn rlp_encoded_length(&self) -> usize {
+        let payload_length = self.gas_limit.length() + self.to.length() + self.input.length();
+        // Include RLP list header size
+        alloy_rlp::Header { list: true, payload_length }.length() + payload_length
+    }
+
+    fn rlp_encode(&self, out: &mut dyn BufMut) {
+        let payload_length = self.gas_limit.length() + self.to.length() + self.input.length();
+        alloy_rlp::Header { list: true, payload_length }.encode(out);
+        self.gas_limit.encode(out);
+        self.to.encode(out);
+        self.input.encode(out);
+    }
+
+    fn rlp_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        let header = alloy_rlp::Header::decode(buf)?;
+        if !header.list {
+            return Err(alloy_rlp::Error::UnexpectedString);
+        }
+
+        Ok(Self {
+            gas_limit: u64::decode(buf)?,
+            to: Address::decode(buf)?,
+            input: Bytes::decode(buf)?,
+        })
+    }
+}
+
 impl Encodable2718 for PoLTx {
     fn encode_2718_len(&self) -> usize {
-        todo!()
+        // 1 byte for transaction type + RLP encoded length
+        1 + self.rlp_encoded_length()
     }
 
     fn encode_2718(&self, out: &mut dyn BufMut) {
-        todo!()
+        out.put_u8(self.ty());
+        self.rlp_encode(out);
     }
 }
 impl Decodable2718 for PoLTx {
     fn typed_decode(ty: u8, buf: &mut &[u8]) -> Eip2718Result<Self> {
-        todo!()
+        if ty != u8::from(BerachainTxType::Berachain) {
+            return Err(alloy_eips::eip2718::Eip2718Error::UnexpectedType(ty));
+        }
+        Self::rlp_decode(buf).map_err(Into::into)
     }
 
     fn fallback_decode(buf: &mut &[u8]) -> Eip2718Result<Self> {
-        todo!()
+        Self::rlp_decode(buf).map_err(Into::into)
     }
 }
 impl Typed2718 for PoLTx {
@@ -140,36 +175,48 @@ impl Typed2718 for PoLTx {
 
 impl Encodable for PoLTx {
     fn encode(&self, out: &mut dyn BufMut) {
-        todo!()
+        // Use consistent RLP list format
+        self.rlp_encode(out);
     }
 }
 
 impl Decodable for PoLTx {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        todo!()
+        // Use consistent RLP list format
+        Self::rlp_decode(buf)
     }
 }
 
 impl InMemorySize for PoLTx {
     fn size(&self) -> usize {
-        todo!()
+        size_of::<Self>() + self.input.len()
     }
 }
 
 impl SignerRecoverable for PoLTx {
     fn recover_signer(&self) -> Result<Address, RecoveryError> {
-        todo!()
+        // PoL transactions are system transactions without signatures
+        // Return zero address for system transactions
+        // TODO: rez
+        Ok(Address::ZERO)
     }
 
     fn recover_signer_unchecked(&self) -> Result<Address, RecoveryError> {
-        todo!()
+        // PoL transactions are system transactions without signatures
+        // Return zero address for system transactions
+        // TODO: rez
+        Ok(Address::ZERO)
     }
 }
 
 impl SignedTransaction for PoLTx {
     fn tx_hash(&self) -> &TxHash {
-        // /Users/rezbera/Code/reth/crates/primitives-traits/src/transaction/signed.rs
-        todo!()
+        // TODO: Rez PoL transactions are system transactions that don't have traditional hashes
+        // We need to compute a deterministic hash based on the transaction content
+        // For now, return a static hash - this would need proper implementation
+        // in a production system with proper hash calculation
+        static SYSTEM_TX_HASH: TxHash = TxHash::ZERO;
+        &SYSTEM_TX_HASH
     }
 }
 
@@ -300,7 +347,7 @@ where
     fn tx_hash(&self) -> &TxHash {
         match self {
             Self::Ethereum(tx) => tx.hash(),
-            Self::Berachain(_) => todo!(),
+            Self::Berachain(tx) => tx.tx_hash(),
         }
     }
 }
@@ -358,7 +405,11 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                     _ => 0,
                 }
             }
-            Self::Berachain(_) => todo!(),
+            Self::Berachain(tx) => {
+                // For Berachain PoL transactions, encode the transaction type and the transaction
+                buf.put_u8(u8::from(BerachainTxType::Berachain));
+                tx.to_compact(buf)
+            }
         }
     }
 
@@ -373,6 +424,11 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
             2 => TxType::Eip1559,
             3 => TxType::Eip4844,
             4 => TxType::Eip7702,
+            190 => {
+                // Handle Berachain PoL transaction (0xBE = 190)
+                let (pol_tx, remaining_buf) = PoLTx::from_compact(buf, len);
+                return (Self::Berachain(pol_tx), remaining_buf);
+            }
             _ => panic!("Unknown transaction type: {}", tx_type_byte),
         };
 
@@ -429,11 +485,19 @@ impl reth_codecs::Compact for PoLTx {
     where
         B: BufMut + AsMut<[u8]>,
     {
-        todo!()
+        let mut written = 0;
+        written += self.gas_limit.to_compact(buf);
+        written += self.to.to_compact(buf);
+        written += self.input.to_compact(buf);
+        written
     }
 
-    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
-        todo!()
+    fn from_compact(buf: &[u8], _len: usize) -> (Self, &[u8]) {
+        let (gas_limit, buf) = u64::from_compact(buf, buf.len());
+        let (to, buf) = Address::from_compact(buf, buf.len());
+        let (input, buf) = Bytes::from_compact(buf, buf.len());
+
+        (Self { gas_limit, to, input }, buf)
     }
 }
 
@@ -456,12 +520,6 @@ impl FromRecoveredTx<PoLTx> for TxEnv {
             max_fee_per_blob_gas: 0,
             authorization_list: vec![],
         }
-    }
-}
-
-impl FromTxWithEncoded<PoLTx> for TxEnv {
-    fn from_encoded_tx(tx: &PoLTx, sender: Address, encoded: Bytes) -> Self {
-        todo!()
     }
 }
 
