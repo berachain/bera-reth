@@ -8,7 +8,9 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::Transaction;
-use alloy_primitives::U256;
+use alloy_primitives::{Address, Bytes, U256, address};
+use alloy_sol_macro::sol;
+use alloy_sol_types::SolCall;
 use reth::{
     api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, TxTy},
     chainspec::EthereumHardforks,
@@ -245,6 +247,11 @@ where
         PayloadBuilderError::Internal(err.into())
     })?;
 
+    // Construct and execute PoL system transaction before mempool transactions
+    // This follows Optimism's pattern of executing system transactions after pre-execution changes
+    // Only executes after Prague1 hardfork activation
+    execute_pol_transaction(&attributes, &mut builder, &chain_spec)?;
+
     // initialize empty blob sidecars at first. If cancun is active then this will be populated by
     // blob sidecars if any.
     let mut blob_sidecars = BlobSidecars::Empty;
@@ -398,4 +405,77 @@ where
         .with_sidecars(blob_sidecars);
 
     Ok(BuildOutcome::Better { payload, cached_reads })
+}
+
+sol! {
+    interface PoLDistributor {
+        function distributeFor(bytes calldata pubkey) external;
+    }
+}
+const POL_DISTRIBUTOR_ADDRESS: Address = address!("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE");
+
+/// Construct and execute PoL system transaction before mempool transactions
+///
+/// This function follows Optimism's deposit transaction pattern but constructs
+/// the transaction in the execution layer:
+/// - Consensus layer provides validator public key
+/// - Execution layer constructs PoL transaction with ABI-encoded calldata
+/// - Execute with zero gas cost using system signer
+/// - Generate proper receipts included in block
+/// - Only executes after Prague1 hardfork activation
+fn execute_pol_transaction(
+    attributes: &BerachainPayloadBuilderAttributes,
+    builder: &mut impl BlockBuilder<Primitives = BerachainPrimitives>,
+    chain_spec: &BerachainChainSpec,
+) -> Result<(), PayloadBuilderError> {
+    use crate::transaction::{BerachainTxEnvelope, PoLTx};
+    use alloy_consensus::transaction::Recovered;
+
+    // Check if Prague1 hardfork is active at this timestamp
+    if !chain_spec.is_prague_active_at_timestamp(attributes.timestamp()) {
+        // Prague1 not active yet, skip PoL transaction
+        return Ok(());
+    }
+
+    // Get validator public key from consensus layer
+    let Some(validator_pubkey) = attributes.prev_validator_pubkey() else {
+        // No validator pubkey provided, skip PoL transaction
+        return Ok(());
+    };
+
+    // Construct ABI-encoded calldata for distributeFor(bytes calldata pubkey)
+    let distribute_call =
+        PoLDistributor::distributeForCall { pubkey: Bytes::from(validator_pubkey.clone()) };
+    let calldata = distribute_call.abi_encode();
+
+    // Construct PoL transaction
+    let pol_tx = PoLTx {
+        gas_limit: 1_000_000_000, // System transactions use nonce 0
+        to: POL_DISTRIBUTOR_ADDRESS,
+        input: Bytes::from(calldata),
+    };
+
+    // Wrap in Berachain transaction envelope
+    let pol_envelope = BerachainTxEnvelope::Berachain(pol_tx);
+
+    // Create recovered transaction with system signer (Address::ZERO for system transactions)
+    let recovered_pol_tx = Recovered::new_unchecked(pol_envelope, Address::ZERO);
+
+    // Execute transaction through proper pipeline to generate receipt
+    match builder.execute_transaction(recovered_pol_tx.clone()) {
+        Ok(_gas_used) => {
+            // PoL transaction executed successfully
+            trace!(target: "payload_builder", ?recovered_pol_tx, "PoL transaction executed successfully");
+        }
+        Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx { error, .. })) => {
+            // Log validation errors but continue (similar to Optimism's approach)
+            warn!(target: "payload_builder", %error, ?recovered_pol_tx, "PoL transaction validation error");
+        }
+        Err(err) => {
+            // Fatal execution errors should fail the block
+            return Err(PayloadBuilderError::EvmExecutionError(Box::new(err)));
+        }
+    }
+
+    Ok(())
 }

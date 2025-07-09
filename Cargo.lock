@@ -1439,6 +1439,8 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-eth",
  "alloy-serde",
+ "alloy-sol-macro",
+ "alloy-sol-types",
  "clap",
  "derive_more",
  "eyre",

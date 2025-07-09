@@ -2,7 +2,7 @@
 
 mod assembler;
 pub mod config;
-mod executor;
+pub mod executor;
 pub mod receipt;
 
 use crate::node::{BerachainNode, evm::config::BerachainEvmConfig};

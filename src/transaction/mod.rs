@@ -20,12 +20,15 @@ use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
 use reth::{
     providers::errors::db::DatabaseError,
-    revm::context::TxEnv,
+    revm::{State, context::TxEnv},
     transaction_pool::{EthPoolTransaction, PoolTransaction},
 };
 use reth_db::table::{Compress, Decompress};
 use reth_ethereum_primitives::PooledTransactionVariant;
-use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
+use reth_evm::{
+    Database, Evm, FromRecoveredTx, FromTxWithEncoded, eth::spec::EthExecutorSpec,
+    execute::ExecutorTx,
+};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
 };
@@ -178,8 +181,8 @@ pub enum BerachainTxEnvelope {
     #[envelope(flatten)]
     Ethereum(TxEnvelope),
     // /// Your 0-gas system transaction
-    // #[envelope(ty = 190)] // equivalent to 0xBE
-    // SystemRewards(PoLTx),
+    #[envelope(ty = 190)] // equivalent to 0xBE
+    Berachain(PoLTx),
 }
 
 impl BerachainTxEnvelope {
@@ -190,14 +193,14 @@ impl BerachainTxEnvelope {
                 TxEnvelope::Eip4844(tx) => Some(tx.clone().map(|variant| variant.into())),
                 _ => None,
             },
-            // TODO: Rez extend after adding SystemRewards
-            // _ => None,
+            _ => None,
         }
     }
     pub fn tx_type(&self) -> BerachainTxType {
         match self {
             // TODO: Rez, is there a better way?
             Self::Ethereum(tx) => BerachainTxType::try_from(tx.tx_type() as u8).unwrap(),
+            Self::Berachain(_) => todo!(),
         }
     }
 
@@ -235,6 +238,9 @@ impl BerachainTxEnvelope {
                 }
                 _ => Err(ValueError::new_static(Self::Ethereum(tx), "Expected 4844 transaction")),
             },
+            Self::Berachain(tx) => {
+                Err(ValueError::new_static(Self::Berachain(tx), "Expected 4844 transaction"))
+            }
         }
     }
 
@@ -266,6 +272,7 @@ impl InMemorySize for BerachainTxEnvelope {
     fn size(&self) -> usize {
         match self {
             Self::Ethereum(tx) => tx.size(),
+            Self::Berachain(tx) => tx.size(),
         }
     }
 }
@@ -274,12 +281,14 @@ impl SignerRecoverable for BerachainTxEnvelope {
     fn recover_signer(&self) -> Result<Address, RecoveryError> {
         match self {
             Self::Ethereum(tx) => tx.recover_signer(),
+            Self::Berachain(tx) => tx.recover_signer(),
         }
     }
 
     fn recover_signer_unchecked(&self) -> Result<Address, RecoveryError> {
         match self {
             Self::Ethereum(tx) => tx.recover_signer_unchecked(),
+            Self::Berachain(tx) => tx.recover_signer_unchecked(),
         }
     }
 }
@@ -291,6 +300,7 @@ where
     fn tx_hash(&self) -> &TxHash {
         match self {
             Self::Ethereum(tx) => tx.hash(),
+            Self::Berachain(_) => todo!(),
         }
     }
 }
@@ -348,6 +358,7 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                     _ => 0,
                 }
             }
+            Self::Berachain(_) => todo!(),
         }
     }
 
@@ -444,6 +455,7 @@ impl FromRecoveredTx<BerachainTxEnvelope> for TxEnv {
             BerachainTxEnvelope::Ethereum(ethereum_tx) => {
                 TxEnv::from_recovered_tx(ethereum_tx, sender)
             }
+            _ => todo!(),
         }
     }
 }
@@ -454,6 +466,7 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
             BerachainTxEnvelope::Ethereum(ethereum_tx) => {
                 TxEnv::from_encoded_tx(ethereum_tx, sender, encoded)
             }
+            _ => todo!(),
         }
     }
 }
@@ -536,12 +549,8 @@ impl From<BerachainTxEnvelope>
                     )
                 }
                 TxEnvelope::Eip7702(tx) => EthereumTxEnvelope::Eip7702(tx),
-                _ => panic!("Unsupported transaction type"),
             },
-            // TODO: Handle custom transaction types when they're implemented
-            // BerachainTxEnvelope::SystemRewards(_) => {
-            //     panic!("System reward transactions cannot be converted to Ethereum format")
-            // }
+            BerachainTxEnvelope::Berachain(_) => todo!(),
         }
     }
 }

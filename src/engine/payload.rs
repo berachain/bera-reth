@@ -78,6 +78,7 @@ pub struct BerachainPayloadBuilderAttributes {
     pub withdrawals: Withdrawals,
     /// Root of the parent beacon block
     pub parent_beacon_block_root: Option<B256>,
+    pub prev_validator_pubkey: Option<B32>,
 }
 
 impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
@@ -101,6 +102,7 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
             prev_randao: attributes.inner.prev_randao,
             withdrawals: attributes.inner.withdrawals.unwrap_or_default().into(),
             parent_beacon_block_root: attributes.inner.parent_beacon_block_root,
+            prev_validator_pubkey: attributes.prev_validator_pubkey,
         })
     }
 
@@ -134,18 +136,8 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
 }
 
 impl BerachainPayloadBuilderAttributes {
-    /// Convert to Ethereum payload attributes for compatibility
-    ///
-    /// This method provides the necessary conversion to interface with
-    /// Ethereum payload building logic while maintaining all required data.
-    pub fn to_eth_payload_attributes(&self) -> EthPayloadAttributes {
-        EthPayloadAttributes {
-            timestamp: self.timestamp,
-            prev_randao: self.prev_randao,
-            suggested_fee_recipient: self.suggested_fee_recipient,
-            withdrawals: Some(self.withdrawals.to_vec()),
-            parent_beacon_block_root: self.parent_beacon_block_root,
-        }
+    pub fn prev_validator_pubkey(&self) -> Option<B32> {
+        self.prev_validator_pubkey
     }
 }
 
@@ -364,24 +356,6 @@ mod tests {
             BerachainPayloadBuilderAttributes::try_new(parent, rpc_attributes, 1).unwrap();
 
         assert_eq!(builder_attributes_1.payload_id(), builder_attributes_2.payload_id());
-    }
-
-    #[test]
-    fn test_to_eth_payload_attributes_conversion() {
-        let builder_attributes = create_test_bera_payload_builder_attributes();
-        let eth_attributes = builder_attributes.to_eth_payload_attributes();
-
-        assert_eq!(eth_attributes.timestamp, builder_attributes.timestamp);
-        assert_eq!(eth_attributes.prev_randao, builder_attributes.prev_randao);
-        assert_eq!(
-            eth_attributes.suggested_fee_recipient,
-            builder_attributes.suggested_fee_recipient
-        );
-        assert_eq!(eth_attributes.withdrawals, Some(builder_attributes.withdrawals.to_vec()));
-        assert_eq!(
-            eth_attributes.parent_beacon_block_root,
-            builder_attributes.parent_beacon_block_root
-        );
     }
 
     #[test]

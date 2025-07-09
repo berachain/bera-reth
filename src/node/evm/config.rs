@@ -17,10 +17,10 @@ use reth::{
 use reth_chainspec::EthChainSpec;
 use reth_evm::{
     ConfigureEvm, EthEvmFactory, EvmEnv, EvmEnvFor, ExecutionCtxFor, NextBlockEnvAttributes,
-    eth::EthBlockExecutionCtx,
+    block::BlockExecutorFactory, eth::EthBlockExecutionCtx,
 };
 use reth_evm_ethereum::{revm_spec, revm_spec_by_timestamp_and_block_number};
-use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
+use reth_primitives_traits::{BlockTy, HeaderTy, NodePrimitives, SealedBlock, SealedHeader};
 use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 
 #[derive(Debug, Clone)]
@@ -64,6 +64,8 @@ impl BerachainEvmConfig {
 impl ConfigureEvm for BerachainEvmConfig {
     type Primitives = BerachainPrimitives;
     type Error = Infallible;
+
+    // TODO: Sus this attributes.
     type NextBlockEnvCtx = NextBlockEnvAttributes;
     type BlockExecutorFactory = Self;
     type BlockAssembler = BerachainBlockAssembler;
