@@ -1,40 +1,26 @@
 use alloy_consensus::{
-    EthereumTxEnvelope, SignableTransaction, Signed, Transaction, TxEip4844, TxEip4844WithSidecar,
-    TxEnvelope, TxType,
+    EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar, TxEnvelope, TxType,
     crypto::RecoveryError,
     error::ValueError,
     transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
 };
 use alloy_eips::{
-    Decodable2718, Encodable2718, Typed2718,
-    eip2718::Eip2718Result,
-    eip2930::AccessList,
-    eip4844::{BlobTransactionValidationError, env_settings::KzgSettings},
-    eip7594::BlobTransactionSidecarVariant,
-    eip7702::SignedAuthorization,
+    Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
+    eip7594::BlobTransactionSidecarVariant, eip7702::SignedAuthorization,
 };
-use alloy_primitives::{
-    Address, B256, Bytes, ChainId, Signature, TxHash, TxKind, U256, bytes::BufMut,
-};
+use alloy_primitives::{Address, B256, Bytes, ChainId, TxHash, TxKind, U256, bytes::BufMut};
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
 use reth::{
-    providers::errors::db::DatabaseError,
-    revm::{State, context::TxEnv},
-    transaction_pool::{EthPoolTransaction, PoolTransaction},
+    providers::errors::db::DatabaseError, revm::context::TxEnv, transaction_pool::PoolTransaction,
 };
 use reth_db::table::{Compress, Decompress};
-use reth_ethereum_primitives::PooledTransactionVariant;
-use reth_evm::{
-    Database, Evm, FromRecoveredTx, FromTxWithEncoded, eth::spec::EthExecutorSpec,
-    execute::ExecutorTx,
-};
+use reth_evm::{Evm, FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
 };
-use reth_transaction_pool::{EthBlobTransactionSidecar, EthPooledTransaction};
 use serde::Deserialize;
-use std::{convert::Infallible, mem::size_of, sync::Arc};
+use std::mem::size_of;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PoLTx {
