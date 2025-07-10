@@ -454,8 +454,13 @@ fn execute_pol_transaction(
     let calldata = distribute_call.abi_encode();
 
     // Construct PoL transaction
-    let pol_tx =
-        PoLTx { gas_limit: 10_000_000, to: POL_DISTRIBUTOR_ADDRESS, input: Bytes::from(calldata) };
+    let pol_tx = PoLTx {
+        nonce: 0, // TODO: rez Update nonce
+        gas_limit: 10_000_000,
+        to: POL_DISTRIBUTOR_ADDRESS,
+        value: U256::ZERO,
+        input: Bytes::from(calldata),
+    };
 
     // Wrap in Berachain transaction envelope
     let pol_envelope = BerachainTxEnvelope::Berachain(pol_tx);

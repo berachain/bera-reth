@@ -8,7 +8,9 @@ use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
     eip7594::BlobTransactionSidecarVariant, eip7702::SignedAuthorization,
 };
-use alloy_primitives::{Address, B256, Bytes, ChainId, TxHash, TxKind, U256, bytes::BufMut};
+use alloy_primitives::{
+    Address, B256, Bytes, ChainId, TxHash, TxKind, U256, bytes::BufMut, keccak256,
+};
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
 use reth::{
@@ -24,9 +26,12 @@ use std::mem::size_of;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PoLTx {
+    #[serde(with = "alloy_serde::quantity")]
+    pub nonce: u64,
     #[serde(with = "alloy_serde::quantity", rename = "gas", alias = "gasLimit")]
     pub gas_limit: u64,
     pub to: Address,
+    pub value: U256,
     pub input: Bytes,
 }
 impl Transaction for PoLTx {
@@ -36,8 +41,7 @@ impl Transaction for PoLTx {
     }
 
     fn nonce(&self) -> u64 {
-        // Same as Op Deposit Tx
-        0u64
+        self.nonce
     }
 
     fn gas_limit(&self) -> u64 {
@@ -81,7 +85,7 @@ impl Transaction for PoLTx {
     }
 
     fn value(&self) -> U256 {
-        U256::from(0)
+        self.value
     }
 
     fn input(&self) -> &Bytes {
@@ -103,16 +107,26 @@ impl Transaction for PoLTx {
 
 impl PoLTx {
     fn rlp_encoded_length(&self) -> usize {
-        let payload_length = self.gas_limit.length() + self.to.length() + self.input.length();
+        let payload_length = self.nonce.length() +
+            self.gas_limit.length() +
+            self.to.length() +
+            self.value.length() +
+            self.input.length();
         // Include RLP list header size
         alloy_rlp::Header { list: true, payload_length }.length() + payload_length
     }
 
     fn rlp_encode(&self, out: &mut dyn BufMut) {
-        let payload_length = self.gas_limit.length() + self.to.length() + self.input.length();
+        let payload_length = self.nonce.length() +
+            self.gas_limit.length() +
+            self.to.length() +
+            self.value.length() +
+            self.input.length();
         alloy_rlp::Header { list: true, payload_length }.encode(out);
+        self.nonce.encode(out);
         self.gas_limit.encode(out);
         self.to.encode(out);
+        self.value.encode(out);
         self.input.encode(out);
     }
 
@@ -123,8 +137,10 @@ impl PoLTx {
         }
 
         Ok(Self {
+            nonce: u64::decode(buf)?,
             gas_limit: u64::decode(buf)?,
             to: Address::decode(buf)?,
+            value: U256::decode(buf)?,
             input: Bytes::decode(buf)?,
         })
     }
@@ -197,12 +213,9 @@ impl SignerRecoverable for PoLTx {
 
 impl SignedTransaction for PoLTx {
     fn tx_hash(&self) -> &TxHash {
-        // TODO: Rez PoL transactions are system transactions that don't have traditional hashes
-        // We need to compute a deterministic hash based on the transaction content
-        // For now, return a static hash - this would need proper implementation
-        // in a production system with proper hash calculation
-        static SYSTEM_TX_HASH: TxHash = TxHash::ZERO;
-        &SYSTEM_TX_HASH
+        let mut buf = Vec::with_capacity(self.encode_2718_len());
+        self.encode_2718(&mut buf);
+        keccak256(&buf)
     }
 }
 
@@ -214,7 +227,7 @@ pub enum BerachainTxEnvelope {
     #[envelope(flatten)]
     Ethereum(TxEnvelope),
     // /// Your 0-gas system transaction
-    #[envelope(ty = 190)] // equivalent to 0xBE
+    #[envelope(ty = 125)] // equivalent to 0x7D
     Berachain(PoLTx),
 }
 
@@ -410,8 +423,8 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
             2 => TxType::Eip1559,
             3 => TxType::Eip4844,
             4 => TxType::Eip7702,
-            190 => {
-                // Handle Berachain PoL transaction (0xBE = 190)
+            125 => {
+                // Handle Berachain PoL transaction (0x7D = 125)
                 let (pol_tx, remaining_buf) = PoLTx::from_compact(buf, len);
                 return (Self::Berachain(pol_tx), remaining_buf);
             }
@@ -472,18 +485,22 @@ impl reth_codecs::Compact for PoLTx {
         B: BufMut + AsMut<[u8]>,
     {
         let mut written = 0;
+        written += self.nonce.to_compact(buf);
         written += self.gas_limit.to_compact(buf);
         written += self.to.to_compact(buf);
+        written += self.value.to_compact(buf);
         written += self.input.to_compact(buf);
         written
     }
 
     fn from_compact(buf: &[u8], _len: usize) -> (Self, &[u8]) {
+        let (nonce, buf) = u64::from_compact(buf, buf.len());
         let (gas_limit, buf) = u64::from_compact(buf, buf.len());
         let (to, buf) = Address::from_compact(buf, buf.len());
+        let (value, buf) = U256::from_compact(buf, buf.len());
         let (input, buf) = Bytes::from_compact(buf, buf.len());
 
-        (Self { gas_limit, to, input }, buf)
+        (Self { nonce, gas_limit, to, value, input }, buf)
     }
 }
 
