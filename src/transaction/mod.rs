@@ -9,7 +9,7 @@ use alloy_eips::{
     eip7594::BlobTransactionSidecarVariant, eip7702::SignedAuthorization,
 };
 use alloy_primitives::{
-    Address, B256, Bytes, ChainId, TxHash, TxKind, U256, bytes::BufMut, keccak256,
+    Address, B256, Bytes, ChainId, Sealable, Sealed, TxHash, TxKind, U256, bytes::BufMut, keccak256,
 };
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
@@ -22,7 +22,7 @@ use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
 };
 use serde::Deserialize;
-use std::mem::size_of;
+use std::{hash::Hash, mem::size_of};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PoLTx {
@@ -106,6 +106,12 @@ impl Transaction for PoLTx {
 }
 
 impl PoLTx {
+    fn tx_hash(&self) -> TxHash {
+        let mut buf = Vec::with_capacity(self.encode_2718_len());
+        self.encode_2718(&mut buf);
+        keccak256(&buf)
+    }
+
     fn rlp_encoded_length(&self) -> usize {
         let payload_length = self.nonce.length() +
             self.gas_limit.length() +
@@ -155,6 +161,12 @@ impl Encodable2718 for PoLTx {
     fn encode_2718(&self, out: &mut dyn BufMut) {
         out.put_u8(self.ty());
         self.rlp_encode(out);
+    }
+}
+
+impl Sealable for PoLTx {
+    fn hash_slow(&self) -> B256 {
+        self.tx_hash()
     }
 }
 impl Decodable2718 for PoLTx {
@@ -211,14 +223,6 @@ impl SignerRecoverable for PoLTx {
     }
 }
 
-impl SignedTransaction for PoLTx {
-    fn tx_hash(&self) -> &TxHash {
-        let mut buf = Vec::with_capacity(self.encode_2718_len());
-        self.encode_2718(&mut buf);
-        keccak256(&buf)
-    }
-}
-
 #[derive(Debug, Clone, alloy_consensus::TransactionEnvelope)]
 #[envelope(tx_type_name = BerachainTxType)]
 #[allow(clippy::large_enum_variant)]
@@ -228,7 +232,7 @@ pub enum BerachainTxEnvelope {
     Ethereum(TxEnvelope),
     // /// Your 0-gas system transaction
     #[envelope(ty = 125)] // equivalent to 0x7D
-    Berachain(PoLTx),
+    Berachain(Sealed<PoLTx>),
 }
 
 impl BerachainTxEnvelope {
@@ -346,7 +350,7 @@ where
     fn tx_hash(&self) -> &TxHash {
         match self {
             Self::Ethereum(tx) => tx.hash(),
-            Self::Berachain(tx) => tx.tx_hash(),
+            Self::Berachain(tx) => tx.hash_ref(),
         }
     }
 }
@@ -426,7 +430,7 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
             125 => {
                 // Handle Berachain PoL transaction (0x7D = 125)
                 let (pol_tx, remaining_buf) = PoLTx::from_compact(buf, len);
-                return (Self::Berachain(pol_tx), remaining_buf);
+                return (Self::Berachain(Sealed::new(pol_tx)), remaining_buf);
             }
             _ => panic!("Unknown transaction type: {}", tx_type_byte),
         };
@@ -530,10 +534,10 @@ impl FromRecoveredTx<BerachainTxEnvelope> for TxEnv {
     fn from_recovered_tx(tx: &BerachainTxEnvelope, sender: Address) -> Self {
         match tx {
             BerachainTxEnvelope::Ethereum(ethereum_tx) => {
-                TxEnv::from_recovered_tx(ethereum_tx, sender)
+                Self::from_recovered_tx(ethereum_tx, sender)
             }
             BerachainTxEnvelope::Berachain(berachain_tx) => {
-                TxEnv::from_recovered_tx(berachain_tx, sender)
+                Self::from_recovered_tx(berachain_tx.inner(), sender)
             }
         }
     }

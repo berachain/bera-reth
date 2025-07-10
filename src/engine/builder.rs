@@ -8,7 +8,7 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::Transaction;
-use alloy_primitives::{Address, B256, Bytes, U256, address, aliases::B32};
+use alloy_primitives::{Address, B256, Bytes, Sealed, U256, address, aliases::B32};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
 use reth::{
@@ -463,7 +463,7 @@ fn execute_pol_transaction(
     };
 
     // Wrap in Berachain transaction envelope
-    let pol_envelope = BerachainTxEnvelope::Berachain(pol_tx);
+    let pol_envelope = BerachainTxEnvelope::Berachain(Sealed::new(pol_tx));
 
     // Create recovered transaction with system signer (Address::ZERO for system transactions)
     let recovered_pol_tx = Recovered::new_unchecked(pol_envelope, Address::ZERO);
