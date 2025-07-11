@@ -19,6 +19,7 @@ use reth::{
 use reth_codecs::Compact;
 use reth_db::table::{Compress, Decompress};
 // use reth_db_api::impl_compression_for_compact;
+use alloy_eips::eip7002::SYSTEM_ADDRESS;
 use reth_evm::{Evm, FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
@@ -215,16 +216,12 @@ impl Compress for BerachainTxEnvelope {
     type Compressed = Vec<u8>;
 
     fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
-        // TODO: sus
-        // Use the compact encoding for compression
         reth_codecs::Compact::to_compact(self, buf);
     }
 }
 
 impl Decompress for BerachainTxEnvelope {
     fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
-        // TODO: sus
-        // Use the compact decoding for decompression
         let (tx, _) = reth_codecs::Compact::from_compact(value, value.len());
         Ok(tx)
     }
@@ -232,17 +229,13 @@ impl Decompress for BerachainTxEnvelope {
 
 impl SignerRecoverable for PoLTx {
     fn recover_signer(&self) -> Result<Address, RecoveryError> {
-        // PoL transactions are system transactions without signatures
-        // Return zero address for system transactions
-        // TODO: rez
-        Ok(Address::ZERO)
+        // TODO: Security implications? Should be none as PoLTx must conform to expected shape
+        // expected at the start of the block.
+        Ok(SYSTEM_ADDRESS)
     }
 
     fn recover_signer_unchecked(&self) -> Result<Address, RecoveryError> {
-        // PoL transactions are system transactions without signatures
-        // Return zero address for system transactions
-        // TODO: rez
-        Ok(Address::ZERO)
+        Ok(SYSTEM_ADDRESS)
     }
 }
 

@@ -8,6 +8,7 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::Transaction;
+use alloy_eips::eip7002::SYSTEM_ADDRESS;
 use alloy_primitives::{Address, B256, Bytes, Sealed, U256, address, aliases::B32};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
@@ -412,7 +413,7 @@ sol! {
         function distributeFor(bytes calldata pubkey) external;
     }
 }
-const POL_DISTRIBUTOR_ADDRESS: Address = address!("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE");
+const POL_DISTRIBUTOR_ADDRESS: Address = address!("0x4200000000000000000000000000000000000042");
 
 /// Construct and execute PoL system transaction before mempool transactions
 ///
@@ -465,8 +466,8 @@ fn execute_pol_transaction(
     // Wrap in Berachain transaction envelope
     let pol_envelope = BerachainTxEnvelope::Berachain(Sealed::new(pol_tx));
 
-    // Create recovered transaction with system signer (Address::ZERO for system transactions)
-    let recovered_pol_tx = Recovered::new_unchecked(pol_envelope, Address::ZERO);
+    // Create recovered transaction with system signer
+    let recovered_pol_tx = Recovered::new_unchecked(pol_envelope, SYSTEM_ADDRESS);
 
     // Execute transaction through proper pipeline to generate receipt
     match builder.execute_transaction(recovered_pol_tx.clone()) {
