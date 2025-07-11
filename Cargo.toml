@@ -16,10 +16,12 @@ alloy-rpc-types-eth = "1.0.17"
 alloy-serde = "1.0.17"
 alloy-sol-macro = "1.2.1"
 alloy-sol-types = "1.2.1"
+bytes = "1.10.1"
 clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6.12"
 jsonrpsee-core = "0.25.1"
+modular-bitfield = "0.11.2"
 parking_lot = "0.12.4"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
@@ -29,6 +31,7 @@ reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92a
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-codecs = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
+reth-db-api = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-engine-local = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-engine-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
@@ -97,6 +100,7 @@ reth-payload-primitives = { path = "../reth/crates/payload/primitives" }
 reth-primitives-traits = { path = "../reth/crates/primitives-traits" }
 reth-tracing = { path = "../reth/crates/tracing" }
 reth-codecs = { path = "../reth/crates/storage/codecs" }
+reth-db-api = { path = "../reth/crates/storage/db-api" }
 reth-optimism-rpc = { path = "../reth/crates/optimism/rpc" }
 reth-rpc-eth-api = { path = "../reth/crates/rpc/rpc-eth-api" }
 reth-rpc-eth-types = { path = "../reth/crates/rpc/rpc-eth-types" }

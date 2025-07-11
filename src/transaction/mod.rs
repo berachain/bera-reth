@@ -16,7 +16,9 @@ use jsonrpsee_core::Serialize;
 use reth::{
     providers::errors::db::DatabaseError, revm::context::TxEnv, transaction_pool::PoolTransaction,
 };
+use reth_codecs::Compact;
 use reth_db::table::{Compress, Decompress};
+// use reth_db_api::impl_compression_for_compact;
 use reth_evm::{Evm, FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
@@ -24,7 +26,7 @@ use reth_primitives_traits::{
 use serde::Deserialize;
 use std::{hash::Hash, mem::size_of};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
 pub struct PoLTx {
     #[serde(with = "alloy_serde::quantity")]
     pub nonce: u64,
@@ -169,6 +171,7 @@ impl Sealable for PoLTx {
         self.tx_hash()
     }
 }
+
 impl Decodable2718 for PoLTx {
     fn typed_decode(ty: u8, buf: &mut &[u8]) -> Eip2718Result<Self> {
         if ty != u8::from(BerachainTxType::Berachain) {
@@ -181,6 +184,7 @@ impl Decodable2718 for PoLTx {
         Self::rlp_decode(buf).map_err(Into::into)
     }
 }
+
 impl Typed2718 for PoLTx {
     fn ty(&self) -> u8 {
         u8::from(BerachainTxType::Berachain)
@@ -204,6 +208,25 @@ impl Decodable for PoLTx {
 impl InMemorySize for PoLTx {
     fn size(&self) -> usize {
         size_of::<Self>() + self.input.len()
+    }
+}
+
+impl Compress for BerachainTxEnvelope {
+    type Compressed = Vec<u8>;
+
+    fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
+        // TODO: sus
+        // Use the compact encoding for compression
+        reth_codecs::Compact::to_compact(self, buf);
+    }
+}
+
+impl Decompress for BerachainTxEnvelope {
+    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
+        // TODO: sus
+        // Use the compact decoding for decompression
+        let (tx, _) = reth_codecs::Compact::from_compact(value, value.len());
+        Ok(tx)
     }
 }
 
@@ -296,25 +319,6 @@ impl BerachainTxEnvelope {
 
     pub fn with_signer<T>(self, signer: Address) -> Recovered<Self> {
         Recovered::new_unchecked(self, signer)
-    }
-}
-
-impl Compress for BerachainTxEnvelope {
-    type Compressed = Vec<u8>;
-
-    fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
-        // TODO: sus
-        // Use the compact encoding for compression
-        reth_codecs::Compact::to_compact(self, buf);
-    }
-}
-
-impl Decompress for BerachainTxEnvelope {
-    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
-        // TODO: sus
-        // Use the compact decoding for decompression
-        let (tx, _) = reth_codecs::Compact::from_compact(value, value.len());
-        Ok(tx)
     }
 }
 
@@ -480,31 +484,6 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
         };
 
         (Self::Ethereum(tx), remaining_buf)
-    }
-}
-
-impl reth_codecs::Compact for PoLTx {
-    fn to_compact<B>(&self, buf: &mut B) -> usize
-    where
-        B: BufMut + AsMut<[u8]>,
-    {
-        let mut written = 0;
-        written += self.nonce.to_compact(buf);
-        written += self.gas_limit.to_compact(buf);
-        written += self.to.to_compact(buf);
-        written += self.value.to_compact(buf);
-        written += self.input.to_compact(buf);
-        written
-    }
-
-    fn from_compact(buf: &[u8], _len: usize) -> (Self, &[u8]) {
-        let (nonce, buf) = u64::from_compact(buf, buf.len());
-        let (gas_limit, buf) = u64::from_compact(buf, buf.len());
-        let (to, buf) = Address::from_compact(buf, buf.len());
-        let (value, buf) = U256::from_compact(buf, buf.len());
-        let (input, buf) = Bytes::from_compact(buf, buf.len());
-
-        (Self { nonce, gas_limit, to, value, input }, buf)
     }
 }
 
