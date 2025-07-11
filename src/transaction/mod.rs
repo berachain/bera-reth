@@ -26,13 +26,11 @@ use std::{hash::Hash, mem::size_of};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PoLTx {
-    #[serde(with = "alloy_serde::quantity")]
-    pub nonce: u64,
-    #[serde(with = "alloy_serde::quantity", rename = "gas", alias = "gasLimit")]
+    pub timestamp: u64,
     pub gas_limit: u64,
     pub to: Address,
     pub value: U256,
-    pub input: Bytes,
+    pub data: Bytes,
 }
 impl Transaction for PoLTx {
     fn chain_id(&self) -> Option<ChainId> {
@@ -41,7 +39,7 @@ impl Transaction for PoLTx {
     }
 
     fn nonce(&self) -> u64 {
-        self.nonce
+        0u64
     }
 
     fn gas_limit(&self) -> u64 {
@@ -89,7 +87,7 @@ impl Transaction for PoLTx {
     }
 
     fn input(&self) -> &Bytes {
-        &self.input
+        &self.data
     }
 
     fn access_list(&self) -> Option<&AccessList> {
@@ -113,27 +111,27 @@ impl PoLTx {
     }
 
     fn rlp_encoded_length(&self) -> usize {
-        let payload_length = self.nonce.length() +
+        let payload_length = self.timestamp.length() +
             self.gas_limit.length() +
             self.to.length() +
             self.value.length() +
-            self.input.length();
+            self.data.length();
         // Include RLP list header size
         alloy_rlp::Header { list: true, payload_length }.length() + payload_length
     }
 
     fn rlp_encode(&self, out: &mut dyn BufMut) {
-        let payload_length = self.nonce.length() +
+        let payload_length = self.timestamp.length() +
             self.gas_limit.length() +
             self.to.length() +
             self.value.length() +
-            self.input.length();
+            self.data.length();
         alloy_rlp::Header { list: true, payload_length }.encode(out);
-        self.nonce.encode(out);
+        self.timestamp.encode(out);
         self.gas_limit.encode(out);
         self.to.encode(out);
         self.value.encode(out);
-        self.input.encode(out);
+        self.data.encode(out);
     }
 
     fn rlp_decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
@@ -143,11 +141,11 @@ impl PoLTx {
         }
 
         Ok(Self {
-            nonce: u64::decode(buf)?,
+            timestamp: u64::decode(buf)?,
             gas_limit: u64::decode(buf)?,
             to: Address::decode(buf)?,
             value: U256::decode(buf)?,
-            input: Bytes::decode(buf)?,
+            data: Bytes::decode(buf)?,
         })
     }
 }
@@ -203,7 +201,7 @@ impl Decodable for PoLTx {
 
 impl InMemorySize for PoLTx {
     fn size(&self) -> usize {
-        size_of::<Self>() + self.input.len()
+        size_of::<Self>() + self.data.len()
     }
 }
 
@@ -489,11 +487,11 @@ impl reth_codecs::Compact for PoLTx {
         B: BufMut + AsMut<[u8]>,
     {
         let mut written = 0;
-        written += self.nonce.to_compact(buf);
+        written += self.timestamp.to_compact(buf);
         written += self.gas_limit.to_compact(buf);
         written += self.to.to_compact(buf);
         written += self.value.to_compact(buf);
-        written += self.input.to_compact(buf);
+        written += self.data.to_compact(buf);
         written
     }
 
@@ -504,7 +502,7 @@ impl reth_codecs::Compact for PoLTx {
         let (value, buf) = U256::from_compact(buf, buf.len());
         let (input, buf) = Bytes::from_compact(buf, buf.len());
 
-        (Self { nonce, gas_limit, to, value, input }, buf)
+        (Self { timestamp: nonce, gas_limit, to, value, data: input }, buf)
     }
 }
 
@@ -518,14 +516,8 @@ impl FromRecoveredTx<PoLTx> for TxEnv {
             gas_price: tx.gas_price().unwrap_or_default(),
             kind: tx.kind(),
             value: tx.value(),
-            data: tx.input.clone(),
-            nonce: tx.nonce(),
-            chain_id: None,
-            access_list: Default::default(),
-            gas_priority_fee: None,
-            blob_hashes: vec![],
-            max_fee_per_blob_gas: 0,
-            authorization_list: vec![],
+            data: tx.data.clone(),
+            ..Default::default()
         }
     }
 }
