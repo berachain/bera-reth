@@ -455,11 +455,11 @@ fn execute_pol_transaction(
 
     // Construct PoL transaction
     let pol_tx = PoLTx {
-        timestamp: attributes.timestamp,
+        nonce: 0, // TODO: rez Update nonce
         gas_limit: 10_000_000,
         to: POL_DISTRIBUTOR_ADDRESS,
         value: U256::ZERO,
-        data: Bytes::from(calldata),
+        input: Bytes::from(calldata),
     };
 
     // Wrap in Berachain transaction envelope
