@@ -1,4 +1,5 @@
 use crate::{
+    chainspec::BerachainChainSpec,
     engine::builder::execute_pol_transaction,
     node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
     transaction::BerachainTxEnvelope,
@@ -6,7 +7,7 @@ use crate::{
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
 use reth::{
-    chainspec::EthereumHardfork,
+    chainspec::{EthereumHardfork, EthereumHardforks},
     providers::BlockExecutionResult,
     revm::{
         DatabaseCommit, Inspector, State,
@@ -27,17 +28,17 @@ use reth_evm::{
     },
     state_change::{balance_increment_state, post_block_balance_increments},
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 #[derive(Debug)]
-pub struct BerachainBlockExecutor<'a, Evm, Spec> {
-    spec: Spec,
+pub struct BerachainBlockExecutor<'a, Evm> {
+    spec: Arc<BerachainChainSpec>,
     /// Context for block execution.
     pub ctx: EthBlockExecutionCtx<'a>,
     /// Inner EVM.
     evm: Evm,
     /// Utility to call system smart contracts.
-    system_caller: SystemCaller<Spec>,
+    system_caller: SystemCaller<Arc<BerachainChainSpec>>,
     /// Receipt builder.
     receipt_builder: BerachainReceiptBuilder,
 
@@ -47,14 +48,11 @@ pub struct BerachainBlockExecutor<'a, Evm, Spec> {
     gas_used: u64,
 }
 
-impl<'a, Evm, Spec> BerachainBlockExecutor<'a, Evm, Spec>
-where
-    Spec: Clone,
-{
+impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
     pub fn new(
         evm: Evm,
         ctx: EthBlockExecutionCtx<'a>,
-        spec: Spec,
+        spec: Arc<BerachainChainSpec>,
         receipt_builder: BerachainReceiptBuilder,
     ) -> Self {
         Self {
@@ -69,14 +67,13 @@ where
     }
 }
 
-impl<'db, DB, E, Spec> BlockExecutor for BerachainBlockExecutor<'_, E, Spec>
+impl<'db, DB, E> BlockExecutor for BerachainBlockExecutor<'_, E>
 where
     DB: Database + 'db,
     E: Evm<
             DB = &'db mut State<DB>,
             Tx: FromRecoveredTx<BerachainTxEnvelope> + FromTxWithEncoded<BerachainTxEnvelope>,
         >,
-    Spec: EthExecutorSpec,
 {
     type Transaction = BerachainTxEnvelope;
     type Receipt = reth_ethereum_primitives::Receipt;
@@ -251,6 +248,6 @@ impl BlockExecutorFactory for BerachainEvmConfig {
         DB: Database + 'a,
         I: Inspector<<Self::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a,
     {
-        BerachainBlockExecutor::new(evm, ctx, &self.spec, self.receipt_builder)
+        BerachainBlockExecutor::new(evm, ctx, self.spec.clone(), self.receipt_builder)
     }
 }
