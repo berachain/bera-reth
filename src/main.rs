@@ -28,7 +28,7 @@ fn main() {
         unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
     }
 
-    let components = |spec: Arc<BerachainChainSpec>| {
+    let cli_components_builder = |spec: Arc<BerachainChainSpec>| {
         (
             BerachainEvmConfig::new_with_evm_factory(spec.clone(), EthEvmFactory::default()),
             EthBeaconConsensus::new(spec),
@@ -38,7 +38,7 @@ fn main() {
     if let Err(err) = Cli::<BerachainChainSpecParser, NoArgs>::parse()
         .with_runner_and_components::<BerachainNode>(
             CliRunner::try_default_runtime().expect("Failed to create default runtime"),
-            components,
+            cli_components_builder,
             async move |builder, _| {
                 info!(target: "reth::cli", "Launching Berachain node");
                 let NodeHandle { node, node_exit_future } =
