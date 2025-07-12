@@ -12,7 +12,7 @@ use crate::{
     rpc::receipt::BerachainEthReceiptBuilder,
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
-use alloy_consensus::transaction::TransactionMeta;
+use alloy_consensus::transaction::{SignerRecoverable, TransactionMeta};
 use alloy_eips::{BlockId, eip2930::AccessList};
 use alloy_primitives::{Address, B256, Bytes, ChainId, TxKind, U256};
 use alloy_rpc_types_eth::{Transaction, TransactionReceipt, TransactionRequest};
@@ -449,8 +449,14 @@ where
             .ok_or(EthApiError::HeaderNotFound(hash.into()))?;
         let blob_params = self.provider().chain_spec().blob_params_at_timestamp(meta.timestamp);
 
-        Ok(BerachainEthReceiptBuilder::new(&tx, meta, &receipt, &all_receipts, blob_params)?
-            .build())
+        Ok(BerachainEthReceiptBuilder::new(
+            tx.try_into_recovered_unchecked()?.as_recovered_ref(),
+            meta,
+            &receipt,
+            &all_receipts,
+            blob_params,
+        )
+        .build())
     }
 }
 

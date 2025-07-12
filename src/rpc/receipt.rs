@@ -1,5 +1,8 @@
 use crate::transaction::BerachainTxEnvelope;
-use alloy_consensus::{ReceiptEnvelope, transaction::TransactionMeta};
+use alloy_consensus::{
+    ReceiptEnvelope,
+    transaction::{Recovered, TransactionMeta},
+};
 use alloy_eips::eip7840::BlobParams;
 use alloy_rpc_types_eth::TransactionReceipt;
 use reth_ethereum_primitives::{Receipt, TxType};
@@ -15,12 +18,12 @@ impl BerachainEthReceiptBuilder {
     /// Note: This requires _all_ block receipts because we need to calculate the gas used by the
     /// transaction.
     pub fn new(
-        transaction: &BerachainTxEnvelope,
+        transaction: Recovered<&BerachainTxEnvelope>,
         meta: TransactionMeta,
         receipt: &Receipt,
         all_receipts: &[Receipt],
         blob_params: Option<BlobParams>,
-    ) -> EthResult<Self> {
+    ) -> Self {
         let base = build_receipt(
             transaction,
             meta,
@@ -34,9 +37,8 @@ impl BerachainEthReceiptBuilder {
                 TxType::Eip4844 => ReceiptEnvelope::Eip4844(receipt_with_bloom),
                 TxType::Eip7702 => ReceiptEnvelope::Eip7702(receipt_with_bloom),
             },
-        )?;
-
-        Ok(Self { base })
+        );
+        Self { base }
     }
 
     /// Builds a receipt response from the base response body, and any set additional fields.

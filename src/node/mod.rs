@@ -1,6 +1,5 @@
 //! Berachain node implementation using Reth's component-based architecture
 
-pub mod cli;
 pub mod evm;
 
 use crate::{
@@ -24,6 +23,7 @@ use reth::{
     providers::EthStorage,
     rpc::compat::TryIntoSimTx,
 };
+use reth_engine_local::LocalPayloadAttributesBuilder;
 use reth_node_api::FullNodeComponents;
 use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
@@ -31,6 +31,8 @@ use reth_node_builder::{
     rpc::BasicEngineApiBuilder,
 };
 use reth_node_ethereum::{EthereumNode, node::EthereumNetworkBuilder};
+use reth_payload_primitives::{PayloadAttributesBuilder, PayloadTypes};
+use std::sync::Arc;
 
 /// Type configuration for a regular Berachain node.
 
@@ -139,6 +141,13 @@ where
 
     fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> BlockTy<Self> {
         rpc_block.into_consensus().convert_transactions()
+    }
+
+    fn local_payload_attributes_builder(
+        chain_spec: &Self::ChainSpec,
+    ) -> impl PayloadAttributesBuilder<<<Self as NodeTypes>::Payload as PayloadTypes>::PayloadAttributes>
+    {
+        LocalPayloadAttributesBuilder::new(Arc::new(chain_spec.clone()))
     }
 }
 
