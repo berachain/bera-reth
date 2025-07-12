@@ -6,7 +6,7 @@ use alloy_consensus::{
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
-    eip7594::BlobTransactionSidecarVariant, eip7702::SignedAuthorization,
+    eip7002::SYSTEM_ADDRESS, eip7594::BlobTransactionSidecarVariant, eip7702::SignedAuthorization,
 };
 use alloy_primitives::{
     Address, B256, Bytes, ChainId, Sealable, Sealed, TxHash, TxKind, U256, bytes::BufMut, keccak256,
@@ -18,8 +18,6 @@ use reth::{
 };
 use reth_codecs::Compact;
 use reth_db::table::{Compress, Decompress};
-// use reth_db_api::impl_compression_for_compact;
-use alloy_eips::eip7002::SYSTEM_ADDRESS;
 use reth_evm::{Evm, FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,

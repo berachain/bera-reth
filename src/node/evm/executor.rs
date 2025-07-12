@@ -1,4 +1,5 @@
 use crate::{
+    engine::builder::execute_pol_transaction,
     node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
     transaction::BerachainTxEnvelope,
 };
@@ -90,6 +91,8 @@ where
         self.system_caller.apply_blockhashes_contract_call(self.ctx.parent_hash, &mut self.evm)?;
         self.system_caller
             .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
+
+        execute_pol_transaction(&mut self.evm).unwrap();
         Ok(())
     }
 

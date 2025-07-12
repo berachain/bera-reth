@@ -16,7 +16,11 @@ use reth::{
     api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, TxTy},
     chainspec::EthereumHardforks,
     providers::StateProviderFactory,
-    revm::{State, context::Block, database::StateProviderDatabase},
+    revm::{
+        DatabaseCommit, State,
+        context::{Block, result::ResultAndState},
+        database::StateProviderDatabase,
+    },
     transaction_pool::{PoolTransaction, TransactionPool},
 };
 use reth_basic_payload_builder::{
@@ -248,11 +252,6 @@ where
         PayloadBuilderError::Internal(err.into())
     })?;
 
-    // Construct and execute PoL system transaction before mempool transactions
-    // This follows Optimism's pattern of executing system transactions after pre-execution changes
-    // Only executes after Prague1 hardfork activation
-    execute_pol_transaction(&attributes, &mut builder, &chain_spec)?;
-
     // initialize empty blob sidecars at first. If cancun is active then this will be populated by
     // blob sidecars if any.
     let mut blob_sidecars = BlobSidecars::Empty;
@@ -424,20 +423,15 @@ const POL_DISTRIBUTOR_ADDRESS: Address = address!("0x420000000000000000000000000
 /// - Execute with zero gas cost using system signer
 /// - Generate proper receipts included in block
 /// - Only executes after Prague1 hardfork activation
-fn execute_pol_transaction(
-    attributes: &BerachainPayloadBuilderAttributes,
-    builder: &mut impl BlockBuilder<Primitives = BerachainPrimitives>,
-    chain_spec: &BerachainChainSpec,
+pub fn execute_pol_transaction(
+    evm: &mut impl Evm<DB: DatabaseCommit>,
 ) -> Result<(), PayloadBuilderError> {
-    use crate::transaction::{BerachainTxEnvelope, PoLTx};
-    use alloy_consensus::transaction::Recovered;
-
-    // Check if Prague1 hardfork is active at this timestamp
-    if !chain_spec.is_prague_active_at_timestamp(attributes.timestamp()) {
-        // Prague1 not active yet, skip PoL transaction
-        warn!(target: "payload_builder", "Prague1 hardfork not active yet, skipping PoL transaction");
-        return Ok(());
-    }
+    // // Check if Prague1 hardfork is active at this timestamp
+    // if !chain_spec.is_prague_active_at_timestamp(attributes.timestamp()) {
+    //     // Prague1 not active yet, skip PoL transaction
+    //     warn!(target: "payload_builder", "Prague1 hardfork not active yet, skipping PoL
+    // transaction");     return Ok(());
+    // }
 
     // Get validator public key from consensus layer
     // TODO: Enable once we get val pubkey from consensus
@@ -454,34 +448,29 @@ fn execute_pol_transaction(
         PoLDistributor::distributeForCall { pubkey: Bytes::from(validator_pubkey.clone()) };
     let calldata = distribute_call.abi_encode();
 
-    // Construct PoL transaction
-    let pol_tx = PoLTx {
-        nonce: 0, // TODO: rez Update nonce
-        gas_limit: 10_000_000,
-        to: POL_DISTRIBUTOR_ADDRESS,
-        value: U256::ZERO,
-        input: Bytes::from(calldata),
-    };
-
-    // Wrap in Berachain transaction envelope
-    let pol_envelope = BerachainTxEnvelope::Berachain(Sealed::new(pol_tx));
-
-    // Create recovered transaction with system signer
-    let recovered_pol_tx = Recovered::new_unchecked(pol_envelope, SYSTEM_ADDRESS);
+    // // Construct PoL transaction
+    // let pol_tx = PoLTx {
+    //     nonce: 0, // TODO: rez Update nonce
+    //     gas_limit: 10_000_000,
+    //     to: POL_DISTRIBUTOR_ADDRESS,
+    //     value: U256::ZERO,
+    //     input: Bytes::from(calldata),
+    // };
+    //
+    // // Wrap in Berachain transaction envelope
+    // let pol_envelope = BerachainTxEnvelope::Berachain(Sealed::new(pol_tx));
+    //
+    // // Create recovered transaction with system signer
+    // let recovered_pol_tx = Recovered::new_unchecked(pol_envelope, SYSTEM_ADDRESS);
 
     // Execute transaction through proper pipeline to generate receipt
-    match builder.execute_transaction(recovered_pol_tx.clone()) {
-        Ok(_gas_used) => {
+    match evm.transact_system_call(SYSTEM_ADDRESS, POL_DISTRIBUTOR_ADDRESS, Bytes::from(calldata)) {
+        Ok(res) => {
             // PoL transaction executed successfully
-            info!(target: "payload_builder", ?recovered_pol_tx, "PoL transaction executed successfully");
+            info!(target: "payload_builder", ?res, "PoL transaction executed successfully");
         }
-        Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx { error, .. })) => {
-            // Log validation errors but continue (similar to Optimism's approach)
-            warn!(target: "payload_builder", %error, ?recovered_pol_tx, "PoL transaction validation error");
-        }
-        Err(err) => {
-            // Fatal execution errors should fail the block
-            return Err(PayloadBuilderError::EvmExecutionError(Box::new(err)));
+        Err(e) => {
+            warn!(target: "payload_builder", %e, "PoL transaction execution failed");
         }
     }
 
