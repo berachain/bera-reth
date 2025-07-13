@@ -1,5 +1,6 @@
 use crate::{
     chainspec::BerachainChainSpec,
+    hardforks::BerachainHardforks,
     primitives::BerachainBlock,
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
@@ -32,6 +33,41 @@ impl BerachainBlockAssembler {
     pub fn new(chain_spec: Arc<BerachainChainSpec>) -> Self {
         Self { chain_spec, extra_data: Default::default() }
     }
+
+    /// Synthesize POL transaction
+    /// This recreates the POL transaction that should be the first transaction after Prague1
+    fn synthesize_pol_transaction() -> Result<BerachainTxEnvelope, BlockExecutionError> {
+        use crate::transaction::PoLTx;
+        use alloy_primitives::{B256, Bytes, Sealed, U256, address};
+        use alloy_sol_macro::sol;
+        use alloy_sol_types::SolCall;
+
+        // Extract validator pubkey from receipt logs
+        // For now, use hardcoded validator pubkey (same as executor)
+        let validator_pubkey: B256 = B256::from_slice(&[0u8; 32]);
+
+        // Construct ABI-encoded calldata
+        sol! {
+            interface PoLDistributor {
+                function distributeFor(bytes calldata pubkey) external;
+            }
+        }
+        let distribute_call =
+            PoLDistributor::distributeForCall { pubkey: Bytes::from(validator_pubkey) };
+        let calldata = distribute_call.abi_encode();
+
+        // Create POL transaction
+        let pol_tx = PoLTx {
+            nonce: 0,
+            gas_limit: 0, // Zero gas for system transaction
+            to: address!("4200000000000000000000000000000000000042"),
+            value: U256::ZERO,
+            input: Bytes::from(calldata),
+        };
+
+        // Wrap in transaction envelope
+        Ok(BerachainTxEnvelope::Berachain(Sealed::new_unchecked(pol_tx, B256::ZERO)))
+    }
 }
 
 impl<F> BlockAssembler<F> for BerachainBlockAssembler
@@ -52,7 +88,7 @@ where
             evm_env,
             execution_ctx: ctx,
             parent,
-            transactions,
+            mut transactions,
             output: BlockExecutionResult { receipts, requests, gas_used },
             state_root,
             ..
@@ -61,6 +97,14 @@ where
         info!(target: "block receipts", ?receipts, "block assembler");
 
         let timestamp = evm_env.block_env.timestamp.saturating_to();
+
+        // Check if Prague1 is active and we need to inject POL transaction
+        if self.chain_spec.is_prague1_active_at_timestamp(timestamp) && !receipts.is_empty() {
+            // Synthesize POL transaction and prepend to transaction list
+            let pol_transaction = Self::synthesize_pol_transaction()?;
+            transactions.insert(0, pol_transaction);
+            info!(target: "block assembler", "Injected POL transaction into block transaction list");
+        }
 
         let transactions_root = proofs::calculate_transaction_root(&transactions);
         let receipts_root =

@@ -1,5 +1,6 @@
 use crate::{
     chainspec::BerachainChainSpec,
+    hardforks::BerachainHardforks,
     node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
@@ -64,7 +65,7 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         }
     }
 
-    /// Execute POL transaction as system call and manually capture receipt  
+    /// Execute POL transaction as system call and manually capture receipt
     fn execute_pol_transaction_with_receipt(&mut self) -> Result<(), BlockExecutionError>
     where
         Evm: reth_evm::Evm,
@@ -77,7 +78,7 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         use reth_evm::block::StateChangeSource;
 
         // Check if Prague1 hardfork is active
-        if !self.spec.is_prague_active_at_timestamp(self.evm.block().timestamp.saturating_to()) {
+        if !self.spec.is_prague1_active_at_timestamp(self.evm.block().timestamp.saturating_to()) {
             return Ok(());
         }
 
@@ -130,10 +131,11 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
                 self.receipts.push(receipt);
 
                 // Notify system caller of state changes from system call
-                // self.system_caller.on_state(
-                //     StateChangeSource::PreBlock(), // POL is always the first transaction (index
-                // 0) &result_and_state.state
-                // );
+                self.system_caller.on_state(
+                    StateChangeSource::Transaction(0), /* POL is always the first transaction
+                                                        * (index 0) */
+                    &result_and_state.state,
+                );
 
                 Ok(())
             }
