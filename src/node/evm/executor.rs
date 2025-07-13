@@ -1,6 +1,5 @@
 use crate::{
     chainspec::BerachainChainSpec,
-    engine::builder::execute_pol_transaction,
     node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
     transaction::BerachainTxEnvelope,
 };
@@ -24,7 +23,6 @@ use reth_evm::{
     eth::{
         EthBlockExecutionCtx, dao_fork, eip6110,
         receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
-        spec::EthExecutorSpec,
     },
     state_change::{balance_increment_state, post_block_balance_increments},
 };
@@ -89,7 +87,7 @@ where
         self.system_caller
             .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
 
-        execute_pol_transaction(&mut self.evm).unwrap();
+        // execute_pol_transaction(&mut self.evm).unwrap();
         Ok(())
     }
 

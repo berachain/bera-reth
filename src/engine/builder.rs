@@ -252,6 +252,12 @@ where
         PayloadBuilderError::Internal(err.into())
     })?;
 
+    // Execute PoL transaction directly using the builder's EVM
+    execute_pol_transaction(builder.evm_mut()).map_err(|err| {
+        warn!(target: "payload_builder", %err, "failed to apply PoL transaction");
+        err
+    })?;
+
     // initialize empty blob sidecars at first. If cancun is active then this will be populated by
     // blob sidecars if any.
     let mut blob_sidecars = BlobSidecars::Empty;
@@ -423,9 +429,7 @@ const POL_DISTRIBUTOR_ADDRESS: Address = address!("0x420000000000000000000000000
 /// - Execute with zero gas cost using system signer
 /// - Generate proper receipts included in block
 /// - Only executes after Prague1 hardfork activation
-pub fn execute_pol_transaction(
-    evm: &mut impl Evm<DB: DatabaseCommit>,
-) -> Result<(), PayloadBuilderError> {
+pub fn execute_pol_transaction(evm: &mut impl Evm) -> Result<(), PayloadBuilderError> {
     // // Check if Prague1 hardfork is active at this timestamp
     // if !chain_spec.is_prague_active_at_timestamp(attributes.timestamp()) {
     //     // Prague1 not active yet, skip PoL transaction
@@ -463,7 +467,6 @@ pub fn execute_pol_transaction(
     // // Create recovered transaction with system signer
     // let recovered_pol_tx = Recovered::new_unchecked(pol_envelope, SYSTEM_ADDRESS);
 
-    // Execute transaction through proper pipeline to generate receipt
     match evm.transact_system_call(SYSTEM_ADDRESS, POL_DISTRIBUTOR_ADDRESS, Bytes::from(calldata)) {
         Ok(res) => {
             // PoL transaction executed successfully
