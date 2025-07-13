@@ -69,12 +69,14 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
     fn execute_pol_transaction_with_receipt(&mut self) -> Result<(), BlockExecutionError>
     where
         Evm: reth_evm::Evm,
+        <Evm as reth_evm::Evm>::DB: DatabaseCommit,
     {
         use crate::transaction::{BerachainTxEnvelope, PoLTx};
         use alloy_eips::eip7002::SYSTEM_ADDRESS;
         use alloy_primitives::{B256, Bytes, Sealed, U256, address};
         use alloy_sol_macro::sol;
         use alloy_sol_types::SolCall;
+        use reth::revm::DatabaseCommit;
         use reth_evm::block::StateChangeSource;
 
         // Check if Prague1 hardfork is active
@@ -136,6 +138,11 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
                                                         * (index 0) */
                     &result_and_state.state,
                 );
+
+                // Commit the POL transaction state changes to the database
+                self.evm.db_mut().commit(result_and_state.state);
+
+                tracing::debug!(target: "executor", "POL transaction state changes committed to database");
 
                 Ok(())
             }
