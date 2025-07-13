@@ -1,4 +1,4 @@
-use crate::transaction::BerachainTxEnvelope;
+use crate::transaction::{BerachainTxEnvelope, BerachainTxType};
 use alloy_consensus::{ReceiptEnvelope, TxType, transaction::TransactionMeta};
 use alloy_eips::eip7840::BlobParams;
 use alloy_rpc_types_eth::TransactionReceipt;

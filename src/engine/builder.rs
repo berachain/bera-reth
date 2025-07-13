@@ -252,12 +252,6 @@ where
         PayloadBuilderError::Internal(err.into())
     })?;
 
-    // Execute PoL transaction directly using the builder's EVM
-    execute_pol_transaction(builder.evm_mut()).map_err(|err| {
-        warn!(target: "payload_builder", %err, "failed to apply PoL transaction");
-        err
-    })?;
-
     // initialize empty blob sidecars at first. If cancun is active then this will be populated by
     // blob sidecars if any.
     let mut blob_sidecars = BlobSidecars::Empty;

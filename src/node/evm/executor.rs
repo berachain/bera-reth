@@ -1,7 +1,7 @@
 use crate::{
     chainspec::BerachainChainSpec,
     node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
-    transaction::BerachainTxEnvelope,
+    transaction::{BerachainTxEnvelope, BerachainTxType},
 };
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
@@ -63,6 +63,86 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             receipt_builder,
         }
     }
+
+    /// Execute POL transaction as system call and manually capture receipt  
+    fn execute_pol_transaction_with_receipt(&mut self) -> Result<(), BlockExecutionError>
+    where
+        Evm: reth_evm::Evm,
+    {
+        use crate::transaction::{BerachainTxEnvelope, PoLTx};
+        use alloy_eips::eip7002::SYSTEM_ADDRESS;
+        use alloy_primitives::{B256, Bytes, Sealed, U256, address};
+        use alloy_sol_macro::sol;
+        use alloy_sol_types::SolCall;
+        use reth_evm::block::StateChangeSource;
+
+        // Check if Prague1 hardfork is active
+        if !self.spec.is_prague_active_at_timestamp(self.evm.block().timestamp.saturating_to()) {
+            return Ok(());
+        }
+
+        // TODO: Get real validator pubkey from consensus layer
+        let validator_pubkey: B256 = B256::from_slice(&[0u8; 32]);
+
+        // Construct ABI-encoded calldata
+        sol! {
+            interface PoLDistributor {
+                function distributeFor(bytes calldata pubkey) external;
+            }
+        }
+        let distribute_call =
+            PoLDistributor::distributeForCall { pubkey: Bytes::from(validator_pubkey.clone()) };
+        let calldata = distribute_call.abi_encode();
+
+        // Execute as system call (maintains zero gas cost and unlimited gas)
+        let pol_distributor_address = address!("4200000000000000000000000000000000000042");
+        match self.evm.transact_system_call(
+            SYSTEM_ADDRESS,
+            pol_distributor_address,
+            Bytes::from(calldata.clone()),
+        ) {
+            Ok(result_and_state) => {
+                tracing::info!(target: "executor", ?result_and_state, "POL transaction executed successfully");
+
+                // Create POL transaction for receipt generation
+                let pol_tx = PoLTx {
+                    nonce: 0,
+                    gas_limit: 0, // Zero gas for system transaction
+                    to: pol_distributor_address,
+                    value: U256::ZERO,
+                    input: Bytes::from(calldata),
+                };
+
+                // Wrap in transaction envelope
+                let pol_envelope =
+                    BerachainTxEnvelope::Berachain(Sealed::new_unchecked(pol_tx, B256::ZERO));
+
+                // Build receipt manually for the system call
+                let receipt = self.receipt_builder.build_receipt(ReceiptBuilderCtx {
+                    tx: &pol_envelope,
+                    evm: &self.evm,
+                    result: result_and_state.result,
+                    state: &result_and_state.state,
+                    cumulative_gas_used: self.gas_used, // No gas consumed by system call
+                });
+
+                // Add receipt to block
+                self.receipts.push(receipt);
+
+                // Notify system caller of state changes from system call
+                // self.system_caller.on_state(
+                //     StateChangeSource::PreBlock(), // POL is always the first transaction (index
+                // 0) &result_and_state.state
+                // );
+
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!(target: "executor", %e, "POL system call execution failed");
+                Err(BlockExecutionError::other(e))
+            }
+        }
+    }
 }
 
 impl<'db, DB, E> BlockExecutor for BerachainBlockExecutor<'_, E>
@@ -87,7 +167,11 @@ where
         self.system_caller
             .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
 
-        // execute_pol_transaction(&mut self.evm).unwrap();
+        // Execute POL transaction and capture receipt
+        if let Err(e) = self.execute_pol_transaction_with_receipt() {
+            // Log error but don't fail block execution
+            tracing::warn!(target: "executor", %e, "POL transaction execution failed");
+        }
         Ok(())
     }
 
