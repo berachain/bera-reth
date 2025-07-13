@@ -106,7 +106,3 @@ reth-rpc-eth-api = { path = "../reth/crates/rpc/rpc-eth-api" }
 reth-rpc-eth-types = { path = "../reth/crates/rpc/rpc-eth-types" }
 reth-rpc-convert = { path = "../reth/crates/rpc/rpc-convert" }
 reth-transaction-pool = { path = "../reth/crates/transaction-pool" }
-
-[patch.crates-io]
-alloy-evm = { path = "../alloy-evm-fork/crates/evm" }
-
