@@ -75,6 +75,10 @@ inherits = "release"
 debug = "full"
 strip = "none"
 
+[patch.crates-io]
+alloy-evm = { path = "../alloy-evm-fork/crates/evm" }
+alloy-op-evm = { path = "../alloy-evm-fork/crates/op-evm" }
+
 [patch."https://github.com/paradigmxyz/reth"]
 reth = { path = "../reth/bin/reth" }
 reth-rpc = { path = "../reth/crates/rpc/rpc" }
