@@ -182,6 +182,16 @@ where
         tx: impl ExecutableTx<Self>,
         f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>) -> CommitChanges,
     ) -> Result<Option<u64>, BlockExecutionError> {
+        // Check if this is a POL transaction - skip validation since it's already executed as
+        // system call
+        if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
+            // POL transactions are executed in apply_pre_execution_changes() as system calls
+            // During block validation, we just return 0 gas used and skip re-execution
+            // TODO: Add additional validation.
+            tracing::debug!(target: "executor", "Skipping POL transaction validation - already executed as system call");
+            return Ok(Some(0));
+        }
+
         // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
         // must be no greater than the block's gasLimit.
         let block_available_gas = self.evm.block().gas_limit - self.gas_used;
