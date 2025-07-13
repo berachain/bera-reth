@@ -37,14 +37,19 @@ impl BerachainBlockAssembler {
     /// Synthesize POL transaction
     /// This recreates the POL transaction that should be the first transaction after Prague1
     fn synthesize_pol_transaction() -> Result<BerachainTxEnvelope, BlockExecutionError> {
+        use alloy_primitives::B256;
+        Self::create_pol_transaction_with_pubkey(B256::from_slice(&[0u8; 32]))
+    }
+
+    /// Create a POL transaction with the given validator pubkey
+    /// This is the canonical POL transaction creation logic used by both executor and assembler
+    pub fn create_pol_transaction_with_pubkey(
+        validator_pubkey: alloy_primitives::B256,
+    ) -> Result<BerachainTxEnvelope, BlockExecutionError> {
         use crate::transaction::PoLTx;
         use alloy_primitives::{B256, Bytes, Sealed, U256, address};
         use alloy_sol_macro::sol;
         use alloy_sol_types::SolCall;
-
-        // Extract validator pubkey from receipt logs
-        // For now, use hardcoded validator pubkey (same as executor)
-        let validator_pubkey: B256 = B256::from_slice(&[0u8; 32]);
 
         // Construct ABI-encoded calldata
         sol! {
@@ -65,8 +70,8 @@ impl BerachainBlockAssembler {
             input: Bytes::from(calldata),
         };
 
-        // Wrap in transaction envelope
-        Ok(BerachainTxEnvelope::Berachain(Sealed::new_unchecked(pol_tx, B256::ZERO)))
+        // Wrap in transaction envelope and calculate proper hash
+        Ok(BerachainTxEnvelope::Berachain(Sealed::new(pol_tx)))
     }
 }
 

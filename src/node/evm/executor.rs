@@ -1,7 +1,10 @@
 use crate::{
     chainspec::BerachainChainSpec,
     hardforks::BerachainHardforks,
-    node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
+    node::evm::{
+        assembler::BerachainBlockAssembler, config::BerachainEvmConfig,
+        receipt::BerachainReceiptBuilder,
+    },
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
 use alloy_consensus::Transaction;
@@ -71,11 +74,8 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         Evm: reth_evm::Evm,
         <Evm as reth_evm::Evm>::DB: DatabaseCommit,
     {
-        use crate::transaction::{BerachainTxEnvelope, PoLTx};
         use alloy_eips::eip7002::SYSTEM_ADDRESS;
-        use alloy_primitives::{B256, Bytes, Sealed, U256, address};
-        use alloy_sol_macro::sol;
-        use alloy_sol_types::SolCall;
+        use alloy_primitives::B256;
         use reth::revm::DatabaseCommit;
         use reth_evm::block::StateChangeSource;
 
@@ -87,38 +87,29 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         // TODO: Get real validator pubkey from consensus layer
         let validator_pubkey: B256 = B256::from_slice(&[0u8; 32]);
 
-        // Construct ABI-encoded calldata
-        sol! {
-            interface PoLDistributor {
-                function distributeFor(bytes calldata pubkey) external;
-            }
-        }
-        let distribute_call =
-            PoLDistributor::distributeForCall { pubkey: Bytes::from(validator_pubkey.clone()) };
-        let calldata = distribute_call.abi_encode();
+        // Use shared POL transaction creation logic
+        let pol_envelope =
+            BerachainBlockAssembler::create_pol_transaction_with_pubkey(validator_pubkey)?;
+        let (calldata, pol_distributor_address) =
+            if let BerachainTxEnvelope::Berachain(pol_tx) = &pol_envelope {
+                (pol_tx.input.clone(), pol_tx.to)
+            } else {
+                return Err(BlockExecutionError::other(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Invalid POL transaction type",
+                )));
+            };
 
         // Execute as system call (maintains zero gas cost and unlimited gas)
-        let pol_distributor_address = address!("4200000000000000000000000000000000000042");
         match self.evm.transact_system_call(
             SYSTEM_ADDRESS,
             pol_distributor_address,
-            Bytes::from(calldata.clone()),
+            calldata.clone(),
         ) {
             Ok(result_and_state) => {
                 tracing::info!(target: "executor", ?result_and_state, "POL transaction executed successfully");
 
-                // Create POL transaction for receipt generation
-                let pol_tx = PoLTx {
-                    nonce: 0,
-                    gas_limit: 0, // Zero gas for system transaction
-                    to: pol_distributor_address,
-                    value: U256::ZERO,
-                    input: Bytes::from(calldata),
-                };
-
-                // Wrap in transaction envelope
-                let pol_envelope =
-                    BerachainTxEnvelope::Berachain(Sealed::new_unchecked(pol_tx, B256::ZERO));
+                // Use the already-created POL envelope for receipt generation
 
                 // Build receipt manually for the system call
                 let receipt = self.receipt_builder.build_receipt(ReceiptBuilderCtx {
@@ -194,8 +185,57 @@ where
         if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
             // POL transactions are executed in apply_pre_execution_changes() as system calls
             // During block validation, we just return 0 gas used and skip re-execution
-            // TODO: Add additional validation.
-            tracing::debug!(target: "executor", "Skipping POL transaction validation - already executed as system call");
+
+            // Note: Transaction index validation should be done at the block level
+            // where the transaction list is available, not here where only receipts are tracked
+
+            // Ensure we are after Prague1 hardfork activation
+            if !self.spec.is_prague1_active_at_timestamp(self.evm.block().timestamp.saturating_to())
+            {
+                tracing::error!(
+                    target: "executor",
+                    "POL transaction found before Prague1 activation - invalid block"
+                );
+                return Err(BlockExecutionError::other(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "POL transaction found before Prague1 hardfork activation",
+                )));
+            }
+
+            // Additional validation: Verify POL transaction matches expected synthetic transaction
+            // Create the canonical POL transaction and compare hashes
+            let validator_pubkey = alloy_primitives::B256::from_slice(&[0u8; 32]);
+            let expected_pol_envelope =
+                match BerachainBlockAssembler::create_pol_transaction_with_pubkey(validator_pubkey)
+                {
+                    Ok(envelope) => envelope,
+                    Err(e) => {
+                        tracing::error!(target: "executor", %e, "Failed to create canonical POL transaction for validation");
+                        return Err(e);
+                    }
+                };
+
+            // Compare transaction hashes - this validates the entire transaction shape
+            let received_tx_hash = tx.tx().trie_hash();
+            let expected_tx_hash = expected_pol_envelope.trie_hash();
+
+            if received_tx_hash != expected_tx_hash {
+                tracing::error!(
+                    target: "executor",
+                    received_hash = ?received_tx_hash,
+                    expected_hash = ?expected_tx_hash,
+                    "POL transaction hash mismatch - transaction shape is invalid"
+                );
+                return Err(BlockExecutionError::other(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "POL transaction hash mismatch: got {:?}, expected {:?}",
+                        received_tx_hash, expected_tx_hash
+                    ),
+                )));
+            }
+
+            tracing::debug!(target: "executor", "POL transaction validation passed - skipping re-execution");
             return Ok(Some(0));
         }
 
