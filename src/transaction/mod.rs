@@ -31,7 +31,8 @@ use std::{hash::Hash, mem::size_of};
 pub struct PoLTx {
     #[serde(with = "alloy_serde::quantity")]
     pub chain_id: ChainId,
-    pub from: Address,
+    #[serde(skip)]
+    pub from: Address, // serde skip as from is derrived from recover_signer in RPC.
     pub to: Address,
     #[serde(with = "alloy_serde::quantity")]
     pub nonce: u64, // nonce = block number distributing for
