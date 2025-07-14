@@ -27,7 +27,7 @@ pub fn create_pol_transaction(
         PoLDistributor::distributeForCall { pubkey: Bytes::from(validator_pubkey) };
     let calldata = distribute_call.abi_encode();
 
-    let nonce = block_number.try_into().map_err(|_| {
+    let nonce = (block_number - U256::from(1)).try_into().map_err(|_| {
         BlockExecutionError::Internal(InternalBlockExecutionError::Other(
             "block number overflow for u64 nonce".into(),
         ))
