@@ -330,6 +330,12 @@ impl InMemorySize for BerachainTxEnvelope {
     }
 }
 
+impl InMemorySize for BerachainTxType {
+    fn size(&self) -> usize {
+        size_of::<Self>()
+    }
+}
+
 impl SignerRecoverable for BerachainTxEnvelope {
     fn recover_signer(&self) -> Result<Address, RecoveryError> {
         match self {
@@ -534,13 +540,9 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
 
 impl From<BerachainTxType> for alloy_consensus::TxType {
     fn from(custom: BerachainTxType) -> Self {
-        match u8::from(custom) {
-            0 => Self::Legacy,
-            1 => Self::Eip2930,
-            2 => Self::Eip1559,
-            3 => Self::Eip4844,
-            4 => Self::Eip7702,
-            _ => Self::Legacy, // fallback for unknown types
+        match custom {
+            BerachainTxType::Ethereum(eth_type) => eth_type,
+            BerachainTxType::Berachain => Self::Legacy, // fallback for POL transactions
         }
     }
 }
