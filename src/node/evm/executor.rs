@@ -5,7 +5,7 @@ use crate::{
         assembler::BerachainBlockAssembler, config::BerachainEvmConfig,
         receipt::BerachainReceiptBuilder,
     },
-    transaction::{BerachainTxEnvelope, BerachainTxType},
+    transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
@@ -89,7 +89,7 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
 
         // Use shared POL transaction creation logic
         let pol_envelope =
-            BerachainBlockAssembler::create_pol_transaction_with_pubkey(validator_pubkey)?;
+            create_pol_transaction(self.spec.clone(), validator_pubkey, self.evm.block().number)?;
         let (calldata, pol_distributor_address) =
             if let BerachainTxEnvelope::Berachain(pol_tx) = &pol_envelope {
                 (pol_tx.input.clone(), pol_tx.to)
@@ -205,15 +205,17 @@ where
             // Additional validation: Verify POL transaction matches expected synthetic transaction
             // Create the canonical POL transaction and compare hashes
             let validator_pubkey = alloy_primitives::B256::from_slice(&[0u8; 32]);
-            let expected_pol_envelope =
-                match BerachainBlockAssembler::create_pol_transaction_with_pubkey(validator_pubkey)
-                {
-                    Ok(envelope) => envelope,
-                    Err(e) => {
-                        tracing::error!(target: "executor", %e, "Failed to create canonical POL transaction for validation");
-                        return Err(e);
-                    }
-                };
+            let expected_pol_envelope = match create_pol_transaction(
+                self.spec.clone(),
+                validator_pubkey,
+                self.evm.block().number,
+            ) {
+                Ok(envelope) => envelope,
+                Err(e) => {
+                    tracing::error!(target: "executor", %e, "Failed to create canonical POL transaction for validation");
+                    return Err(e);
+                }
+            };
 
             // Compare transaction hashes - this validates the entire transaction shape
             let received_tx_hash = tx.tx().trie_hash();

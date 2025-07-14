@@ -1,3 +1,5 @@
+pub mod pol;
+
 use alloy_consensus::{
     EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar, TxEnvelope, TxType,
     crypto::RecoveryError,
@@ -28,17 +30,18 @@ use std::{hash::Hash, mem::size_of};
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
 pub struct PoLTx {
     #[serde(with = "alloy_serde::quantity")]
-    pub nonce: u64,
+    pub chain_id: ChainId,
+    pub from: Address,
+    pub to: Address,
+    #[serde(with = "alloy_serde::quantity")]
+    pub nonce: u64, // nonce = block number distributing for
     #[serde(with = "alloy_serde::quantity", rename = "gas", alias = "gasLimit")]
     pub gas_limit: u64,
-    pub to: Address,
-    pub value: U256,
     pub input: Bytes,
 }
 impl Transaction for PoLTx {
     fn chain_id(&self) -> Option<ChainId> {
-        // Same as Op Deposit Tx
-        None
+        Some(self.chain_id)
     }
 
     fn nonce(&self) -> u64 {
@@ -86,7 +89,7 @@ impl Transaction for PoLTx {
     }
 
     fn value(&self) -> U256 {
-        self.value
+        U256::from(0)
     }
 
     fn input(&self) -> &Bytes {
@@ -113,27 +116,30 @@ impl PoLTx {
         keccak256(&buf)
     }
 
-    fn rlp_encoded_length(&self) -> usize {
-        let payload_length = self.nonce.length() +
-            self.gas_limit.length() +
+    fn rlp_payload_length(&self) -> usize {
+        self.chain_id.length() +
+            self.from.length() +
             self.to.length() +
-            self.value.length() +
-            self.input.length();
+            self.nonce.length() +
+            self.gas_limit.length() +
+            self.input.length()
+    }
+
+    fn rlp_encoded_length(&self) -> usize {
+        let payload_length = self.rlp_payload_length();
         // Include RLP list header size
         alloy_rlp::Header { list: true, payload_length }.length() + payload_length
     }
 
     fn rlp_encode(&self, out: &mut dyn BufMut) {
-        let payload_length = self.nonce.length() +
-            self.gas_limit.length() +
-            self.to.length() +
-            self.value.length() +
-            self.input.length();
+        let payload_length = self.rlp_payload_length();
+
         alloy_rlp::Header { list: true, payload_length }.encode(out);
+        self.chain_id.encode(out);
+        self.from.encode(out);
+        self.to.encode(out);
         self.nonce.encode(out);
         self.gas_limit.encode(out);
-        self.to.encode(out);
-        self.value.encode(out);
         self.input.encode(out);
     }
 
@@ -144,10 +150,11 @@ impl PoLTx {
         }
 
         Ok(Self {
+            chain_id: ChainId::decode(buf)?,
+            from: Address::decode(buf)?,
+            to: Address::decode(buf)?,
             nonce: u64::decode(buf)?,
             gas_limit: u64::decode(buf)?,
-            to: Address::decode(buf)?,
-            value: U256::decode(buf)?,
             input: Bytes::decode(buf)?,
         })
     }

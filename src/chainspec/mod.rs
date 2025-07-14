@@ -10,6 +10,7 @@ use alloy_eips::{
     eip2124::{ForkFilter, ForkId, Head},
 };
 use alloy_genesis::Genesis;
+use alloy_primitives::address;
 use derive_more::{Constructor, Into};
 use reth::{
     chainspec::{
@@ -37,6 +38,14 @@ pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
     inner: ChainSpec,
 }
+
+impl BerachainChainSpec {
+    pub fn pol_contract(&self) -> Address {
+        // TODO: Load from genesis config
+        address!("4200000000000000000000000000000000000042")
+    }
+}
+
 impl EthChainSpec for BerachainChainSpec {
     type Header = Header;
 

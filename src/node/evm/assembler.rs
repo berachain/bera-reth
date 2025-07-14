@@ -2,13 +2,13 @@ use crate::{
     chainspec::BerachainChainSpec,
     hardforks::BerachainHardforks,
     primitives::BerachainBlock,
-    transaction::{BerachainTxEnvelope, BerachainTxType},
+    transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
 use alloy_consensus::{
     Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, Header, Transaction, TxReceipt, proofs,
 };
 use alloy_eips::merge::BEACON_NONCE;
-use alloy_primitives::{Bytes, logs_bloom};
+use alloy_primitives::{B256, Bytes, U256, logs_bloom};
 use reth::{chainspec::EthereumHardforks, providers::BlockExecutionResult};
 use reth_chainspec::EthChainSpec;
 use reth_ethereum_primitives::Receipt;
@@ -32,46 +32,6 @@ impl BerachainBlockAssembler {
     /// Creates a new [`EthBlockAssembler`].
     pub fn new(chain_spec: Arc<BerachainChainSpec>) -> Self {
         Self { chain_spec, extra_data: Default::default() }
-    }
-
-    /// Synthesize POL transaction
-    /// This recreates the POL transaction that should be the first transaction after Prague1
-    fn synthesize_pol_transaction() -> Result<BerachainTxEnvelope, BlockExecutionError> {
-        use alloy_primitives::B256;
-        Self::create_pol_transaction_with_pubkey(B256::from_slice(&[0u8; 32]))
-    }
-
-    /// Create a POL transaction with the given validator pubkey
-    /// This is the canonical POL transaction creation logic used by both executor and assembler
-    pub fn create_pol_transaction_with_pubkey(
-        validator_pubkey: alloy_primitives::B256,
-    ) -> Result<BerachainTxEnvelope, BlockExecutionError> {
-        use crate::transaction::PoLTx;
-        use alloy_primitives::{B256, Bytes, Sealed, U256, address};
-        use alloy_sol_macro::sol;
-        use alloy_sol_types::SolCall;
-
-        // Construct ABI-encoded calldata
-        sol! {
-            interface PoLDistributor {
-                function distributeFor(bytes calldata pubkey) external;
-            }
-        }
-        let distribute_call =
-            PoLDistributor::distributeForCall { pubkey: Bytes::from(validator_pubkey) };
-        let calldata = distribute_call.abi_encode();
-
-        // Create POL transaction
-        let pol_tx = PoLTx {
-            nonce: 0,
-            gas_limit: 0, // Zero gas for system transaction
-            to: address!("4200000000000000000000000000000000000042"),
-            value: U256::ZERO,
-            input: Bytes::from(calldata),
-        };
-
-        // Wrap in transaction envelope and calculate proper hash
-        Ok(BerachainTxEnvelope::Berachain(Sealed::new(pol_tx)))
     }
 }
 
@@ -105,8 +65,12 @@ where
 
         // Check if Prague1 is active and we need to inject POL transaction
         if self.chain_spec.is_prague1_active_at_timestamp(timestamp) && !receipts.is_empty() {
-            // Synthesize POL transaction and prepend to transaction list
-            let pol_transaction = Self::synthesize_pol_transaction()?;
+            // Synthesize POL transaction and prepend to transactions list
+            let pol_transaction = create_pol_transaction(
+                self.chain_spec.clone(),
+                B256::from_slice(&[0u8; 32]),
+                evm_env.block_env.number,
+            )?;
             transactions.insert(0, pol_transaction);
             info!(target: "block assembler", "Injected POL transaction into block transaction list");
         }
