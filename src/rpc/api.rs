@@ -8,7 +8,7 @@ use reth_rpc_convert::RpcConverter;
 use reth_rpc_eth_api::{FromEthApiError, FullEthApiTypes, RpcReceipt};
 
 use crate::{
-    node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
+    node::evm::config::BerachainEvmConfig,
     rpc::receipt::BerachainEthReceiptBuilder,
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
@@ -51,8 +51,8 @@ use reth_rpc_eth_api::{
     },
 };
 use reth_rpc_eth_types::{
-    EthApiError, EthReceiptBuilder, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
-    error::FromEvmError, utils::recover_raw_transaction,
+    EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock, error::FromEvmError,
+    utils::recover_raw_transaction,
 };
 use reth_transaction_pool::TransactionOrigin;
 

@@ -6,7 +6,7 @@ use alloy_eips::{
     eip4895::{Withdrawal, Withdrawals},
     eip7685::Requests,
 };
-use alloy_primitives::{Address, B256, U256, aliases::B32};
+use alloy_primitives::{Address, B256, U256};
 use alloy_rpc_types::engine::{
     BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1, ExecutionPayloadV3,

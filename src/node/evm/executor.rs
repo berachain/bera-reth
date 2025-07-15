@@ -1,10 +1,7 @@
 use crate::{
     chainspec::BerachainChainSpec,
     hardforks::BerachainHardforks,
-    node::evm::{
-        assembler::BerachainBlockAssembler, config::BerachainEvmConfig,
-        receipt::BerachainReceiptBuilder,
-    },
+    node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
     transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
 use alloy_consensus::Transaction;

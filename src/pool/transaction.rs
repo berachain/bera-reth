@@ -1,15 +1,12 @@
 use crate::transaction::BerachainTxEnvelope;
 use alloy_consensus::{
     EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar,
-    error::ValueError,
-    transaction::{PooledTransaction, Recovered},
+    transaction::Recovered,
 };
 use alloy_eips::{
     Encodable2718, Typed2718,
     eip2930::AccessList,
-    eip4844::{
-        BlobAndProofV1, BlobAndProofV2, BlobTransactionValidationError, env_settings::KzgSettings,
-    },
+    eip4844::{BlobTransactionValidationError, env_settings::KzgSettings},
     eip7594::BlobTransactionSidecarVariant,
     eip7702::SignedAuthorization,
 };

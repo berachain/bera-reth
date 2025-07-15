@@ -1443,7 +1443,6 @@ dependencies = [
  "eyre",
  "jsonrpsee-core",
  "modular-bitfield",
- "parity-scale-codec",
  "parking_lot",
  "reth",
  "reth-basic-payload-builder",

@@ -8,19 +8,12 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::Transaction;
-use alloy_eips::eip7002::SYSTEM_ADDRESS;
-use alloy_primitives::{Address, B256, Bytes, Sealed, U256, address, aliases::B32};
-use alloy_sol_macro::sol;
-use alloy_sol_types::SolCall;
+use alloy_primitives::U256;
 use reth::{
     api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, TxTy},
     chainspec::EthereumHardforks,
     providers::StateProviderFactory,
-    revm::{
-        DatabaseCommit, State,
-        context::{Block, result::ResultAndState},
-        database::StateProviderDatabase,
-    },
+    revm::{State, context::Block, database::StateProviderDatabase},
     transaction_pool::{PoolTransaction, TransactionPool},
 };
 use reth_basic_payload_builder::{
@@ -43,7 +36,7 @@ use reth_transaction_pool::{
     error::{Eip4844PoolTransactionError, InvalidPoolTransactionError},
 };
 use std::sync::Arc;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, trace, warn};
 
 type BestTransactionsIter<Pool> = Box<
     dyn BestTransactions<Item = Arc<ValidPoolTransaction<<Pool as TransactionPool>::Transaction>>>,

@@ -8,7 +8,7 @@ use alloy_consensus::{
     Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, Header, Transaction, TxReceipt, proofs,
 };
 use alloy_eips::merge::BEACON_NONCE;
-use alloy_primitives::{B256, Bytes, U256, logs_bloom};
+use alloy_primitives::{B256, Bytes, logs_bloom};
 use reth::{chainspec::EthereumHardforks, providers::BlockExecutionResult};
 use reth_chainspec::EthChainSpec;
 use reth_ethereum_primitives::Receipt;

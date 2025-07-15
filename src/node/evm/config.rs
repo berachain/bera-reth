@@ -17,10 +17,10 @@ use reth::{
 use reth_chainspec::EthChainSpec;
 use reth_evm::{
     ConfigureEvm, EthEvmFactory, EvmEnv, EvmEnvFor, ExecutionCtxFor, NextBlockEnvAttributes,
-    block::BlockExecutorFactory, eth::EthBlockExecutionCtx,
+    eth::EthBlockExecutionCtx,
 };
 use reth_evm_ethereum::{revm_spec, revm_spec_by_timestamp_and_block_number};
-use reth_primitives_traits::{BlockTy, HeaderTy, NodePrimitives, SealedBlock, SealedHeader};
+use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
 use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 
 #[derive(Debug, Clone)]

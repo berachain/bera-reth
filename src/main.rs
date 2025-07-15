@@ -12,9 +12,7 @@ use bera_reth::{chainspec::BerachainChainSpec, node::evm::config::BerachainEvmCo
 use reth_cli_commands::node::NoArgs;
 use reth_ethereum_cli::Cli;
 use reth_evm::EthEvmFactory;
-use reth_evm_ethereum::EthEvmConfig;
 use reth_node_builder::NodeHandle;
-use reth_node_ethereum::EthereumNode;
 use tracing::info;
 
 /// Main entry point. Sets up runtime, signal handlers, and launches Berachain node.

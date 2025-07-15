@@ -4,22 +4,18 @@ use alloy_consensus::{
     EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar, TxEnvelope, TxType,
     crypto::RecoveryError,
     error::ValueError,
-    transaction::{Recovered, RlpEcdsaEncodableTx, SignerRecoverable},
+    transaction::{Recovered, SignerRecoverable},
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
     eip7002::SYSTEM_ADDRESS, eip7594::BlobTransactionSidecarVariant, eip7702::SignedAuthorization,
 };
 use alloy_primitives::{
-    Address, B256, Bytes, ChainId, Sealable, Sealed, TxHash, TxKind, U256,
-    bytes::{Buf, BufMut},
-    keccak256,
+    Address, B256, Bytes, ChainId, Sealable, Sealed, TxHash, TxKind, U256, bytes::BufMut, keccak256,
 };
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
-use reth::{
-    providers::errors::db::DatabaseError, revm::context::TxEnv, transaction_pool::PoolTransaction,
-};
+use reth::{providers::errors::db::DatabaseError, revm::context::TxEnv};
 use reth_codecs::Compact;
 use reth_db::table::{Compress, Decompress};
 use reth_evm::{Evm, FromRecoveredTx, FromTxWithEncoded};
@@ -248,7 +244,7 @@ impl SignerRecoverable for PoLTx {
 }
 
 #[derive(Debug, Clone, alloy_consensus::TransactionEnvelope)]
-// #[envelope(tx_type_name = BerachainTxType)]
+#[envelope(tx_type_name = BerachainTxType)]
 #[allow(clippy::large_enum_variant)]
 pub enum BerachainTxEnvelope {
     /// Existing Ethereum transactions (purely additive)
