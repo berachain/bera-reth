@@ -1,4 +1,5 @@
 pub mod pol;
+mod txtype;
 
 use alloy_consensus::{
     EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar, TxEnvelope, TxType,
@@ -325,12 +326,6 @@ impl InMemorySize for BerachainTxEnvelope {
             Self::Ethereum(tx) => tx.size(),
             Self::Berachain(tx) => tx.size(),
         }
-    }
-}
-
-impl InMemorySize for BerachainTxType {
-    fn size(&self) -> usize {
-        size_of::<Self>()
     }
 }
 
