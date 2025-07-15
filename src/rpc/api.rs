@@ -9,7 +9,7 @@ use reth_rpc_eth_api::{FromEthApiError, FullEthApiTypes, RpcReceipt};
 
 use crate::{
     node::evm::config::BerachainEvmConfig,
-    rpc::receipt::BerachainEthReceiptBuilder,
+    rpc::receipt::{BerachainEthReceiptBuilder, BerachainReceiptEnvelope},
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
 use alloy_consensus::transaction::{SignerRecoverable, TransactionMeta};
@@ -235,7 +235,7 @@ impl Network for BerachainNetwork {
 
     type UnsignedTx = BerachainTypedTransaction;
 
-    type ReceiptEnvelope = alloy_consensus::ReceiptEnvelope;
+    type ReceiptEnvelope = BerachainReceiptEnvelope;
 
     type Header = alloy_consensus::Header;
 
@@ -243,7 +243,7 @@ impl Network for BerachainNetwork {
 
     type TransactionResponse = alloy_rpc_types_eth::Transaction<BerachainTxEnvelope>;
 
-    type ReceiptResponse = alloy_rpc_types_eth::TransactionReceipt;
+    type ReceiptResponse = alloy_rpc_types_eth::TransactionReceipt<BerachainReceiptEnvelope>;
 
     type HeaderResponse = alloy_rpc_types_eth::Header;
 
@@ -499,7 +499,7 @@ where
             Network: NetworkInfo,
         > + LoadBlock<
             Error = EthApiError,
-            NetworkTypes: RpcTypes<Receipt = TransactionReceipt>,
+            NetworkTypes = BerachainNetwork,
             RpcConvert: RpcConvert<Network = Self::NetworkTypes>,
         >,
     Provider: BlockReader,
