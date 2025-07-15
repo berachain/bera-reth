@@ -23,6 +23,7 @@ eyre = "0.6.12"
 jsonrpsee-core = "0.25.1"
 modular-bitfield = "0.11.2"
 parking_lot = "0.12.4"
+parity-scale-codec = "3.6.1"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }

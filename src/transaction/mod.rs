@@ -11,7 +11,9 @@ use alloy_eips::{
     eip7002::SYSTEM_ADDRESS, eip7594::BlobTransactionSidecarVariant, eip7702::SignedAuthorization,
 };
 use alloy_primitives::{
-    Address, B256, Bytes, ChainId, Sealable, Sealed, TxHash, TxKind, U256, bytes::BufMut, keccak256,
+    Address, B256, Bytes, ChainId, Sealable, Sealed, TxHash, TxKind, U256,
+    bytes::{Buf, BufMut},
+    keccak256,
 };
 use alloy_rlp::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
@@ -246,7 +248,7 @@ impl SignerRecoverable for PoLTx {
 }
 
 #[derive(Debug, Clone, alloy_consensus::TransactionEnvelope)]
-#[envelope(tx_type_name = BerachainTxType)]
+// #[envelope(tx_type_name = BerachainTxType)]
 #[allow(clippy::large_enum_variant)]
 pub enum BerachainTxEnvelope {
     /// Existing Ethereum transactions (purely additive)

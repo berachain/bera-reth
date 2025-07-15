@@ -154,7 +154,7 @@ where
         >,
 {
     type Transaction = BerachainTxEnvelope;
-    type Receipt = reth_ethereum_primitives::Receipt;
+    type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>;
     type Evm = E;
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
@@ -376,7 +376,7 @@ impl BlockExecutorFactory for BerachainEvmConfig {
     type EvmFactory = EthEvmFactory;
     type ExecutionCtx<'a> = EthBlockExecutionCtx<'a>;
     type Transaction = BerachainTxEnvelope;
-    type Receipt = reth_ethereum_primitives::Receipt;
+    type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>;
 
     fn evm_factory(&self) -> &Self::EvmFactory {
         &self.evm_factory

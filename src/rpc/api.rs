@@ -428,7 +428,7 @@ where
                           + BlockNumReader
                           + StageCheckpointReader
                           + TransactionsProvider<Transaction = BerachainTxEnvelope>
-                          + ReceiptProvider<Receipt = Receipt>,
+                          + ReceiptProvider<Receipt = Receipt<BerachainTxType>>,
             Network: NetworkInfo,
         > + RpcNodeCoreExt,
     Provider: BlockReader,
@@ -437,7 +437,7 @@ where
         &self,
         tx: BerachainTxEnvelope,
         meta: TransactionMeta,
-        receipt: Receipt,
+        receipt: Receipt<BerachainTxType>,
     ) -> Result<RpcReceipt<Self::NetworkTypes>, Self::Error> {
         let hash = meta.block_hash;
         // get all receipts for the block
@@ -494,7 +494,7 @@ where
                           + StageCheckpointReader
                           + BlockReader<
                 Transaction = BerachainTxEnvelope,
-                Receipt = reth_ethereum_primitives::Receipt,
+                Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>,
             >,
             Network: NetworkInfo,
         > + LoadBlock<

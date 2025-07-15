@@ -40,7 +40,7 @@ where
     F: for<'a> BlockExecutorFactory<
             ExecutionCtx<'a> = EthBlockExecutionCtx<'a>,
             Transaction = BerachainTxEnvelope,
-            Receipt = Receipt,
+            Receipt = Receipt<BerachainTxType>,
         >,
 {
     type Block = BerachainBlock;

@@ -20,8 +20,8 @@ impl BerachainEthReceiptBuilder {
     pub fn new(
         transaction: Recovered<&BerachainTxEnvelope>,
         meta: TransactionMeta,
-        receipt: &Receipt,
-        all_receipts: &[Receipt],
+        receipt: &Receipt<BerachainTxType>,
+        all_receipts: &[Receipt<BerachainTxType>],
         blob_params: Option<BlobParams>,
     ) -> Self {
         let base = build_receipt(
@@ -31,10 +31,9 @@ impl BerachainEthReceiptBuilder {
             all_receipts,
             blob_params,
             |receipt_with_bloom| {
-                // Use the transaction type from the BerachainTxEnvelope to properly handle POL
-                // transactions
-                match transaction.as_ref() {
-                    BerachainTxEnvelope::Ethereum(eth_tx) => match eth_tx.tx_type() {
+                // Use the receipt's transaction type to properly handle all transaction types
+                match receipt.tx_type {
+                    BerachainTxType::Ethereum(eth_type) => match eth_type {
                         alloy_consensus::TxType::Legacy => {
                             ReceiptEnvelope::Legacy(receipt_with_bloom)
                         }
@@ -51,9 +50,9 @@ impl BerachainEthReceiptBuilder {
                             ReceiptEnvelope::Eip7702(receipt_with_bloom)
                         }
                     },
-                    BerachainTxEnvelope::Berachain(_) => {
-                        // For POL transactions, use Legacy envelope format but with the correct
-                        // type
+                    BerachainTxType::Berachain => {
+                        // For POL transactions, use Legacy envelope format with correct type
+                        // preservation
                         ReceiptEnvelope::Legacy(receipt_with_bloom)
                     }
                 }

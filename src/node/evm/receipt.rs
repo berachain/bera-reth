@@ -17,7 +17,7 @@ pub struct BerachainReceiptBuilder;
 
 impl ReceiptBuilder for BerachainReceiptBuilder {
     type Transaction = BerachainTxEnvelope;
-    type Receipt = Receipt;
+    type Receipt = Receipt<BerachainTxType>;
 
     fn build_receipt<E: Evm>(
         &self,
@@ -25,7 +25,7 @@ impl ReceiptBuilder for BerachainReceiptBuilder {
     ) -> Self::Receipt {
         let ReceiptBuilderCtx { tx, result, cumulative_gas_used, .. } = ctx;
         Receipt {
-            tx_type: tx.tx_type().into(),
+            tx_type: tx.tx_type(),
             // Success flag was added in `EIP-658: Embedding transaction status code in
             // receipts`.
             success: result.is_success(),
