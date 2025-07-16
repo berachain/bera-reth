@@ -1442,7 +1442,6 @@ dependencies = [
  "eyre",
  "jsonrpsee-core",
  "modular-bitfield",
- "parking_lot",
  "reth",
  "reth-basic-payload-builder",
  "reth-chainspec",
@@ -1450,6 +1449,7 @@ dependencies = [
  "reth-cli-commands",
  "reth-cli-util",
  "reth-codecs",
+ "reth-codecs-derive 1.5.0",
  "reth-db",
  "reth-db-api",
  "reth-engine-local",
@@ -6226,9 +6226,20 @@ dependencies = [
  "bytes",
  "modular-bitfield",
  "op-alloy-consensus",
- "reth-codecs-derive",
+ "reth-codecs-derive 1.5.1",
  "reth-zstd-compressors",
  "serde",
+]
+
+[[package]]
+name = "reth-codecs-derive"
+version = "1.5.0"
+source = "git+https://github.com/paradigmxyz/reth?rev=a0b92ae705e9eb167dc3f25da751dd201b5992e3#a0b92ae705e9eb167dc3f25da751dd201b5992e3"
+dependencies = [
+ "convert_case",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -6762,7 +6773,7 @@ dependencies = [
  "bytes",
  "derive_more",
  "reth-chainspec",
- "reth-codecs-derive",
+ "reth-codecs-derive 1.5.1",
  "reth-ethereum-primitives",
  "reth-primitives-traits",
  "serde",

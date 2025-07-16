@@ -22,7 +22,6 @@ derive_more = "2.0.1"
 eyre = "0.6.12"
 jsonrpsee-core = "0.25.1"
 modular-bitfield = "0.11.2"
-parking_lot = "0.12.4"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
@@ -30,6 +29,7 @@ reth-cli = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb1
 reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-codecs = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
+reth-codecs-derive = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-db-api = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-engine-local = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }

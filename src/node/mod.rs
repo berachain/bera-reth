@@ -45,7 +45,7 @@ impl NodeTypes for BerachainNode {
     type Primitives = BerachainPrimitives;
     type ChainSpec = BerachainChainSpec;
     type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
-    type Storage = EthStorage<BerachainTxEnvelope>;
+    type Storage = EthStorage<BerachainTxEnvelope, BerachainHeader>;
     type Payload = BerachainEngineTypes;
 }
 

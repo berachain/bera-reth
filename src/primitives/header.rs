@@ -1,13 +1,15 @@
 use alloy_consensus::Header;
 use alloy_primitives::{Address, B64, B256, BlockNumber, Bloom, Bytes, Sealable, U256};
-use alloy_rlp::{Decodable, Encodable};
+use alloy_rlp::{Decodable, Encodable, length_of_length};
 use bytes::BufMut;
 use reth_codecs::Compact;
-use reth_primitives_traits::{BlockHeader, InMemorySize, serde_bincode_compat::SerdeBincodeCompat};
+use reth_db_api::table::{Compress, Decompress};
+use reth_primitives_traits::{BlockHeader, InMemorySize, serde_bincode_compat::RlpBincode};
 use serde::{Deserialize, Serialize};
 
 /// Berachain block header with additional fields for consensus
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+/// TODO: All of the implementations here need to be properly tested.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize, Compact)]
 pub struct BerachainHeader {
     /// The Keccak 256-bit hash of the parent block's header, in its entirety.
     pub parent_hash: B256,
@@ -46,7 +48,7 @@ pub struct BerachainHeader {
     pub mix_hash: B256,
     /// A 64-bit value which, combined with the mixhash, proves that a sufficient amount of
     /// computation has been carried out on this block.
-    pub nonce: B64,
+    pub nonce: u64,
     /// A scalar representing EIP1559 base fee which can move up or down each block according to a
     /// formula which is a function of gas used in parent block and gas target.
     pub base_fee_per_gas: Option<u64>,
@@ -60,108 +62,276 @@ pub struct BerachainHeader {
     pub parent_beacon_block_root: Option<B256>,
     /// The hash of the requests trie root, added in EIP-7685.
     pub requests_hash: Option<B256>,
-    /// An arbitrary byte array containing data relevant to this block. This must be 32 bytes or
-    /// fewer.
-    pub extra_data: Bytes,
     /// Previous proposer public key for Berachain consensus.
     pub prev_proposer_pubkey: Option<B256>,
+    /// An arbitrary byte array containing data relevant to this block. This must be 32 bytes or
+    /// fewer. Must be last for Compact derive.
+    pub extra_data: Bytes,
+}
+
+impl BerachainHeader {
+    fn header_payload_length(&self) -> usize {
+        let mut length = 0;
+        length += self.parent_hash.length();
+        length += self.ommers_hash.length();
+        length += self.beneficiary.length();
+        length += self.state_root.length();
+        length += self.transactions_root.length();
+        length += self.receipts_root.length();
+        length += self.logs_bloom.length();
+        length += self.difficulty.length();
+        length += U256::from(self.number).length();
+        length += U256::from(self.gas_limit).length();
+        length += U256::from(self.gas_used).length();
+        length += self.timestamp.length();
+        length += self.extra_data.length();
+        length += self.mix_hash.length();
+        length += self.nonce.length();
+
+        if let Some(base_fee) = self.base_fee_per_gas {
+            length += U256::from(base_fee).length();
+        }
+
+        if let Some(root) = self.withdrawals_root {
+            length += root.length();
+        }
+
+        if let Some(blob_gas_used) = self.blob_gas_used {
+            length += U256::from(blob_gas_used).length();
+        }
+
+        if let Some(excess_blob_gas) = self.excess_blob_gas {
+            length += U256::from(excess_blob_gas).length();
+        }
+
+        if let Some(parent_beacon_block_root) = self.parent_beacon_block_root {
+            length += parent_beacon_block_root.length();
+        }
+
+        if let Some(requests_hash) = self.requests_hash {
+            length += requests_hash.length();
+        }
+
+        if let Some(prev_proposer_pubkey) = self.prev_proposer_pubkey {
+            length += prev_proposer_pubkey.length();
+        }
+
+        length
+    }
 }
 
 impl Encodable for BerachainHeader {
     fn encode(&self, out: &mut dyn BufMut) {
-        todo!()
+        let list_header =
+            alloy_rlp::Header { list: true, payload_length: self.header_payload_length() };
+        list_header.encode(out);
+        self.parent_hash.encode(out);
+        self.ommers_hash.encode(out);
+        self.beneficiary.encode(out);
+        self.state_root.encode(out);
+        self.transactions_root.encode(out);
+        self.receipts_root.encode(out);
+        self.logs_bloom.encode(out);
+        self.difficulty.encode(out);
+        U256::from(self.number).encode(out);
+        U256::from(self.gas_limit).encode(out);
+        U256::from(self.gas_used).encode(out);
+        self.timestamp.encode(out);
+        self.extra_data.encode(out);
+        self.mix_hash.encode(out);
+        self.nonce.encode(out);
+
+        if let Some(base_fee) = self.base_fee_per_gas {
+            U256::from(base_fee).encode(out);
+        }
+
+        if let Some(root) = self.withdrawals_root {
+            root.encode(out);
+        }
+
+        if let Some(blob_gas_used) = self.blob_gas_used {
+            U256::from(blob_gas_used).encode(out);
+        }
+
+        if let Some(excess_blob_gas) = self.excess_blob_gas {
+            U256::from(excess_blob_gas).encode(out);
+        }
+
+        if let Some(parent_beacon_block_root) = self.parent_beacon_block_root {
+            parent_beacon_block_root.encode(out);
+        }
+
+        if let Some(requests_hash) = self.requests_hash {
+            requests_hash.encode(out);
+        }
+
+        if let Some(prev_proposer_pubkey) = self.prev_proposer_pubkey {
+            prev_proposer_pubkey.encode(out);
+        }
+    }
+
+    fn length(&self) -> usize {
+        let mut length = 0;
+        length += self.header_payload_length();
+        length += length_of_length(length);
+        length
     }
 }
 
 impl Decodable for BerachainHeader {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        todo!()
+        let rlp_head = alloy_rlp::Header::decode(buf)?;
+        if !rlp_head.list {
+            return Err(alloy_rlp::Error::UnexpectedString);
+        }
+        let started_len = buf.len();
+        let mut this = Self {
+            parent_hash: Decodable::decode(buf)?,
+            ommers_hash: Decodable::decode(buf)?,
+            beneficiary: Decodable::decode(buf)?,
+            state_root: Decodable::decode(buf)?,
+            transactions_root: Decodable::decode(buf)?,
+            receipts_root: Decodable::decode(buf)?,
+            logs_bloom: Decodable::decode(buf)?,
+            difficulty: Decodable::decode(buf)?,
+            number: u64::decode(buf)?,
+            gas_limit: u64::decode(buf)?,
+            gas_used: u64::decode(buf)?,
+            timestamp: Decodable::decode(buf)?,
+            extra_data: Decodable::decode(buf)?,
+            mix_hash: Decodable::decode(buf)?,
+            nonce: u64::decode(buf)?,
+            base_fee_per_gas: None,
+            withdrawals_root: None,
+            blob_gas_used: None,
+            excess_blob_gas: None,
+            parent_beacon_block_root: None,
+            requests_hash: None,
+            prev_proposer_pubkey: None,
+        };
+
+        if started_len - buf.len() < rlp_head.payload_length {
+            this.base_fee_per_gas = Some(u64::decode(buf)?);
+        }
+
+        if started_len - buf.len() < rlp_head.payload_length {
+            this.withdrawals_root = Some(Decodable::decode(buf)?);
+        }
+
+        if started_len - buf.len() < rlp_head.payload_length {
+            this.blob_gas_used = Some(u64::decode(buf)?);
+        }
+
+        if started_len - buf.len() < rlp_head.payload_length {
+            this.excess_blob_gas = Some(u64::decode(buf)?);
+        }
+
+        if started_len - buf.len() < rlp_head.payload_length {
+            this.parent_beacon_block_root = Some(B256::decode(buf)?);
+        }
+
+        if started_len - buf.len() < rlp_head.payload_length {
+            this.requests_hash = Some(B256::decode(buf)?);
+        }
+
+        if started_len - buf.len() < rlp_head.payload_length {
+            this.prev_proposer_pubkey = Some(B256::decode(buf)?);
+        }
+
+        let consumed = started_len - buf.len();
+        if consumed != rlp_head.payload_length {
+            return Err(alloy_rlp::Error::ListLengthMismatch {
+                expected: rlp_head.payload_length,
+                got: consumed,
+            });
+        }
+        Ok(this)
     }
 }
 
 impl alloy_consensus::BlockHeader for BerachainHeader {
     fn parent_hash(&self) -> B256 {
-        todo!()
+        self.parent_hash
     }
 
     fn ommers_hash(&self) -> B256 {
-        todo!()
+        self.ommers_hash
     }
 
     fn beneficiary(&self) -> Address {
-        todo!()
+        self.beneficiary
     }
 
     fn state_root(&self) -> B256 {
-        todo!()
+        self.state_root
     }
 
     fn transactions_root(&self) -> B256 {
-        todo!()
+        self.transactions_root
     }
 
     fn receipts_root(&self) -> B256 {
-        todo!()
+        self.receipts_root
     }
 
     fn withdrawals_root(&self) -> Option<B256> {
-        todo!()
+        self.withdrawals_root
     }
 
     fn logs_bloom(&self) -> Bloom {
-        todo!()
+        self.logs_bloom
     }
 
     fn difficulty(&self) -> U256 {
-        todo!()
+        self.difficulty
     }
 
     fn number(&self) -> BlockNumber {
-        todo!()
+        self.number
     }
 
     fn gas_limit(&self) -> u64 {
-        todo!()
+        self.gas_limit
     }
 
     fn gas_used(&self) -> u64 {
-        todo!()
+        self.gas_used
     }
 
     fn timestamp(&self) -> u64 {
-        todo!()
+        self.timestamp
     }
 
     fn mix_hash(&self) -> Option<B256> {
-        todo!()
+        Some(self.mix_hash)
     }
 
     fn nonce(&self) -> Option<B64> {
-        todo!()
+        Some(self.nonce.into())
     }
 
     fn base_fee_per_gas(&self) -> Option<u64> {
-        todo!()
+        self.base_fee_per_gas
     }
 
     fn blob_gas_used(&self) -> Option<u64> {
-        todo!()
+        self.blob_gas_used
     }
 
     fn excess_blob_gas(&self) -> Option<u64> {
-        todo!()
+        self.excess_blob_gas
     }
 
     fn parent_beacon_block_root(&self) -> Option<B256> {
-        todo!()
+        self.parent_beacon_block_root
     }
 
     fn requests_hash(&self) -> Option<B256> {
-        todo!()
+        self.requests_hash
     }
 
     fn extra_data(&self) -> &Bytes {
-        todo!()
+        &self.extra_data
     }
 }
 
@@ -173,42 +343,42 @@ impl Sealable for BerachainHeader {
 
 impl InMemorySize for BerachainHeader {
     fn size(&self) -> usize {
-        todo!()
+        use core::mem;
+
+        mem::size_of::<B256>() + // parent_hash
+        mem::size_of::<B256>() + // ommers_hash
+        mem::size_of::<Address>() + // beneficiary
+        mem::size_of::<B256>() + // state_root
+        mem::size_of::<B256>() + // transactions_root
+        mem::size_of::<B256>() + // receipts_root
+        mem::size_of::<Option<B256>>() + // withdrawals_root
+        mem::size_of::<Bloom>() + // logs_bloom
+        mem::size_of::<U256>() + // difficulty
+        mem::size_of::<BlockNumber>() + // number
+        mem::size_of::<u64>() + // gas_limit
+        mem::size_of::<u64>() + // gas_used
+        mem::size_of::<u64>() + // timestamp
+        mem::size_of::<B256>() + // mix_hash
+        mem::size_of::<u64>() + // nonce
+        mem::size_of::<Option<u64>>() + // base_fee_per_gas
+        mem::size_of::<Option<u64>>() + // blob_gas_used
+        mem::size_of::<Option<u64>>() + // excess_blob_gas
+        mem::size_of::<Option<B256>>() + // parent_beacon_block_root
+        mem::size_of::<Option<B256>>() + // requests_hash
+        mem::size_of::<Option<B256>>() + // prev_proposer_pubkey
+        self.extra_data.len() // extra_data
     }
 }
 
-impl SerdeBincodeCompat for BerachainHeader {
-    type BincodeRepr<'a> = ();
-
-    fn as_repr(&self) -> Self::BincodeRepr<'_> {
-        todo!()
-    }
-
-    fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
-        todo!()
-    }
-}
+impl RlpBincode for BerachainHeader {}
 
 impl AsRef<Self> for BerachainHeader {
     fn as_ref(&self) -> &Self {
-        todo!()
+        self
     }
 }
 
 impl BlockHeader for BerachainHeader {}
-
-impl Compact for BerachainHeader {
-    fn to_compact<B>(&self, buf: &mut B) -> usize
-    where
-        B: BufMut + AsMut<[u8]>,
-    {
-        todo!()
-    }
-
-    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
-        todo!()
-    }
-}
 
 impl From<&Header> for BerachainHeader {
     fn from(value: &Header) -> Self {
@@ -227,14 +397,59 @@ impl From<&Header> for BerachainHeader {
             gas_used: value.gas_used,
             timestamp: value.timestamp,
             mix_hash: value.mix_hash,
-            nonce: value.nonce,
+            nonce: value.nonce.into(),
             base_fee_per_gas: value.base_fee_per_gas,
             blob_gas_used: value.blob_gas_used,
             excess_blob_gas: value.excess_blob_gas,
             parent_beacon_block_root: value.parent_beacon_block_root,
             requests_hash: value.requests_hash,
-            extra_data: value.clone().extra_data,
             prev_proposer_pubkey: None,
+            extra_data: value.clone().extra_data,
         }
+    }
+}
+
+impl From<Header> for BerachainHeader {
+    fn from(value: Header) -> Self {
+        BerachainHeader {
+            parent_hash: value.parent_hash,
+            ommers_hash: value.ommers_hash,
+            beneficiary: value.beneficiary,
+            state_root: value.state_root,
+            transactions_root: value.transactions_root,
+            receipts_root: value.receipts_root,
+            withdrawals_root: value.withdrawals_root,
+            logs_bloom: value.logs_bloom,
+            difficulty: value.difficulty,
+            number: value.number,
+            gas_limit: value.gas_limit,
+            gas_used: value.gas_used,
+            timestamp: value.timestamp,
+            mix_hash: value.mix_hash,
+            nonce: value.nonce.into(),
+            base_fee_per_gas: value.base_fee_per_gas,
+            blob_gas_used: value.blob_gas_used,
+            excess_blob_gas: value.excess_blob_gas,
+            parent_beacon_block_root: value.parent_beacon_block_root,
+            requests_hash: value.requests_hash,
+            prev_proposer_pubkey: None,
+            extra_data: value.extra_data,
+        }
+    }
+}
+
+// Database traits implementation
+impl Compress for BerachainHeader {
+    type Compressed = Vec<u8>;
+
+    fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
+        let _ = Compact::to_compact(self, buf);
+    }
+}
+
+impl Decompress for BerachainHeader {
+    fn decompress(value: &[u8]) -> Result<Self, reth_db_api::DatabaseError> {
+        let (obj, _) = Compact::from_compact(value, value.len());
+        Ok(obj)
     }
 }

@@ -2,7 +2,7 @@ mod transaction;
 
 use crate::{
     chainspec::BerachainChainSpec, pool::transaction::BerachainPooledTransaction,
-    transaction::BerachainTxEnvelope,
+    primitives::BerachainPrimitives, transaction::BerachainTxEnvelope,
 };
 use alloy_eips::{eip7840::BlobParams, merge::EPOCH_SLOTS};
 use reth::{
@@ -25,10 +25,7 @@ pub struct BerachainPoolBuilder;
 
 impl<Types, Node> PoolBuilder<Node> for BerachainPoolBuilder
 where
-    Types: NodeTypes<
-            ChainSpec = BerachainChainSpec,
-            Primitives: NodePrimitives<SignedTx = BerachainTxEnvelope>,
-        >,
+    Types: NodeTypes<ChainSpec = BerachainChainSpec, Primitives = BerachainPrimitives>,
     Node: FullNodeTypes<Types = Types>,
 {
     type Pool = EthTransactionPool<Node::Provider, DiskFileBlobStore, BerachainPooledTransaction>;
