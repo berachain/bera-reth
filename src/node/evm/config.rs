@@ -4,7 +4,7 @@ use crate::{
         assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,
         receipt::BerachainReceiptBuilder,
     },
-    primitives::BerachainPrimitives,
+    primitives::{BerachainHeader, BerachainPrimitives},
 };
 use alloy_consensus::BlockHeader;
 use alloy_eips::{eip1559::INITIAL_BASE_FEE, eip4895::Withdrawals, eip7840::BlobParams};
@@ -98,7 +98,7 @@ impl ConfigureEvm for BerachainEvmConfig {
 
     fn evm_env(&self, header: &HeaderTy<Self::Primitives>) -> EvmEnvFor<Self> {
         let blob_params = self.chain_spec().blob_params_at_timestamp(header.timestamp);
-        let spec = revm_spec(self.chain_spec(), header);
+        let spec = revm_spec::<BerachainChainSpec, BerachainHeader>(self.chain_spec(), header);
 
         // configure evm env based on parent block
         let mut cfg_env =
@@ -202,7 +202,7 @@ impl ConfigureEvm for BerachainEvmConfig {
             parent_beacon_block_root: block.header().parent_beacon_block_root,
             ommers: &block.body().ommers,
             withdrawals: block.body().withdrawals.as_ref().map(Cow::Borrowed),
-            prev_proposer_pubkey: None, // TODO: Add to block header
+            prev_proposer_pubkey: block.header().prev_proposer_pubkey,
         }
     }
 

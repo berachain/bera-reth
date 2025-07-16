@@ -3,6 +3,7 @@
 use crate::{
     genesis::BerachainGenesisConfig,
     hardforks::{BerachainHardfork, BerachainHardforks},
+    primitives::BerachainHeader,
 };
 use alloy_consensus::BlockHeader;
 use alloy_eips::{
@@ -17,7 +18,7 @@ use reth::{
         BaseFeeParams, BaseFeeParamsKind, Chain, ChainHardforks, EthereumHardfork,
         EthereumHardforks, ForkCondition, Hardfork,
     },
-    primitives::{Header, SealedHeader},
+    primitives::SealedHeader,
     revm::primitives::{Address, B256, U256, b256},
 };
 use reth_chainspec::{ChainSpec, DepositContract, EthChainSpec, Hardforks, make_genesis_header};
@@ -37,6 +38,7 @@ const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
     inner: ChainSpec,
+    genesis_header: BerachainHeader,
 }
 
 impl BerachainChainSpec {
@@ -47,7 +49,7 @@ impl BerachainChainSpec {
 }
 
 impl EthChainSpec for BerachainChainSpec {
-    type Header = Header;
+    type Header = BerachainHeader;
 
     fn chain(&self) -> Chain {
         self.inner.chain()
@@ -84,7 +86,7 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn genesis_header(&self) -> &Self::Header {
-        self.inner.genesis_header()
+        &self.genesis_header
     }
 
     fn genesis(&self) -> &alloy_genesis::Genesis {
@@ -356,7 +358,9 @@ impl From<Genesis> for BerachainChainSpec {
             base_fee_params,
             ..Default::default()
         };
-        Self { inner }
+
+        let genesis_header = BerachainHeader::from(inner.genesis_header());
+        Self { inner, genesis_header }
     }
 }
 
@@ -559,16 +563,22 @@ mod tests {
         let chain_spec = BerachainChainSpec::from(genesis);
 
         // Create a parent block before Prague1
-        let parent_header =
-            Header { timestamp: 999, base_fee_per_gas: Some(100_000_000), ..Default::default() };
+        let parent_header = BerachainHeader {
+            timestamp: 999,
+            base_fee_per_gas: Some(100_000_000),
+            ..Default::default()
+        };
 
         // Before Prague1, base fee can go below 1 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
         assert!(next_base_fee.unwrap() < PRAGUE1_MIN_BASE_FEE_WEI);
 
         // Create a parent block at Prague1 activation
-        let parent_header =
-            Header { timestamp: 1000, base_fee_per_gas: Some(100_000_000), ..Default::default() };
+        let parent_header = BerachainHeader {
+            timestamp: 1000,
+            base_fee_per_gas: Some(100_000_000),
+            ..Default::default()
+        };
 
         // After Prague1, base fee should be at least 1 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);

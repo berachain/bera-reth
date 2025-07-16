@@ -4,7 +4,7 @@ use crate::{
         BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
     },
     node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
-    primitives::BerachainPrimitives,
+    primitives::{BerachainHeader, BerachainPrimitives},
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::Transaction;
@@ -24,7 +24,7 @@ use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_ethereum_engine_primitives::BlobSidecars;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_evm::{
-    ConfigureEvm, Evm, NextBlockEnvAttributes,
+    ConfigureEvm, Evm,
     block::{BlockExecutionError, BlockValidationError},
     execute::{BlockBuilder, BlockBuilderOutcome},
 };
@@ -168,7 +168,7 @@ where
 
     fn build_empty_payload(
         &self,
-        config: PayloadConfig<Self::Attributes>,
+        config: PayloadConfig<BerachainPayloadBuilderAttributes, BerachainHeader>,
     ) -> Result<BerachainBuiltPayload, PayloadBuilderError> {
         let args = BuildArguments::new(Default::default(), config, Default::default(), None);
 

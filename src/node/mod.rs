@@ -11,7 +11,7 @@ use crate::{
     },
     node::evm::BerachainExecutorBuilder,
     pool::BerachainPoolBuilder,
-    primitives::BerachainPrimitives,
+    primitives::{BerachainHeader, BerachainPrimitives},
     rpc::{BerachainAddOns, BerachainEthApiBuilder},
     transaction::BerachainTxEnvelope,
 };
@@ -137,10 +137,10 @@ impl<N> DebugNode<N> for BerachainNode
 where
     N: FullNodeComponents<Types = Self>,
 {
-    type RpcBlock = alloy_rpc_types::Block<BerachainTxEnvelope>;
+    type RpcBlock = alloy_rpc_types::Block<BerachainTxEnvelope, BerachainHeader>;
 
     fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> BlockTy<Self> {
-        rpc_block.into_consensus().convert_transactions()
+        rpc_block.into_consensus_block().convert_transactions()
     }
 
     fn local_payload_attributes_builder(

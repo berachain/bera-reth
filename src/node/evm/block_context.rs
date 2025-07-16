@@ -1,4 +1,4 @@
-use alloy_consensus::Header;
+use crate::primitives::BerachainHeader;
 use alloy_eips::eip4895::Withdrawals;
 use alloy_primitives::B256;
 use std::borrow::Cow;
@@ -11,7 +11,7 @@ pub struct BerachainBlockExecutionCtx<'a> {
     /// The parent beacon block root
     pub parent_beacon_block_root: Option<B256>,
     /// The block ommers (uncle blocks)
-    pub ommers: &'a [Header],
+    pub ommers: &'a [BerachainHeader],
     /// The block withdrawals
     pub withdrawals: Option<Cow<'a, Withdrawals>>,
     /// Previous proposer public key.

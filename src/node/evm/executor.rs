@@ -25,7 +25,7 @@ use reth_evm::{
         StateChangeSource, SystemCaller,
     },
     eth::{
-        EthBlockExecutionCtx, dao_fork, eip6110,
+        dao_fork, eip6110,
         receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
     },
     state_change::{balance_increment_state, post_block_balance_increments},

@@ -10,6 +10,7 @@ use std::borrow::Cow;
 
 use crate::{
     node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
+    primitives::BerachainHeader,
     rpc::receipt::{BerachainEthReceiptBuilder, BerachainReceiptEnvelope},
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
@@ -235,17 +236,18 @@ impl Network for BerachainNetwork {
 
     type ReceiptEnvelope = BerachainReceiptEnvelope;
 
-    type Header = alloy_consensus::Header;
+    type Header = BerachainHeader;
 
-    type TransactionRequest = alloy_rpc_types_eth::transaction::TransactionRequest;
+    type TransactionRequest = TransactionRequest;
 
-    type TransactionResponse = alloy_rpc_types_eth::Transaction<BerachainTxEnvelope>;
+    type TransactionResponse = Transaction<BerachainTxEnvelope>;
 
     type ReceiptResponse = alloy_rpc_types_eth::TransactionReceipt<BerachainReceiptEnvelope>;
 
-    type HeaderResponse = alloy_rpc_types_eth::Header;
+    type HeaderResponse = alloy_rpc_types_eth::Header<BerachainHeader>;
 
-    type BlockResponse = alloy_rpc_types_eth::Block<Transaction<BerachainTxEnvelope>>;
+    type BlockResponse =
+        alloy_rpc_types_eth::Block<Self::TransactionResponse, Self::HeaderResponse>;
 }
 
 #[derive(Deref)]

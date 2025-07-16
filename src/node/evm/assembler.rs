@@ -2,14 +2,14 @@ use crate::{
     chainspec::BerachainChainSpec,
     hardforks::BerachainHardforks,
     node::evm::{block_context::BerachainBlockExecutionCtx, error::BerachainExecutionError},
-    primitives::BerachainBlock,
+    primitives::{BerachainBlock, BerachainHeader},
     transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
 use alloy_consensus::{
-    Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, Header, Transaction, TxReceipt, proofs,
+    Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, Transaction, TxReceipt, proofs,
 };
 use alloy_eips::merge::BEACON_NONCE;
-use alloy_primitives::{B256, Bytes, logs_bloom};
+use alloy_primitives::{Bytes, logs_bloom};
 use reth::{chainspec::EthereumHardforks, providers::BlockExecutionResult};
 use reth_chainspec::EthChainSpec;
 use reth_ethereum_primitives::Receipt;
@@ -47,7 +47,7 @@ where
 
     fn assemble_block(
         &self,
-        input: BlockAssemblerInput<'_, '_, F>,
+        input: BlockAssemblerInput<'_, '_, F, BerachainHeader>,
     ) -> Result<Self::Block, BlockExecutionError> {
         let BlockAssemblerInput {
             evm_env,
@@ -127,7 +127,7 @@ where
             };
         }
 
-        let header = Header {
+        let header = BerachainHeader {
             parent_hash: ctx.parent_hash,
             ommers_hash: EMPTY_OMMER_ROOT_HASH,
             beneficiary: evm_env.block_env.beneficiary,
@@ -149,6 +149,7 @@ where
             blob_gas_used,
             excess_blob_gas,
             requests_hash,
+            prev_proposer_pubkey: ctx.prev_proposer_pubkey,
         };
 
         Ok(Block {

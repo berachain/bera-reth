@@ -1,5 +1,5 @@
 use crate::transaction::{BerachainTxEnvelope, BerachainTxType};
-use reth_ethereum_primitives::{Receipt, TransactionSigned};
+use reth_ethereum_primitives::Receipt;
 use reth_evm::{
     Evm,
     eth::receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
