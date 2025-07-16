@@ -14,6 +14,7 @@ pub fn create_pol_transaction(
     chain_spec: Arc<BerachainChainSpec>,
     prev_proposer_pubkey: BlsPublicKey,
     block_number: U256,
+    base_fee: u64,
 ) -> Result<BerachainTxEnvelope, BlockExecutionError> {
     use crate::transaction::PoLTx;
     use alloy_primitives::{Bytes, Sealed};
@@ -30,9 +31,14 @@ pub fn create_pol_transaction(
         PoLDistributor::distributeForCall { pubkey: Bytes::from(prev_proposer_pubkey) };
     let calldata = distribute_call.abi_encode();
 
-    let nonce = (block_number - U256::from(1)).try_into().map_err(|_| {
+    let nonce_u256 = block_number - U256::from(1);
+    let nonce = nonce_u256.try_into().map_err(|_| {
         BlockExecutionError::Internal(InternalBlockExecutionError::Other(
-            "block number overflow for u64 nonce".into(),
+            format!(
+                "block number overflow for u64 nonce: block_number={}, nonce_u256={}",
+                block_number, nonce_u256
+            )
+            .into(),
         ))
     })?;
 
@@ -44,6 +50,8 @@ pub fn create_pol_transaction(
         input: Bytes::from(calldata),
         nonce,
         gas_limit: eip7825::TX_GAS_LIMIT_CAP, // this is the env value used in revm for system calls
+        gas_price: base_fee.into(),           /* gas price is set to the base fee for RPC
+                                               * compatability reasons */
     };
 
     // Wrap in transaction envelope and calculate proper hash

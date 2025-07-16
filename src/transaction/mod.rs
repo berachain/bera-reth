@@ -1,6 +1,9 @@
 pub mod pol;
 mod txtype;
 
+/// Transaction type identifier for Berachain POL transactions
+pub const POL_TX_TYPE: u8 = 126; // 0x7E
+
 use alloy_consensus::{
     EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar, TxEnvelope, TxType,
     crypto::RecoveryError,
@@ -31,12 +34,14 @@ pub struct PoLTx {
     #[serde(with = "alloy_serde::quantity")]
     pub chain_id: ChainId,
     #[serde(skip)]
-    pub from: Address, // serde skip as from is derrived from recover_signer in RPC.
+    pub from: Address, // system address - serde skip as from is derived from recover_signer in RPC
     pub to: Address,
     #[serde(with = "alloy_serde::quantity")]
-    pub nonce: u64, // nonce = block number distributing for
+    pub nonce: u64, // MUST be block_number - 1 for POL transactions per specification
     #[serde(with = "alloy_serde::quantity", rename = "gas", alias = "gasLimit")]
     pub gas_limit: u64,
+    #[serde(with = "alloy_serde::quantity")]
+    pub gas_price: u128, // gas_price to match Go struct
     pub input: Bytes,
 }
 impl Transaction for PoLTx {
@@ -53,15 +58,15 @@ impl Transaction for PoLTx {
     }
 
     fn gas_price(&self) -> Option<u128> {
-        None
+        Some(self.gas_price)
     }
 
     fn max_fee_per_gas(&self) -> u128 {
-        0
+        self.gas_price
     }
 
     fn max_priority_fee_per_gas(&self) -> Option<u128> {
-        None
+        Some(self.gas_price)
     }
 
     fn max_fee_per_blob_gas(&self) -> Option<u128> {
@@ -69,7 +74,7 @@ impl Transaction for PoLTx {
     }
 
     fn priority_fee_or_price(&self) -> u128 {
-        0
+        self.gas_price
     }
 
     fn effective_gas_price(&self, _base_fee: Option<u64>) -> u128 {
@@ -122,6 +127,7 @@ impl PoLTx {
             self.to.length() +
             self.nonce.length() +
             self.gas_limit.length() +
+            self.gas_price.length() +
             self.input.length()
     }
 
@@ -140,6 +146,7 @@ impl PoLTx {
         self.to.encode(out);
         self.nonce.encode(out);
         self.gas_limit.encode(out);
+        self.gas_price.encode(out);
         self.input.encode(out);
     }
 
@@ -155,6 +162,7 @@ impl PoLTx {
             to: Address::decode(buf)?,
             nonce: u64::decode(buf)?,
             gas_limit: u64::decode(buf)?,
+            gas_price: u128::decode(buf)?,
             input: Bytes::decode(buf)?,
         })
     }
@@ -234,8 +242,7 @@ impl Decompress for BerachainTxEnvelope {
 
 impl SignerRecoverable for PoLTx {
     fn recover_signer(&self) -> Result<Address, RecoveryError> {
-        // TODO: Security implications? Should be none as PoLTx must conform to expected shape
-        // expected at the start of the block.
+        // POL transactions are always from the system address
         Ok(SYSTEM_ADDRESS)
     }
 
@@ -252,7 +259,7 @@ pub enum BerachainTxEnvelope {
     #[envelope(flatten)]
     Ethereum(TxEnvelope),
     // /// Your 0-gas system transaction
-    #[envelope(ty = 125)] // equivalent to 0x7D
+    #[envelope(ty = 126)] // POL_TX_TYPE - derive macro requires literal
     Berachain(Sealed<PoLTx>),
 }
 
@@ -429,8 +436,8 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
             2 => TxType::Eip1559,
             3 => TxType::Eip4844,
             4 => TxType::Eip7702,
-            125 => {
-                // Handle Berachain PoL transaction (0x7D = 125)
+            POL_TX_TYPE => {
+                // Handle Berachain PoL transaction
                 let (pol_tx, remaining_buf) = PoLTx::from_compact(buf, len);
                 return (Self::Berachain(Sealed::new(pol_tx)), remaining_buf);
             }

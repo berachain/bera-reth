@@ -55,7 +55,7 @@ POL transactions use a **synthetic transaction architecture** that balances thre
 ### POL Transaction Type
 
 ```
-Transaction Type: 0x7D (125)
+Transaction Type: 0x7E (126)
 Category: System Transaction
 ```
 
@@ -63,7 +63,7 @@ Category: System Transaction
 
 ```rust
 struct PoLTx {
-    nonce: u64,           // MUST be 0
+    nonce: u64,           // MUST be block_number - 1
     gas_limit: u64,       // MUST be 0 (system transaction identifier)
     to: Address,          // POL distributor contract address
     value: U256,          // MUST be 0
@@ -74,9 +74,9 @@ struct PoLTx {
 ### Field Specifications
 
 #### Nonce
-- **Value**: `0`
-- **Purpose**: System transactions don't use normal nonce progression
-- **Validation**: MUST reject POL transactions with non-zero nonce
+- **Value**: `block_number - 1`
+- **Purpose**: Unique identification per block using block number
+- **Validation**: MUST reject POL transactions with incorrect nonce
 
 #### Gas Limit
 - **Value**: `0`
@@ -103,7 +103,7 @@ struct PoLTx {
 
 ```
 transaction_hash = keccak256(rlp_encode([
-    0x7D,                    // Transaction type prefix
+    0x7E,                    // Transaction type prefix
     rlp_encode([nonce, gas_limit, to, value, input])
 ]))
 ```
@@ -113,12 +113,12 @@ transaction_hash = keccak256(rlp_encode([
 #### RLP Encoding
 ```
 POL_TX = [nonce, gas_limit, to, value, input]
-TYPED_POL_TX = 0x7D || rlp_encode(POL_TX)
+TYPED_POL_TX = 0x7E || rlp_encode(POL_TX)
 ```
 
 #### EIP-2718 Compliance
 - Uses EIP-2718 typed transaction format
-- Type prefix `0x7D` (125) for POL transactions
+- Type prefix `0x7E` (126) for POL transactions
 - Standard RLP encoding for transaction body
 
 ## Execution Semantics
@@ -326,14 +326,14 @@ TRANSACTION_TYPES = {
     0x01: AccessListTransaction,
     0x02: FeeMarketTransaction,
     0x03: BlobTransaction,
-    0x7D: POLTransaction,        # New POL transaction type
+    0x7E: POLTransaction,        # New POL transaction type
 }
 ```
 
 #### 2. Transaction Pool Modifications
 ```python
 def validate_transaction_for_pool(tx):
-    if tx.type == 0x7D:  # POL transaction
+    if tx.type == 0x7E:  # POL transaction
         # POL transactions should not enter mempool
         raise RejectTransaction("POL transactions are system-generated only")
     
@@ -413,7 +413,7 @@ const (
     AccessListTxType
     DynamicFeeTxType
     BlobTxType
-    POLTxType = 0x7D  // Add POL transaction type
+    POLTxType = 0x7E  // Add POL transaction type
 )
 ```
 
@@ -474,8 +474,8 @@ impl BlockExecutor for BerachainExecutor {
 #### Interface Bindings
 ```typescript
 interface POLTransaction {
-    type: 0x7D;
-    nonce: 0;
+    type: 0x7E;
+    nonce: number; // block_number - 1
     gasLimit: 0;
     to: '0x4200000000000000000000000000000000000042';
     value: 0;
@@ -546,8 +546,8 @@ interface POLTransaction {
 #### Canonical POL Transaction
 ```json
 {
-    "type": "0x7D",
-    "nonce": "0x0",
+    "type": "0x7E",
+    "nonce": "0x9",     // block_number - 1 (example: block 10)
     "gasLimit": "0x0",
     "to": "0x4200000000000000000000000000000000000042",
     "value": "0x0",
@@ -563,8 +563,9 @@ def test_pol_block_construction():
     block = create_test_block_with_pol()
     
     # Validate POL at index 0
-    assert block.transactions[0].type == 0x7D
+    assert block.transactions[0].type == 0x7E
     assert block.transactions[0].gas_limit == 0
+    assert block.transactions[0].nonce == block.number - 1
     
     # Validate merkle roots
     assert block.header.transactions_root == calculate_transaction_root(block.transactions)

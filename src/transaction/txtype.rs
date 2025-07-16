@@ -1,6 +1,6 @@
 //! Compact implementation for [`BerachainTxType`]
 
-use crate::transaction::{BerachainTxEnvelope, BerachainTxType};
+use crate::transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE};
 use alloy_consensus::TxType;
 use bytes::{Buf, BufMut};
 use reth::providers::errors::db::DatabaseError;
@@ -16,7 +16,7 @@ impl Compact for BerachainTxType {
         match self {
             Self::Ethereum(tx) => tx.to_compact(buf),
             Self::Berachain => {
-                buf.put_u8(125);
+                buf.put_u8(POL_TX_TYPE);
                 COMPACT_EXTENDED_IDENTIFIER_FLAG
             }
         }
@@ -28,7 +28,7 @@ impl Compact for BerachainTxType {
     fn from_compact(mut buf: &[u8], _len: usize) -> (Self, &[u8]) {
         let tx_type_byte = buf.get_u8();
         let tx_type = match tx_type_byte {
-            125 => Self::Berachain,
+            POL_TX_TYPE => Self::Berachain,
             0..=4 => Self::Ethereum(
                 alloy_consensus::TxType::try_from(tx_type_byte).unwrap_or(TxType::Legacy),
             ),

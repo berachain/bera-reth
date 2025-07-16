@@ -1,4 +1,4 @@
-use crate::transaction::{BerachainTxEnvelope, BerachainTxType};
+use crate::transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE};
 use alloy_consensus::{
     Eip658Value, Receipt, ReceiptWithBloom, TxReceipt, TxType, Typed2718,
     transaction::{Recovered, TransactionMeta},
@@ -33,7 +33,7 @@ pub enum BerachainReceiptEnvelope {
     Eip4844(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
     #[serde(rename = "0x4")]
     Eip7702(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
-    #[serde(rename = "0x7d")] // TODO: Change to 0x7e.
+    #[serde(rename = "0x7e")]
     Berachain(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
 }
 
@@ -103,14 +103,14 @@ impl Typed2718 for BerachainReceiptEnvelope {
     fn ty(&self) -> u8 {
         match self.tx_type() {
             BerachainTxType::Ethereum(eth_type) => eth_type as u8,
-            BerachainTxType::Berachain => 125u8, // POL transaction type
+            BerachainTxType::Berachain => POL_TX_TYPE, // POL transaction type
         }
     }
 }
 
 impl IsTyped2718 for BerachainReceiptEnvelope {
     fn is_type(type_id: u8) -> bool {
-        matches!(type_id, 0 | 1 | 2 | 3 | 4 | 125)
+        matches!(type_id, 0 | 1 | 2 | 3 | 4 | POL_TX_TYPE)
     }
 }
 

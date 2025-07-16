@@ -90,10 +90,12 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             self.ctx.prev_proposer_pubkey.ok_or(BerachainExecutionError::MissingProposerPubkey)?;
 
         // Use shared POL transaction creation logic
+        let base_fee = self.evm.block().basefee;
         let pol_envelope = create_pol_transaction(
             self.spec.clone(),
             prev_proposer_pubkey,
             self.evm.block().number,
+            base_fee,
         )?;
         let (calldata, pol_distributor_address) =
             if let BerachainTxEnvelope::Berachain(pol_tx) = &pol_envelope {
@@ -217,10 +219,12 @@ where
                 .ctx
                 .prev_proposer_pubkey
                 .ok_or(BerachainExecutionError::MissingProposerPubkey)?;
+            let base_fee = self.evm.block().basefee;
             let expected_pol_envelope = match create_pol_transaction(
                 self.spec.clone(),
                 prev_proposer_pubkey,
                 self.evm.block().number,
+                base_fee,
             ) {
                 Ok(envelope) => envelope,
                 Err(e) => {

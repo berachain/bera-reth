@@ -69,10 +69,12 @@ where
                 ctx.prev_proposer_pubkey.ok_or(BerachainExecutionError::MissingProposerPubkey)?;
 
             // Synthesize POL transaction and prepend to transactions list
+            let base_fee = evm_env.block_env.basefee;
             let pol_transaction = create_pol_transaction(
                 self.chain_spec.clone(),
                 prev_proposer_pubkey,
                 evm_env.block_env.number,
+                base_fee,
             )?;
 
             transactions.insert(0, pol_transaction);
