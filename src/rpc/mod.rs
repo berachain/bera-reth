@@ -2,8 +2,11 @@ mod api;
 mod receipt;
 
 use crate::{
-    chainspec::BerachainChainSpec, engine::BerachainEngineTypes, primitives::BerachainPrimitives,
-    rpc::api::BerachainApi, transaction::BerachainTxEnvelope,
+    chainspec::BerachainChainSpec,
+    engine::BerachainEngineTypes,
+    primitives::BerachainPrimitives,
+    rpc::api::{BerachainApi, BerachainNetwork},
+    transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::transaction::TransactionInfo;
 use alloy_rpc_types::engine::ExecutionData;
@@ -45,6 +48,7 @@ where
         <N as FullNodeComponents>::Pool,
         <N as FullNodeComponents>::Network,
         <N as FullNodeComponents>::Evm,
+        BerachainNetwork,
     >;
 
     async fn build_eth_api(self, ctx: EthApiCtx<'_, N>) -> eyre::Result<Self::EthApi> {

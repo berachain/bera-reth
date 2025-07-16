@@ -13,6 +13,7 @@ use alloy_rpc_types_eth::TransactionReceipt;
 use reth_ethereum_primitives::Receipt as RethReceipt;
 use reth_primitives_traits::InMemorySize;
 use reth_rpc_eth_types::receipt::build_receipt;
+use std::borrow::Cow;
 
 pub struct BerachainEthReceiptBuilder {
     base: TransactionReceipt<BerachainReceiptEnvelope>,
@@ -154,10 +155,12 @@ impl BerachainEthReceiptBuilder {
     pub fn new(
         transaction: Recovered<&BerachainTxEnvelope>,
         meta: TransactionMeta,
-        receipt: &reth_ethereum_primitives::Receipt<BerachainTxType>,
+        receipt: Cow<'_, reth_ethereum_primitives::Receipt<BerachainTxType>>,
         all_receipts: &[reth_ethereum_primitives::Receipt<BerachainTxType>],
         blob_params: Option<BlobParams>,
     ) -> Self {
+        let tx_type = receipt.tx_type;
+
         let base = build_receipt(
             transaction,
             meta,
@@ -166,7 +169,7 @@ impl BerachainEthReceiptBuilder {
             blob_params,
             |receipt_with_bloom| {
                 // Use the receipt's transaction type to properly handle all transaction types
-                match receipt.tx_type {
+                match tx_type {
                     BerachainTxType::Ethereum(eth_type) => match eth_type {
                         alloy_consensus::TxType::Legacy => {
                             BerachainReceiptEnvelope::Legacy(receipt_with_bloom)
