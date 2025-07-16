@@ -1,6 +1,7 @@
 use crate::{
     chainspec::BerachainChainSpec,
     hardforks::BerachainHardforks,
+    node::evm::block_context::BerachainBlockExecutionCtx,
     primitives::BerachainBlock,
     transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
@@ -14,7 +15,6 @@ use reth_chainspec::EthChainSpec;
 use reth_ethereum_primitives::Receipt;
 use reth_evm::{
     block::{BlockExecutionError, BlockExecutorFactory},
-    eth::EthBlockExecutionCtx,
     execute::{BlockAssembler, BlockAssemblerInput},
 };
 use std::sync::Arc;
@@ -38,7 +38,7 @@ impl BerachainBlockAssembler {
 impl<F> BlockAssembler<F> for BerachainBlockAssembler
 where
     F: for<'a> BlockExecutorFactory<
-            ExecutionCtx<'a> = EthBlockExecutionCtx<'a>,
+            ExecutionCtx<'a> = BerachainBlockExecutionCtx<'a>,
             Transaction = BerachainTxEnvelope,
             Receipt = Receipt<BerachainTxType>,
         >,

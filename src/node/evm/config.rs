@@ -1,6 +1,9 @@
 use crate::{
     chainspec::BerachainChainSpec,
-    node::evm::{assembler::BerachainBlockAssembler, receipt::BerachainReceiptBuilder},
+    node::evm::{
+        assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,
+        receipt::BerachainReceiptBuilder,
+    },
     primitives::BerachainPrimitives,
 };
 use alloy_consensus::BlockHeader;
@@ -179,11 +182,12 @@ impl ConfigureEvm for BerachainEvmConfig {
         &self,
         block: &'a SealedBlock<BlockTy<Self::Primitives>>,
     ) -> ExecutionCtxFor<'a, Self> {
-        EthBlockExecutionCtx {
+        BerachainBlockExecutionCtx {
             parent_hash: block.header().parent_hash,
             parent_beacon_block_root: block.header().parent_beacon_block_root,
             ommers: &block.body().ommers,
             withdrawals: block.body().withdrawals.as_ref().map(Cow::Borrowed),
+            prev_proposer_pubkey: None,
         }
     }
 
@@ -192,11 +196,12 @@ impl ConfigureEvm for BerachainEvmConfig {
         parent: &SealedHeader<HeaderTy<Self::Primitives>>,
         attributes: Self::NextBlockEnvCtx,
     ) -> ExecutionCtxFor<'_, Self> {
-        EthBlockExecutionCtx {
+        BerachainBlockExecutionCtx {
             parent_hash: parent.hash(),
             parent_beacon_block_root: attributes.parent_beacon_block_root,
             ommers: &[],
             withdrawals: attributes.withdrawals.map(Cow::Owned),
+            prev_proposer_pubkey: None,
         }
     }
 }

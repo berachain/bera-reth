@@ -78,7 +78,7 @@ pub struct BerachainPayloadBuilderAttributes {
     pub withdrawals: Withdrawals,
     /// Root of the parent beacon block
     pub parent_beacon_block_root: Option<B256>,
-    pub prev_validator_pubkey: Option<B256>,
+    pub prev_proposer_pubkey: Option<B256>,
 }
 
 impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
@@ -102,7 +102,7 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
             prev_randao: attributes.inner.prev_randao,
             withdrawals: attributes.inner.withdrawals.unwrap_or_default().into(),
             parent_beacon_block_root: attributes.inner.parent_beacon_block_root,
-            prev_validator_pubkey: attributes.prev_validator_pubkey,
+            prev_proposer_pubkey: attributes.prev_validator_pubkey,
         })
     }
 
@@ -137,7 +137,7 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
 
 impl BerachainPayloadBuilderAttributes {
     pub fn prev_validator_pubkey(&self) -> Option<B256> {
-        self.prev_validator_pubkey
+        self.prev_proposer_pubkey
     }
 }
 

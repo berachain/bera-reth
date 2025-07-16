@@ -1,7 +1,10 @@
 use crate::{
     chainspec::BerachainChainSpec,
     hardforks::BerachainHardforks,
-    node::evm::{config::BerachainEvmConfig, receipt::BerachainReceiptBuilder},
+    node::evm::{
+        block_context::BerachainBlockExecutionCtx, config::BerachainEvmConfig,
+        receipt::BerachainReceiptBuilder,
+    },
     transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
 use alloy_consensus::Transaction;
@@ -33,7 +36,7 @@ use std::{borrow::Cow, sync::Arc};
 pub struct BerachainBlockExecutor<'a, Evm> {
     spec: Arc<BerachainChainSpec>,
     /// Context for block execution.
-    pub ctx: EthBlockExecutionCtx<'a>,
+    pub ctx: BerachainBlockExecutionCtx<'a>,
     /// Inner EVM.
     evm: Evm,
     /// Utility to call system smart contracts.
@@ -50,7 +53,7 @@ pub struct BerachainBlockExecutor<'a, Evm> {
 impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
     pub fn new(
         evm: Evm,
-        ctx: EthBlockExecutionCtx<'a>,
+        ctx: BerachainBlockExecutionCtx<'a>,
         spec: Arc<BerachainChainSpec>,
         receipt_builder: BerachainReceiptBuilder,
     ) -> Self {
@@ -371,7 +374,7 @@ where
 
 impl BlockExecutorFactory for BerachainEvmConfig {
     type EvmFactory = EthEvmFactory;
-    type ExecutionCtx<'a> = EthBlockExecutionCtx<'a>;
+    type ExecutionCtx<'a> = BerachainBlockExecutionCtx<'a>;
     type Transaction = BerachainTxEnvelope;
     type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>;
 
