@@ -1466,6 +1466,7 @@ dependencies = [
  "reth-node-ethereum",
  "reth-optimism-rpc",
  "reth-payload-primitives",
+ "reth-payload-validator 1.5.0",
  "reth-primitives-traits",
  "reth-rpc",
  "reth-rpc-convert",
@@ -6862,7 +6863,7 @@ dependencies = [
  "reth-payload-builder",
  "reth-payload-builder-primitives",
  "reth-payload-primitives",
- "reth-payload-validator",
+ "reth-payload-validator 1.5.1",
  "reth-primitives-traits",
  "reth-revm",
  "reth-storage-api",
@@ -7625,7 +7626,7 @@ dependencies = [
  "reth-payload-builder-primitives",
  "reth-payload-primitives",
  "reth-payload-util",
- "reth-payload-validator",
+ "reth-payload-validator 1.5.1",
  "reth-primitives-traits",
  "reth-revm",
  "reth-storage-api",
@@ -7802,6 +7803,16 @@ dependencies = [
  "alloy-consensus",
  "alloy-primitives",
  "reth-transaction-pool",
+]
+
+[[package]]
+name = "reth-payload-validator"
+version = "1.5.0"
+source = "git+https://github.com/paradigmxyz/reth?rev=a0b92ae705e9eb167dc3f25da751dd201b5992e3#a0b92ae705e9eb167dc3f25da751dd201b5992e3"
+dependencies = [
+ "alloy-consensus",
+ "alloy-rpc-types-engine",
+ "reth-primitives-traits",
 ]
 
 [[package]]

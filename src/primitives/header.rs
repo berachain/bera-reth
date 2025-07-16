@@ -1,5 +1,5 @@
 use alloy_consensus::Header;
-use alloy_primitives::{Address, B64, B256, BlockNumber, Bloom, Bytes, Sealable, U256};
+use alloy_primitives::{Address, B64, B256, BlockNumber, Bloom, Bytes, Sealable, U256, keccak256};
 use alloy_rlp::{Decodable, Encodable, length_of_length};
 use bytes::BufMut;
 use reth_codecs::Compact;
@@ -337,7 +337,9 @@ impl alloy_consensus::BlockHeader for BerachainHeader {
 
 impl Sealable for BerachainHeader {
     fn hash_slow(&self) -> B256 {
-        todo!()
+        let mut out = Vec::<u8>::new();
+        self.encode(&mut out);
+        keccak256(&out)
     }
 }
 
