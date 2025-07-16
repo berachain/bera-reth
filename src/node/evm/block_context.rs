@@ -1,4 +1,4 @@
-use crate::primitives::BerachainHeader;
+use crate::primitives::{BerachainHeader, header::BlsPublicKey};
 use alloy_eips::eip4895::Withdrawals;
 use alloy_primitives::B256;
 use std::borrow::Cow;
@@ -15,5 +15,5 @@ pub struct BerachainBlockExecutionCtx<'a> {
     /// The block withdrawals
     pub withdrawals: Option<Cow<'a, Withdrawals>>,
     /// Previous proposer public key.
-    pub prev_proposer_pubkey: Option<B256>,
+    pub prev_proposer_pubkey: Option<BlsPublicKey>,
 }

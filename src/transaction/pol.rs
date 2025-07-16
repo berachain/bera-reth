@@ -1,4 +1,7 @@
-use crate::{chainspec::BerachainChainSpec, transaction::BerachainTxEnvelope};
+use crate::{
+    chainspec::BerachainChainSpec, primitives::header::BlsPublicKey,
+    transaction::BerachainTxEnvelope,
+};
 use alloy_primitives::U256;
 use reth::revm::{handler::SYSTEM_ADDRESS, primitives::eip7825};
 use reth_chainspec::EthChainSpec;
@@ -9,7 +12,7 @@ use std::sync::Arc;
 /// This is the canonical POL transaction creation logic used by both executor and assembler
 pub fn create_pol_transaction(
     chain_spec: Arc<BerachainChainSpec>,
-    prev_proposer_pubkey: alloy_primitives::B256,
+    prev_proposer_pubkey: BlsPublicKey,
     block_number: U256,
 ) -> Result<BerachainTxEnvelope, BlockExecutionError> {
     use crate::transaction::PoLTx;

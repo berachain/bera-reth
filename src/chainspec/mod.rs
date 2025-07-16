@@ -3,7 +3,7 @@
 use crate::{
     genesis::BerachainGenesisConfig,
     hardforks::{BerachainHardfork, BerachainHardforks},
-    primitives::BerachainHeader,
+    primitives::{BerachainHeader, header::BlsPublicKey},
 };
 use alloy_consensus::BlockHeader;
 use alloy_eips::{
@@ -363,7 +363,7 @@ impl From<Genesis> for BerachainChainSpec {
         // Set prev_proposer_pubkey to known value for genesis block
 
         // TODO: Gate behind Prague1
-        genesis_header.prev_proposer_pubkey = Some(B256::ZERO);
+        genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
         Self { inner, genesis_header }
     }
 }

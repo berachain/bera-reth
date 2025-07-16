@@ -1,11 +1,16 @@
 use alloy_consensus::Header;
-use alloy_primitives::{Address, B64, B256, BlockNumber, Bloom, Bytes, Sealable, U256, keccak256};
+use alloy_primitives::{
+    Address, B64, B256, BlockNumber, Bloom, Bytes, FixedBytes, Sealable, U256, keccak256,
+};
 use alloy_rlp::{Decodable, Encodable, length_of_length};
 use bytes::BufMut;
 use reth_codecs::Compact;
 use reth_db_api::table::{Compress, Decompress};
 use reth_primitives_traits::{BlockHeader, InMemorySize, serde_bincode_compat::RlpBincode};
 use serde::{Deserialize, Serialize};
+
+/// 48-byte BLS12-381 public key for Berachain consensus
+pub type BlsPublicKey = FixedBytes<48>;
 
 /// Berachain block header with additional fields for consensus
 /// TODO: All of the implementations here need to be properly tested.
@@ -63,7 +68,7 @@ pub struct BerachainHeader {
     /// The hash of the requests trie root, added in EIP-7685.
     pub requests_hash: Option<B256>,
     /// Previous proposer public key for Berachain consensus.
-    pub prev_proposer_pubkey: Option<B256>,
+    pub prev_proposer_pubkey: Option<BlsPublicKey>,
     /// An arbitrary byte array containing data relevant to this block. This must be 32 bytes or
     /// fewer. Must be last for Compact derive.
     pub extra_data: Bytes,
@@ -235,7 +240,7 @@ impl Decodable for BerachainHeader {
         }
 
         if started_len - buf.len() < rlp_head.payload_length {
-            this.prev_proposer_pubkey = Some(B256::decode(buf)?);
+            this.prev_proposer_pubkey = Some(BlsPublicKey::decode(buf)?);
         }
 
         let consumed = started_len - buf.len();
@@ -367,7 +372,7 @@ impl InMemorySize for BerachainHeader {
         mem::size_of::<Option<u64>>() + // excess_blob_gas
         mem::size_of::<Option<B256>>() + // parent_beacon_block_root
         mem::size_of::<Option<B256>>() + // requests_hash
-        mem::size_of::<Option<B256>>() + // prev_proposer_pubkey
+        mem::size_of::<Option<BlsPublicKey>>() + // prev_proposer_pubkey
         self.extra_data.len() // extra_data
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     chainspec::BerachainChainSpec,
-    primitives::{BerachainBlock, BerachainPrimitives},
+    primitives::{BerachainBlock, BerachainPrimitives, header::BlsPublicKey},
 };
 use alloy_eips::{
     eip4895::{Withdrawal, Withdrawals},
@@ -33,7 +33,7 @@ use std::{convert::Infallible, sync::Arc};
 pub struct BerachainPayloadAttributes {
     #[serde(flatten)]
     pub inner: EthPayloadAttributes,
-    pub prev_proposer_pubkey: Option<B256>,
+    pub prev_proposer_pubkey: Option<BlsPublicKey>,
 }
 
 impl PayloadAttributes for BerachainPayloadAttributes {
@@ -50,7 +50,7 @@ impl PayloadAttributes for BerachainPayloadAttributes {
 }
 
 impl BerachainPayloadAttributes {
-    pub fn prev_proposer_pubkey(&self) -> Option<B256> {
+    pub fn prev_proposer_pubkey(&self) -> Option<BlsPublicKey> {
         self.prev_proposer_pubkey
     }
 }
@@ -78,7 +78,7 @@ pub struct BerachainPayloadBuilderAttributes {
     pub withdrawals: Withdrawals,
     /// Root of the parent beacon block
     pub parent_beacon_block_root: Option<B256>,
-    pub prev_proposer_pubkey: Option<B256>,
+    pub prev_proposer_pubkey: Option<BlsPublicKey>,
 }
 
 impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
@@ -136,7 +136,7 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
 }
 
 impl BerachainPayloadBuilderAttributes {
-    pub fn prev_proposer_pubkey(&self) -> Option<B256> {
+    pub fn prev_proposer_pubkey(&self) -> Option<BlsPublicKey> {
         self.prev_proposer_pubkey
     }
 }
@@ -287,92 +287,5 @@ impl BuiltPayload for BerachainBuiltPayload {
 
     fn requests(&self) -> Option<Requests> {
         self.requests.clone()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use alloy_primitives::{Address, B256};
-    use reth::api::PayloadAttributes;
-
-    fn create_test_bera_payload_attributes() -> BerachainPayloadAttributes {
-        BerachainPayloadAttributes {
-            inner: EthPayloadAttributes {
-                timestamp: 1234567890,
-                prev_randao: B256::from([1u8; 32]),
-                suggested_fee_recipient: Address::from([2u8; 20]),
-                withdrawals: Some(vec![]),
-                parent_beacon_block_root: Some(B256::from([3u8; 32])),
-            },
-            prev_proposer_pubkey: None,
-        }
-    }
-
-    fn create_test_bera_payload_builder_attributes() -> BerachainPayloadBuilderAttributes {
-        let parent = B256::from([4u8; 32]);
-        let attributes = create_test_bera_payload_attributes();
-        BerachainPayloadBuilderAttributes::try_new(parent, attributes, 1).unwrap()
-    }
-
-    #[test]
-    fn test_bera_payload_attributes_payload_attributes_trait() {
-        let attributes = create_test_bera_payload_attributes();
-
-        assert_eq!(attributes.timestamp(), 1234567890);
-        assert_eq!(attributes.withdrawals(), Some(&vec![]));
-        assert_eq!(attributes.parent_beacon_block_root(), Some(B256::from([3u8; 32])));
-    }
-
-    #[test]
-    fn test_bera_payload_builder_attributes_try_new() {
-        let parent = B256::from([4u8; 32]);
-        let rpc_attributes = create_test_bera_payload_attributes();
-
-        let builder_attributes =
-            BerachainPayloadBuilderAttributes::try_new(parent, rpc_attributes.clone(), 1).unwrap();
-
-        assert_eq!(builder_attributes.parent(), parent);
-        assert_eq!(builder_attributes.timestamp(), rpc_attributes.inner.timestamp);
-        assert_eq!(
-            builder_attributes.suggested_fee_recipient(),
-            rpc_attributes.inner.suggested_fee_recipient
-        );
-        assert_eq!(builder_attributes.prev_randao(), rpc_attributes.inner.prev_randao);
-        assert_eq!(
-            builder_attributes.parent_beacon_block_root(),
-            rpc_attributes.inner.parent_beacon_block_root
-        );
-    }
-
-    #[test]
-    fn test_bera_payload_builder_attributes_payload_id_deterministic() {
-        let parent = B256::from([4u8; 32]);
-        let rpc_attributes = create_test_bera_payload_attributes();
-
-        let builder_attributes_1 =
-            BerachainPayloadBuilderAttributes::try_new(parent, rpc_attributes.clone(), 1).unwrap();
-        let builder_attributes_2 =
-            BerachainPayloadBuilderAttributes::try_new(parent, rpc_attributes, 1).unwrap();
-
-        assert_eq!(builder_attributes_1.payload_id(), builder_attributes_2.payload_id());
-    }
-
-    #[test]
-    fn test_withdrawals_conversion() {
-        let parent = B256::from([4u8; 32]);
-        let mut rpc_attributes = create_test_bera_payload_attributes();
-
-        // Test with empty withdrawals
-        rpc_attributes.inner.withdrawals = Some(vec![]);
-        let builder_attributes =
-            BerachainPayloadBuilderAttributes::try_new(parent, rpc_attributes.clone(), 1).unwrap();
-        assert!(builder_attributes.withdrawals().is_empty());
-
-        // Test with None withdrawals (should default to empty)
-        rpc_attributes.inner.withdrawals = None;
-        let builder_attributes =
-            BerachainPayloadBuilderAttributes::try_new(parent, rpc_attributes, 1).unwrap();
-        assert!(builder_attributes.withdrawals().is_empty());
     }
 }

@@ -4,7 +4,7 @@ use crate::{
         assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,
         receipt::BerachainReceiptBuilder,
     },
-    primitives::{BerachainHeader, BerachainPrimitives},
+    primitives::{BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
 };
 use alloy_consensus::BlockHeader;
 use alloy_eips::{eip1559::INITIAL_BASE_FEE, eip4895::Withdrawals, eip7840::BlobParams};
@@ -77,7 +77,7 @@ pub struct BerachainNextBlockEnvAttributes {
     /// Withdrawals
     pub withdrawals: Option<Withdrawals>,
     /// Previous proposer public key.
-    pub prev_proposer_pubkey: Option<B256>,
+    pub prev_proposer_pubkey: Option<BlsPublicKey>,
 }
 
 impl ConfigureEvm for BerachainEvmConfig {
