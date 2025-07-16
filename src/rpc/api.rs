@@ -9,7 +9,7 @@ use reth_rpc_eth_api::{FromEthApiError, FullEthApiTypes, RpcReceipt};
 use std::borrow::Cow;
 
 use crate::{
-    node::evm::config::BerachainEvmConfig,
+    node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
     rpc::receipt::{BerachainEthReceiptBuilder, BerachainReceiptEnvelope},
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
@@ -36,9 +36,7 @@ use reth::{
 };
 use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_ethereum_primitives::Receipt;
-use reth_evm::{
-    ConfigureEvm, EvmFactory, NextBlockEnvAttributes, TxEnvFor, block::BlockExecutorFactory,
-};
+use reth_evm::{ConfigureEvm, EvmFactory, TxEnvFor, block::BlockExecutorFactory};
 use reth_primitives_traits::{NodePrimitives, SealedHeader};
 use reth_rpc_eth_api::{
     EthApiTypes, RpcNodeCore, RpcNodeCoreExt,
@@ -705,7 +703,7 @@ where
             >,
             Evm: ConfigureEvm<
                 Primitives = <Self as RpcNodeCore>::Primitives,
-                NextBlockEnvCtx: From<NextBlockEnvAttributes>,
+                NextBlockEnvCtx: From<BerachainNextBlockEnvAttributes>,
             >,
             Primitives: NodePrimitives<
                 BlockHeader = ProviderHeader<Self::Provider>,
@@ -730,13 +728,14 @@ where
         &self,
         parent: &SealedHeader<ProviderHeader<Self::Provider>>,
     ) -> Result<<Self::Evm as reth_evm::ConfigureEvm>::NextBlockEnvCtx, Self::Error> {
-        Ok(NextBlockEnvAttributes {
+        Ok(BerachainNextBlockEnvAttributes {
             timestamp: parent.timestamp().saturating_add(12),
             suggested_fee_recipient: parent.beneficiary(),
             prev_randao: B256::random(),
             gas_limit: parent.gas_limit(),
             parent_beacon_block_root: parent.parent_beacon_block_root().map(|_| B256::ZERO),
             withdrawals: parent.withdrawals_root().map(|_| Default::default()),
+            prev_proposer_pubkey: None, // TODO: Populate correctly
         }
         .into())
     }

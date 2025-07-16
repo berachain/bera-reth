@@ -7,8 +7,8 @@ use crate::{
     primitives::BerachainPrimitives,
 };
 use alloy_consensus::BlockHeader;
-use alloy_eips::{eip1559::INITIAL_BASE_FEE, eip7840::BlobParams};
-use alloy_primitives::{Bytes, U256};
+use alloy_eips::{eip1559::INITIAL_BASE_FEE, eip4895::Withdrawals, eip7840::BlobParams};
+use alloy_primitives::{Address, B256, Bytes, U256};
 use reth::{
     chainspec::{EthereumHardfork, Hardforks},
     revm::{
@@ -18,10 +18,7 @@ use reth::{
     },
 };
 use reth_chainspec::EthChainSpec;
-use reth_evm::{
-    ConfigureEvm, EthEvmFactory, EvmEnv, EvmEnvFor, ExecutionCtxFor, NextBlockEnvAttributes,
-    eth::EthBlockExecutionCtx,
-};
+use reth_evm::{ConfigureEvm, EthEvmFactory, EvmEnv, EvmEnvFor, ExecutionCtxFor};
 use reth_evm_ethereum::{revm_spec, revm_spec_by_timestamp_and_block_number};
 use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
 use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
@@ -64,12 +61,30 @@ impl BerachainEvmConfig {
     }
 }
 
+/// Attributes for the next block environment for Berachain.
+#[derive(Debug, Clone)]
+pub struct BerachainNextBlockEnvAttributes {
+    /// The timestamp of the next block.
+    pub timestamp: u64,
+    /// The suggested fee recipient for the next block.
+    pub suggested_fee_recipient: Address,
+    /// The randomness value for the next block.
+    pub prev_randao: B256,
+    /// Block gas limit.
+    pub gas_limit: u64,
+    /// The parent beacon block root.
+    pub parent_beacon_block_root: Option<B256>,
+    /// Withdrawals
+    pub withdrawals: Option<Withdrawals>,
+    /// Previous proposer public key.
+    pub prev_proposer_pubkey: Option<B256>,
+}
+
 impl ConfigureEvm for BerachainEvmConfig {
     type Primitives = BerachainPrimitives;
     type Error = Infallible;
 
-    // TODO: Sus this attributes.
-    type NextBlockEnvCtx = NextBlockEnvAttributes;
+    type NextBlockEnvCtx = BerachainNextBlockEnvAttributes;
     type BlockExecutorFactory = Self;
     type BlockAssembler = BerachainBlockAssembler;
 
@@ -187,7 +202,7 @@ impl ConfigureEvm for BerachainEvmConfig {
             parent_beacon_block_root: block.header().parent_beacon_block_root,
             ommers: &block.body().ommers,
             withdrawals: block.body().withdrawals.as_ref().map(Cow::Borrowed),
-            prev_proposer_pubkey: None,
+            prev_proposer_pubkey: None, // TODO: Add to block header
         }
     }
 
@@ -201,7 +216,7 @@ impl ConfigureEvm for BerachainEvmConfig {
             parent_beacon_block_root: attributes.parent_beacon_block_root,
             ommers: &[],
             withdrawals: attributes.withdrawals.map(Cow::Owned),
-            prev_proposer_pubkey: None,
+            prev_proposer_pubkey: attributes.prev_proposer_pubkey,
         }
     }
 }

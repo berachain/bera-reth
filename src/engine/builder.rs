@@ -3,7 +3,7 @@ use crate::{
     engine::payload::{
         BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
     },
-    node::evm::config::BerachainEvmConfig,
+    node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
     primitives::BerachainPrimitives,
     transaction::BerachainTxEnvelope,
 };
@@ -216,13 +216,14 @@ where
         .builder_for_next_block(
             &mut db,
             &parent_header,
-            NextBlockEnvAttributes {
+            BerachainNextBlockEnvAttributes {
                 timestamp: attributes.timestamp(),
                 suggested_fee_recipient: attributes.suggested_fee_recipient(),
                 prev_randao: attributes.prev_randao(),
                 gas_limit: builder_config.gas_limit(parent_header.gas_limit),
                 parent_beacon_block_root: attributes.parent_beacon_block_root(),
                 withdrawals: Some(attributes.withdrawals().clone()),
+                prev_proposer_pubkey: attributes.prev_proposer_pubkey,
             },
         )
         .map_err(PayloadBuilderError::other)?;
