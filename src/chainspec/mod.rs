@@ -11,7 +11,7 @@ use alloy_eips::{
     eip2124::{ForkFilter, ForkId, Head},
 };
 use alloy_genesis::Genesis;
-use alloy_primitives::address;
+use alloy_primitives::{Sealable, address};
 use derive_more::{Constructor, Into};
 use reth::{
     chainspec::{
@@ -74,7 +74,7 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn genesis_hash(&self) -> B256 {
-        self.inner.genesis_hash()
+        self.genesis_header.hash_slow()
     }
 
     fn prune_delete_limit(&self) -> usize {
@@ -359,7 +359,11 @@ impl From<Genesis> for BerachainChainSpec {
             ..Default::default()
         };
 
-        let genesis_header = BerachainHeader::from(inner.genesis_header());
+        let mut genesis_header = BerachainHeader::from(inner.genesis_header());
+        // Set prev_proposer_pubkey to known value for genesis block
+
+        // TODO: Gate behind Prague1
+        genesis_header.prev_proposer_pubkey = Some(B256::ZERO);
         Self { inner, genesis_header }
     }
 }

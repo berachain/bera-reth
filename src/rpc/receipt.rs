@@ -33,7 +33,7 @@ pub enum BerachainReceiptEnvelope {
     Eip4844(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
     #[serde(rename = "0x4")]
     Eip7702(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
-    #[serde(rename = "0x7d")]
+    #[serde(rename = "0x7d")] // TODO: Change to 0x7e.
     Berachain(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
 }
 
