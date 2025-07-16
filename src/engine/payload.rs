@@ -33,6 +33,7 @@ use std::{convert::Infallible, sync::Arc};
 pub struct BerachainPayloadAttributes {
     #[serde(flatten)]
     pub inner: EthPayloadAttributes,
+    #[serde(rename = "parentProposerPubKey")]
     pub prev_proposer_pubkey: Option<BlsPublicKey>,
 }
 
