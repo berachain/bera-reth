@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// This is the canonical POL transaction creation logic used by both executor and assembler
 pub fn create_pol_transaction(
     chain_spec: Arc<BerachainChainSpec>,
-    validator_pubkey: alloy_primitives::B256,
+    prev_proposer_pubkey: alloy_primitives::B256,
     block_number: U256,
 ) -> Result<BerachainTxEnvelope, BlockExecutionError> {
     use crate::transaction::PoLTx;
@@ -24,7 +24,7 @@ pub fn create_pol_transaction(
         }
     }
     let distribute_call =
-        PoLDistributor::distributeForCall { pubkey: Bytes::from(validator_pubkey) };
+        PoLDistributor::distributeForCall { pubkey: Bytes::from(prev_proposer_pubkey) };
     let calldata = distribute_call.abi_encode();
 
     let nonce = (block_number - U256::from(1)).try_into().map_err(|_| {

@@ -3,7 +3,7 @@ use crate::{
     hardforks::BerachainHardforks,
     node::evm::{
         block_context::BerachainBlockExecutionCtx, config::BerachainEvmConfig,
-        receipt::BerachainReceiptBuilder,
+        error::BerachainExecutionError, receipt::BerachainReceiptBuilder,
     },
     transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
@@ -48,6 +48,8 @@ pub struct BerachainBlockExecutor<'a, Evm> {
     receipts: Vec<<BerachainReceiptBuilder as ReceiptBuilder>::Receipt>,
     /// Total gas used by transactions in this block.
     gas_used: u64,
+    /// Transaction index counter for validation.
+    transaction_index: usize,
 }
 
 impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
@@ -65,6 +67,7 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             gas_used: 0,
             system_caller: SystemCaller::new(spec.clone()),
             receipt_builder,
+            transaction_index: 0,
         }
     }
 
@@ -75,7 +78,6 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         <Evm as reth_evm::Evm>::DB: DatabaseCommit,
     {
         use alloy_eips::eip7002::SYSTEM_ADDRESS;
-        use alloy_primitives::B256;
         use reth::revm::DatabaseCommit;
         use reth_evm::block::StateChangeSource;
 
@@ -84,20 +86,20 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             return Ok(());
         }
 
-        // TODO: Get real validator pubkey from consensus layer
-        let validator_pubkey: B256 = B256::from_slice(&[0u8; 32]);
+        let prev_proposer_pubkey =
+            self.ctx.prev_proposer_pubkey.ok_or(BerachainExecutionError::MissingProposerPubkey)?;
 
         // Use shared POL transaction creation logic
-        let pol_envelope =
-            create_pol_transaction(self.spec.clone(), validator_pubkey, self.evm.block().number)?;
+        let pol_envelope = create_pol_transaction(
+            self.spec.clone(),
+            prev_proposer_pubkey,
+            self.evm.block().number,
+        )?;
         let (calldata, pol_distributor_address) =
             if let BerachainTxEnvelope::Berachain(pol_tx) = &pol_envelope {
                 (pol_tx.input.clone(), pol_tx.to)
             } else {
-                return Err(BlockExecutionError::other(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Invalid POL transaction type",
-                )));
+                return Err(BerachainExecutionError::InvalidPolTransactionType.into());
             };
 
         // Execute as system call (maintains zero gas cost and unlimited gas)
@@ -168,10 +170,7 @@ where
             .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
 
         // Execute POL transaction and capture receipt
-        if let Err(e) = self.execute_pol_transaction_with_receipt() {
-            // Log error but don't fail block execution
-            tracing::warn!(target: "executor", %e, "POL transaction execution failed");
-        }
+        self.execute_pol_transaction_with_receipt()?;
         Ok(())
     }
 
@@ -180,34 +179,47 @@ where
         tx: impl ExecutableTx<Self>,
         f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>) -> CommitChanges,
     ) -> Result<Option<u64>, BlockExecutionError> {
+        let is_prague1_active =
+            self.spec.is_prague1_active_at_timestamp(self.evm.block().timestamp.saturating_to());
+
         // Check if this is a POL transaction - skip validation since it's already executed as
         // system call
         if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
             // POL transactions are executed in apply_pre_execution_changes() as system calls
             // During block validation, we just return 0 gas used and skip re-execution
 
-            // Note: Transaction index validation should be done at the block level
-            // where the transaction list is available, not here where only receipts are tracked
+            // Validate that POL transaction is the first transaction in the block
+            if self.transaction_index != 0 {
+                tracing::error!(
+                    target: "executor",
+                    transaction_index = self.transaction_index,
+                    "POL transaction found at incorrect index - must be first transaction"
+                );
+                return Err(BerachainExecutionError::PolTransactionInvalidIndex {
+                    expected_index: 0,
+                    actual_index: self.transaction_index,
+                }
+                .into());
+            }
 
             // Ensure we are after Prague1 hardfork activation
-            if !self.spec.is_prague1_active_at_timestamp(self.evm.block().timestamp.saturating_to())
-            {
+            if !is_prague1_active {
                 tracing::error!(
                     target: "executor",
                     "POL transaction found before Prague1 activation - invalid block"
                 );
-                return Err(BlockExecutionError::other(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "POL transaction found before Prague1 hardfork activation",
-                )));
+                return Err(BerachainExecutionError::PolTransactionBeforePragueOne.into());
             }
 
             // Additional validation: Verify POL transaction matches expected synthetic transaction
             // Create the canonical POL transaction and compare hashes
-            let validator_pubkey = alloy_primitives::B256::from_slice(&[0u8; 32]);
+            let prev_proposer_pubkey = self
+                .ctx
+                .prev_proposer_pubkey
+                .ok_or(BerachainExecutionError::MissingProposerPubkey)?;
             let expected_pol_envelope = match create_pol_transaction(
                 self.spec.clone(),
-                validator_pubkey,
+                prev_proposer_pubkey,
                 self.evm.block().number,
             ) {
                 Ok(envelope) => envelope,
@@ -228,17 +240,31 @@ where
                     expected_hash = ?expected_tx_hash,
                     "POL transaction hash mismatch - transaction shape is invalid"
                 );
-                return Err(BlockExecutionError::other(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!(
-                        "POL transaction hash mismatch: got {:?}, expected {:?}",
-                        received_tx_hash, expected_tx_hash
-                    ),
-                )));
+                return Err(BerachainExecutionError::PolTransactionHashMismatch {
+                    received_hash: received_tx_hash,
+                    expected_hash: expected_tx_hash,
+                }
+                .into());
             }
 
             tracing::debug!(target: "executor", "POL transaction validation passed - skipping re-execution");
+
+            // Increment transaction index counter for validation
+            self.transaction_index += 1;
+
             return Ok(Some(0));
+        }
+
+        // Validate that non-POL transactions follow the Prague1 rules
+        if is_prague1_active {
+            // In Prague1 blocks, the first transaction MUST be a POL transaction
+            if self.transaction_index == 0 {
+                tracing::error!(
+                    target: "executor",
+                    "First transaction in Prague1 block must be a POL transaction"
+                );
+                return Err(BerachainExecutionError::MissingPolTransactionAtIndex0.into());
+            }
         }
 
         // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
@@ -281,6 +307,9 @@ where
 
         // Commit the state changes.
         self.evm.db_mut().commit(state);
+
+        // Increment transaction index counter for validation
+        self.transaction_index += 1;
 
         Ok(Some(gas_used))
     }

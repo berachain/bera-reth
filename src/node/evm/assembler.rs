@@ -1,7 +1,7 @@
 use crate::{
     chainspec::BerachainChainSpec,
     hardforks::BerachainHardforks,
-    node::evm::block_context::BerachainBlockExecutionCtx,
+    node::evm::{block_context::BerachainBlockExecutionCtx, error::BerachainExecutionError},
     primitives::BerachainBlock,
     transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
@@ -64,20 +64,37 @@ where
         let timestamp = evm_env.block_env.timestamp.saturating_to();
 
         // Check if Prague1 is active and we need to inject POL transaction
-        if self.chain_spec.is_prague1_active_at_timestamp(timestamp) && !receipts.is_empty() {
+        if self.chain_spec.is_prague1_active_at_timestamp(timestamp) {
+            let prev_proposer_pubkey =
+                ctx.prev_proposer_pubkey.ok_or(BerachainExecutionError::MissingProposerPubkey)?;
+
             // Synthesize POL transaction and prepend to transactions list
             let pol_transaction = create_pol_transaction(
                 self.chain_spec.clone(),
-                B256::from_slice(&[0u8; 32]),
+                prev_proposer_pubkey,
                 evm_env.block_env.number,
             )?;
+
             transactions.insert(0, pol_transaction);
             info!(target: "block assembler", "Injected POL transaction into block transaction list");
+
+            // Validate that we have receipts after POL transaction execution
+            if receipts.is_empty() {
+                return Err(BerachainExecutionError::MissingPolReceipts.into());
+            }
+
+            // Validate that the first transaction in the list is indeed a POL transaction
+            if let Some(first_tx) = transactions.first() {
+                if !matches!(first_tx, BerachainTxEnvelope::Berachain(_)) {
+                    return Err(BerachainExecutionError::MissingPolTransactionAtIndex0.into());
+                }
+            } else {
+                return Err(BerachainExecutionError::MissingPolTransactionAtIndex0.into());
+            }
         }
 
         let transactions_root = proofs::calculate_transaction_root(&transactions);
-        let receipts_root =
-            reth_ethereum_primitives::Receipt::calculate_receipt_root_no_memo(receipts);
+        let receipts_root = Receipt::calculate_receipt_root_no_memo(receipts);
         let logs_bloom = logs_bloom(receipts.iter().flat_map(|r| r.logs()));
 
         let withdrawals = self

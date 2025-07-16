@@ -3,6 +3,7 @@
 mod assembler;
 mod block_context;
 pub mod config;
+pub mod error;
 pub mod executor;
 pub mod receipt;
 

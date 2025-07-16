@@ -33,7 +33,7 @@ use std::{convert::Infallible, sync::Arc};
 pub struct BerachainPayloadAttributes {
     #[serde(flatten)]
     pub inner: EthPayloadAttributes,
-    pub prev_validator_pubkey: Option<B256>,
+    pub prev_proposer_pubkey: Option<B256>,
 }
 
 impl PayloadAttributes for BerachainPayloadAttributes {
@@ -50,8 +50,8 @@ impl PayloadAttributes for BerachainPayloadAttributes {
 }
 
 impl BerachainPayloadAttributes {
-    pub fn prev_validator_pubkey(&self) -> Option<B256> {
-        self.prev_validator_pubkey
+    pub fn prev_proposer_pubkey(&self) -> Option<B256> {
+        self.prev_proposer_pubkey
     }
 }
 
@@ -102,7 +102,7 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
             prev_randao: attributes.inner.prev_randao,
             withdrawals: attributes.inner.withdrawals.unwrap_or_default().into(),
             parent_beacon_block_root: attributes.inner.parent_beacon_block_root,
-            prev_proposer_pubkey: attributes.prev_validator_pubkey,
+            prev_proposer_pubkey: attributes.prev_proposer_pubkey,
         })
     }
 
@@ -136,7 +136,7 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
 }
 
 impl BerachainPayloadBuilderAttributes {
-    pub fn prev_validator_pubkey(&self) -> Option<B256> {
+    pub fn prev_proposer_pubkey(&self) -> Option<B256> {
         self.prev_proposer_pubkey
     }
 }
@@ -160,7 +160,7 @@ impl PayloadAttributesBuilder<BerachainPayloadAttributes>
                     .is_cancun_active_at_timestamp(timestamp)
                     .then(B256::random),
             },
-            prev_validator_pubkey: None,
+            prev_proposer_pubkey: None,
         }
     }
 }
@@ -305,7 +305,7 @@ mod tests {
                 withdrawals: Some(vec![]),
                 parent_beacon_block_root: Some(B256::from([3u8; 32])),
             },
-            prev_validator_pubkey: None,
+            prev_proposer_pubkey: None,
         }
     }
 
