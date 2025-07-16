@@ -1,5 +1,5 @@
 use crate::transaction::{BerachainTxEnvelope, BerachainTxType};
-use reth_primitives_traits::NodePrimitives;
+use reth_primitives_traits::{BlockHeader, NodePrimitives};
 
 pub mod header;
 pub use header::BerachainHeader;

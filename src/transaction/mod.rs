@@ -26,7 +26,7 @@ use reth_primitives_traits::{
 use serde::Deserialize;
 use std::{hash::Hash, mem::size_of};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
 pub struct PoLTx {
     #[serde(with = "alloy_serde::quantity")]
     pub chain_id: ChainId,

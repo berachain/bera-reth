@@ -8,13 +8,14 @@ use reth_codecs::Compact;
 use reth_db_api::table::{Compress, Decompress};
 use reth_primitives_traits::{BlockHeader, InMemorySize, serde_bincode_compat::RlpBincode};
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 /// 48-byte BLS12-381 public key for Berachain consensus
 pub type BlsPublicKey = FixedBytes<48>;
 
 /// Berachain block header with additional fields for consensus
 /// TODO: All of the implementations here need to be properly tested.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize, Compact)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct BerachainHeader {
     /// The Keccak 256-bit hash of the parent block's header, in its entirety.
     pub parent_hash: B256,
@@ -53,7 +54,7 @@ pub struct BerachainHeader {
     pub mix_hash: B256,
     /// A 64-bit value which, combined with the mixhash, proves that a sufficient amount of
     /// computation has been carried out on this block.
-    pub nonce: u64,
+    pub nonce: B64,
     /// A scalar representing EIP1559 base fee which can move up or down each block according to a
     /// formula which is a function of gas used in parent block and gas target.
     pub base_fee_per_gas: Option<u64>,
@@ -205,7 +206,7 @@ impl Decodable for BerachainHeader {
             timestamp: Decodable::decode(buf)?,
             extra_data: Decodable::decode(buf)?,
             mix_hash: Decodable::decode(buf)?,
-            nonce: u64::decode(buf)?,
+            nonce: Decodable::decode(buf)?,
             base_fee_per_gas: None,
             withdrawals_root: None,
             blob_gas_used: None,
@@ -342,9 +343,37 @@ impl alloy_consensus::BlockHeader for BerachainHeader {
 
 impl Sealable for BerachainHeader {
     fn hash_slow(&self) -> B256 {
+        info!("BerachainHeader hash_slow - all fields:");
+        info!("  parent_hash: {:?}", self.parent_hash);
+        info!("  ommers_hash: {:?}", self.ommers_hash);
+        info!("  beneficiary: {:?}", self.beneficiary);
+        info!("  state_root: {:?}", self.state_root);
+        info!("  transactions_root: {:?}", self.transactions_root);
+        info!("  receipts_root: {:?}", self.receipts_root);
+        info!("  withdrawals_root: {:?}", self.withdrawals_root);
+        info!("  logs_bloom: {:?}", self.logs_bloom);
+        info!("  difficulty: {:?}", self.difficulty);
+        info!("  number: {:?}", self.number);
+        info!("  gas_limit: {:?}", self.gas_limit);
+        info!("  gas_used: {:?}", self.gas_used);
+        info!("  timestamp: {:?}", self.timestamp);
+        info!("  mix_hash: {:?}", self.mix_hash);
+        info!("  nonce: {:?}", self.nonce);
+        info!("  base_fee_per_gas: {:?}", self.base_fee_per_gas);
+        info!("  blob_gas_used: {:?}", self.blob_gas_used);
+        info!("  excess_blob_gas: {:?}", self.excess_blob_gas);
+        info!("  parent_beacon_block_root: {:?}", self.parent_beacon_block_root);
+        info!("  requests_hash: {:?}", self.requests_hash);
+        info!("  prev_proposer_pubkey: {:?}", self.prev_proposer_pubkey);
+        info!("  extra_data: {:?}", self.extra_data);
+
         let mut out = Vec::<u8>::new();
         self.encode(&mut out);
-        keccak256(&out)
+        let hash = keccak256(&out);
+        info!("  calculated hash: {:?}", hash);
+        info!("  rlp bytes length: {}", out.len());
+        info!("  rlp bytes: {:?}", hex::encode(&out));
+        hash
     }
 }
 
@@ -404,7 +433,7 @@ impl From<&Header> for BerachainHeader {
             gas_used: value.gas_used,
             timestamp: value.timestamp,
             mix_hash: value.mix_hash,
-            nonce: value.nonce.into(),
+            nonce: value.nonce,
             base_fee_per_gas: value.base_fee_per_gas,
             blob_gas_used: value.blob_gas_used,
             excess_blob_gas: value.excess_blob_gas,
@@ -433,7 +462,7 @@ impl From<Header> for BerachainHeader {
             gas_used: value.gas_used,
             timestamp: value.timestamp,
             mix_hash: value.mix_hash,
-            nonce: value.nonce.into(),
+            nonce: value.nonce,
             base_fee_per_gas: value.base_fee_per_gas,
             blob_gas_used: value.blob_gas_used,
             excess_blob_gas: value.excess_blob_gas,
@@ -442,6 +471,115 @@ impl From<Header> for BerachainHeader {
             prev_proposer_pubkey: None,
             extra_data: value.extra_data,
         }
+    }
+}
+
+/// Internal header struct for Compact derive
+///
+/// This mirrors the pattern used in reth for alloy consensus Header at:
+/// https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs
+///
+/// The pattern is used because some field types (like B64) cannot derive Compact directly,
+/// so we create an internal struct with compatible types (u64 for nonce) and bridge between them.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Compact, Serialize, Deserialize)]
+struct CompactBerachainHeader {
+    parent_hash: B256,
+    ommers_hash: B256,
+    beneficiary: Address,
+    state_root: B256,
+    transactions_root: B256,
+    receipts_root: B256,
+    withdrawals_root: Option<B256>,
+    logs_bloom: Bloom,
+    difficulty: U256,
+    number: u64,
+    gas_limit: u64,
+    gas_used: u64,
+    timestamp: u64,
+    mix_hash: B256,
+    nonce: u64,
+    base_fee_per_gas: Option<u64>,
+    blob_gas_used: Option<u64>,
+    excess_blob_gas: Option<u64>,
+    parent_beacon_block_root: Option<B256>,
+    requests_hash: Option<B256>,
+    prev_proposer_pubkey: Option<BlsPublicKey>,
+    extra_data: Bytes,
+}
+
+impl Compact for BerachainHeader {
+    /// Converts BerachainHeader to compact format using internal CompactBerachainHeader
+    ///
+    /// This follows the same pattern as reth's implementation for alloy consensus Header.
+    /// See: https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs#L76-L107
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: BufMut + AsMut<[u8]>,
+    {
+        let compact_header = CompactBerachainHeader {
+            parent_hash: self.parent_hash,
+            ommers_hash: self.ommers_hash,
+            beneficiary: self.beneficiary,
+            state_root: self.state_root,
+            transactions_root: self.transactions_root,
+            receipts_root: self.receipts_root,
+            withdrawals_root: self.withdrawals_root,
+            logs_bloom: self.logs_bloom,
+            difficulty: self.difficulty,
+            number: self.number,
+            gas_limit: self.gas_limit,
+            gas_used: self.gas_used,
+            timestamp: self.timestamp,
+            mix_hash: self.mix_hash,
+            nonce: self.nonce.into(), // Convert B64 to u64 (same as reth L98)
+            base_fee_per_gas: self.base_fee_per_gas,
+            blob_gas_used: self.blob_gas_used,
+            excess_blob_gas: self.excess_blob_gas,
+            parent_beacon_block_root: self.parent_beacon_block_root,
+            requests_hash: self.requests_hash,
+            prev_proposer_pubkey: self.prev_proposer_pubkey,
+            extra_data: self.extra_data.clone(),
+        };
+        compact_header.to_compact(buf)
+    }
+
+    /// Converts from compact format to BerachainHeader using internal CompactBerachainHeader
+    ///
+    /// This follows the same pattern as reth's implementation for alloy consensus Header.
+    /// See: https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs#L109-L136
+    ///
+    /// TODO: Implement backwards compatibility to decompress headers that were compressed as the
+    /// original alloy consensus Header (without prev_proposer_pubkey field). Need proper format
+    /// detection instead of panic-based fallback.
+    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
+        let (compact_header, remaining) = CompactBerachainHeader::from_compact(buf, len);
+
+        let berachain_header = Self {
+            parent_hash: compact_header.parent_hash,
+            ommers_hash: compact_header.ommers_hash,
+            beneficiary: compact_header.beneficiary,
+            state_root: compact_header.state_root,
+            transactions_root: compact_header.transactions_root,
+            receipts_root: compact_header.receipts_root,
+            withdrawals_root: compact_header.withdrawals_root,
+            logs_bloom: compact_header.logs_bloom,
+            difficulty: compact_header.difficulty,
+            number: compact_header.number,
+            gas_limit: compact_header.gas_limit,
+            gas_used: compact_header.gas_used,
+            timestamp: compact_header.timestamp,
+            mix_hash: compact_header.mix_hash,
+            nonce: compact_header.nonce.into(), // Convert u64 to B64 (same as reth L126)
+            base_fee_per_gas: compact_header.base_fee_per_gas,
+            blob_gas_used: compact_header.blob_gas_used,
+            excess_blob_gas: compact_header.excess_blob_gas,
+            parent_beacon_block_root: compact_header.parent_beacon_block_root,
+            requests_hash: compact_header.requests_hash,
+            prev_proposer_pubkey: compact_header.prev_proposer_pubkey,
+            extra_data: compact_header.extra_data,
+        };
+
+        (berachain_header, remaining)
     }
 }
 
@@ -459,4 +597,114 @@ impl Decompress for BerachainHeader {
         let (obj, _) = Compact::from_compact(value, value.len());
         Ok(obj)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy_primitives::{Address, B256, Bloom, Bytes, U256, hex::FromHex};
+
+    #[test]
+    fn test_beaconkit_genesis_rlp_compatibility() {
+        // RLP bytes from BeaconKit genesis (actual output from logging)
+        let beaconkit_rlp = hex::decode(
+            "f90302a00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347940000000000000000000000000000000000000000a000ac9a3b66324d024a0375d78edce0fd4f18226a6ae0f1c2e97404c2de17f4eaa056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080808401c9c3808080b8750000000000000000000000000000000000000000000000000000000000000000658bdf435d810c91414ec09147daa6db624063790000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000880000000000000000843b9aca00a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b4218080a00000000000000000000000000000000000000000000000000000000000000000a0e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        ).unwrap();
+
+        // Expected fields from BeaconKit logging output
+        let expected_header = BerachainHeader {
+            parent_hash: B256::ZERO,
+            ommers_hash: B256::from_hex(
+                "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            )
+            .unwrap(),
+            beneficiary: Address::ZERO,
+            state_root: B256::from_hex(
+                "0x00ac9a3b66324d024a0375d78edce0fd4f18226a6ae0f1c2e97404c2de17f4ea",
+            )
+            .unwrap(),
+            transactions_root: B256::from_hex(
+                "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            )
+            .unwrap(),
+            receipts_root: B256::from_hex(
+                "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            )
+            .unwrap(),
+            withdrawals_root: Some(B256::from_hex(
+                "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            )
+            .unwrap()),
+            logs_bloom: Bloom::ZERO,
+            difficulty: U256::ZERO,
+            number: 0,
+            gas_limit: 30000000,
+            gas_used: 0,
+            timestamp: 0,
+            mix_hash: B256::ZERO,
+            nonce: B64::ZERO,
+            base_fee_per_gas: Some(1000000000),
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            parent_beacon_block_root: Some(B256::ZERO),
+            requests_hash: Some(B256::from_hex(
+                "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            )
+            .unwrap()),
+            prev_proposer_pubkey: Some(BlsPublicKey::ZERO),
+            extra_data: Bytes::from_hex(
+                "0x0000000000000000000000000000000000000000000000000000000000000000658bdf435d810c91414ec09147daa6db624063790000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            )
+            .unwrap(),
+        };
+
+        // Expected hash from BeaconKit
+        let expected_hash =
+            B256::from_hex("0x80801f1a05a8df55b6d0bd5caa0881628b44416e6f759019d5ee678fd6ac29ac")
+                .unwrap();
+
+        // Decode the RLP bytes
+        let decoded_header: BerachainHeader =
+            Decodable::decode(&mut beaconkit_rlp.as_slice()).unwrap();
+
+        // Verify all fields match expected values
+        assert_eq!(decoded_header.parent_hash, expected_header.parent_hash);
+        assert_eq!(decoded_header.ommers_hash, expected_header.ommers_hash);
+        assert_eq!(decoded_header.beneficiary, expected_header.beneficiary);
+        assert_eq!(decoded_header.state_root, expected_header.state_root);
+        assert_eq!(decoded_header.transactions_root, expected_header.transactions_root);
+        assert_eq!(decoded_header.receipts_root, expected_header.receipts_root);
+        assert_eq!(decoded_header.withdrawals_root, expected_header.withdrawals_root);
+        assert_eq!(decoded_header.logs_bloom, expected_header.logs_bloom);
+        assert_eq!(decoded_header.difficulty, expected_header.difficulty);
+        assert_eq!(decoded_header.number, expected_header.number);
+        assert_eq!(decoded_header.gas_limit, expected_header.gas_limit);
+        assert_eq!(decoded_header.gas_used, expected_header.gas_used);
+        assert_eq!(decoded_header.timestamp, expected_header.timestamp);
+        assert_eq!(decoded_header.mix_hash, expected_header.mix_hash);
+        assert_eq!(decoded_header.nonce, expected_header.nonce);
+        assert_eq!(decoded_header.base_fee_per_gas, expected_header.base_fee_per_gas);
+        assert_eq!(decoded_header.blob_gas_used, expected_header.blob_gas_used);
+        assert_eq!(decoded_header.excess_blob_gas, expected_header.excess_blob_gas);
+        assert_eq!(
+            decoded_header.parent_beacon_block_root,
+            expected_header.parent_beacon_block_root
+        );
+        assert_eq!(decoded_header.requests_hash, expected_header.requests_hash);
+        assert_eq!(decoded_header.prev_proposer_pubkey, expected_header.prev_proposer_pubkey);
+        assert_eq!(decoded_header.extra_data, expected_header.extra_data);
+
+        // Verify the hash matches BeaconKit's expected hash
+        let calculated_hash = decoded_header.hash_slow();
+        assert_eq!(calculated_hash, expected_hash);
+
+        // Test that re-encoding produces the same RLP bytes
+        let mut re_encoded = Vec::new();
+        decoded_header.encode(&mut re_encoded);
+        assert_eq!(re_encoded, beaconkit_rlp);
+    }
+
+    // TODO: Add test for backwards compatibility when implemented
+    // Test should verify that headers compressed with alloy Header can be decompressed with
+    // BerachainHeader
 }
