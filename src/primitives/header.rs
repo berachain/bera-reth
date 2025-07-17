@@ -416,6 +416,7 @@ impl AsRef<Self> for BerachainHeader {
 
 impl BlockHeader for BerachainHeader {}
 
+/// This should only be called in genesis chainspec parsing, as it sets proposer_pub_key to None.
 impl From<&Header> for BerachainHeader {
     fn from(value: &Header) -> Self {
         BerachainHeader {

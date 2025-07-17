@@ -21,7 +21,15 @@ clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6.12"
 hex = "0.4.3"
+
+# rpc
+jsonrpsee = "0.25.1"
 jsonrpsee-core = "0.25.1"
+jsonrpsee-http-client = "0.25.1"
+jsonrpsee-proc-macros = "0.25.1"
+jsonrpsee-server = "0.25.1"
+jsonrpsee-types = "0.25.1"
+
 modular-bitfield = "0.11.2"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
@@ -38,7 +46,6 @@ reth-engine-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "a
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
-reth-payload-validator = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
@@ -49,6 +56,7 @@ reth-node-core = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae70
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-optimism-rpc = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-payload-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
+reth-payload-validator = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-rpc = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-rpc-convert = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
@@ -58,10 +66,11 @@ reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
+test-fuzz = "7"
 thiserror = "2.0"
 tokio = "1.46.0"
 tracing = "0.1.41"
-test-fuzz = "7"
+async-trait = "0.1.88"
 
 [features]
 default = ["jemalloc"]

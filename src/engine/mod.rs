@@ -13,14 +13,21 @@
 
 pub mod builder;
 pub mod payload;
+mod rpc;
 pub mod validator;
 
-use crate::engine::payload::{
-    BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
+use crate::{
+    engine::payload::{
+        BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
+    },
+    primitives::header::BlsPublicKey,
 };
+use alloy_eips::{eip4895::Withdrawal, eip7685::Requests};
+use alloy_primitives::B256;
 use alloy_rpc_types::engine::{
     ExecutionData, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
-    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1,
+    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadSidecar,
+    ExecutionPayloadV1,
 };
 use reth::{
     api::{BuiltPayload, EngineTypes, NodePrimitives, PayloadTypes},
@@ -34,14 +41,12 @@ use reth_node_ethereum::EthEngineTypes;
 /// payload attributes, built payload types, and execution data formats.
 /// It delegates most functionality to Ethereum types while providing
 /// extension points for Berachain-specific features.
-/// TODO: Add custom execution data types when Berachain-specific logic is needed.
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct BerachainEngineTypes;
 
 impl PayloadTypes for BerachainEngineTypes {
     type ExecutionData = <EthEngineTypes as PayloadTypes>::ExecutionData;
 
-    // TODO: Change the built payload type to Berachain use BerachainPrimitives
     type BuiltPayload = BerachainBuiltPayload;
     type PayloadAttributes = BerachainPayloadAttributes;
     type PayloadBuilderAttributes = BerachainPayloadBuilderAttributes;
@@ -55,6 +60,32 @@ impl PayloadTypes for BerachainEngineTypes {
             ExecutionPayload::from_block_unchecked(block.hash(), &block.into_block());
         ExecutionData { payload, sidecar }
     }
+}
+
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct BerachainExecutionPayloadEnvelopeV4 {
+    /// Inner [`ExecutionPayloadEnvelopeV3`].
+    #[deref]
+    #[deref_mut]
+    #[serde(flatten)]
+    pub envelope_inner: ExecutionPayloadEnvelopeV3,
+
+    /// A list of opaque [EIP-7685][eip7685] requests.
+    ///
+    /// [eip7685]: https://eips.ethereum.org/EIPS/eip-7685
+    pub execution_requests: Requests,
+    /// Introduced in BRIP-0004
+    pub parent_proposer_pub_key: Option<BlsPublicKey>,
 }
 
 impl EngineTypes for BerachainEngineTypes {

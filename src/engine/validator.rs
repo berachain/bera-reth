@@ -50,6 +50,8 @@ impl BerachainEngineValidator {
         // Convert header from standard to BerachainHeader
         let berachain_header = BerachainHeader::from(standard_block.header.clone());
 
+        // TODO: Add the proposer pub key to the header here.
+
         // Create BerachainBlock with converted header and body
         let berachain_ommers: Vec<BerachainHeader> =
             standard_block.body.ommers.iter().map(|h| BerachainHeader::from(h.clone())).collect();
@@ -132,7 +134,7 @@ impl BerachainEngineValidator {
 
 impl PayloadValidator for BerachainEngineValidator {
     type Block = BerachainBlock;
-    type ExecutionData = ExecutionData;
+    type ExecutionData = <BerachainEngineTypes as PayloadTypes>::ExecutionData;
 
     fn ensure_well_formed_payload(
         &self,
@@ -176,10 +178,18 @@ where
         version: EngineApiMessageVersion,
         payload_or_attrs: PayloadOrAttributes<'_, Self::ExecutionData, BerachainPayloadAttributes>,
     ) -> Result<(), EngineObjectValidationError> {
-        payload_or_attrs
-            .execution_requests()
-            .map(|requests| validate_execution_requests(requests))
-            .transpose()?;
+        // Extract execution requests from the payload if present
+        let execution_requests =
+            if let PayloadOrAttributes::ExecutionPayload(payload) = &payload_or_attrs {
+                payload.sidecar.requests()
+            } else {
+                None
+            };
+
+        // Validate execution requests if present
+        if let Some(requests) = execution_requests {
+            validate_execution_requests(requests)?;
+        }
 
         validate_version_specific_fields(self.chain_spec(), version, payload_or_attrs)
     }
