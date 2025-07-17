@@ -16,13 +16,16 @@ pub type BlsPublicKey = FixedBytes<48>;
 /// Berachain block header with additional fields for consensus
 /// TODO: All of the implementations here need to be properly tested.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BerachainHeader {
     /// The Keccak 256-bit hash of the parent block's header, in its entirety.
     pub parent_hash: B256,
     /// The Keccak 256-bit hash of the ommers list portion of this block.
+    #[serde(rename = "sha3Uncles", alias = "ommersHash")]
     pub ommers_hash: B256,
     /// The 160-bit address to which all fees collected from the successful mining of this block be
     /// transferred.
+    #[serde(rename = "miner", alias = "beneficiary")]
     pub beneficiary: Address,
     /// The Keccak 256-bit hash of the root node of the state trie, after all transactions are
     /// executed and finalizations are applied.
@@ -42,12 +45,16 @@ pub struct BerachainHeader {
     pub difficulty: U256,
     /// A scalar value equal to the number of ancestor blocks. The genesis block has a number of
     /// zero.
+    #[serde(with = "alloy_serde::quantity")]
     pub number: u64,
     /// A scalar value equal to the current limit of gas expenditure per block.
+    #[serde(with = "alloy_serde::quantity")]
     pub gas_limit: u64,
     /// A scalar value equal to the total amount of gas used in transactions in this block.
+    #[serde(with = "alloy_serde::quantity")]
     pub gas_used: u64,
     /// A scalar value equal to the reasonable output of Unix's time() at this block's inception.
+    #[serde(with = "alloy_serde::quantity")]
     pub timestamp: u64,
     /// A 256-bit hash which, combined with the nonce, proves that a sufficient amount of
     /// computation has been carried out on this block.
@@ -57,18 +64,24 @@ pub struct BerachainHeader {
     pub nonce: B64,
     /// A scalar representing EIP1559 base fee which can move up or down each block according to a
     /// formula which is a function of gas used in parent block and gas target.
+    #[serde(default, with = "alloy_serde::quantity::opt", skip_serializing_if = "Option::is_none")]
     pub base_fee_per_gas: Option<u64>,
     /// The total amount of blob gas consumed by the transactions within the block, added in
     /// EIP-4844.
+    #[serde(default, with = "alloy_serde::quantity::opt", skip_serializing_if = "Option::is_none")]
     pub blob_gas_used: Option<u64>,
     /// A running total of blob gas consumed in excess of the target, prior to the block.
+    #[serde(default, with = "alloy_serde::quantity::opt", skip_serializing_if = "Option::is_none")]
     pub excess_blob_gas: Option<u64>,
     /// The hash of the parent beacon block's root is included in execution blocks, as proposed by
     /// EIP-4788.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_beacon_block_root: Option<B256>,
     /// The hash of the requests trie root, added in EIP-7685.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requests_hash: Option<B256>,
     /// Previous proposer public key for Berachain consensus.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prev_proposer_pubkey: Option<BlsPublicKey>,
     /// An arbitrary byte array containing data relevant to this block. This must be 32 bytes or
     /// fewer. Must be last for Compact derive.
