@@ -60,13 +60,14 @@ pub type BerachainRpcConverter = RpcConverter<BerachainNetwork, BerachainEvmConf
 
 impl fmt::Display for BerachainTxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+        match self {
+            Self::Ethereum(tx) => tx.fmt(f),
+            Self::Berachain => write!(f, "BRIP-0004"),
+        }
     }
 }
 
-pub enum BerachainTypedTransaction {}
-
-impl From<BerachainTxEnvelope> for BerachainTypedTransaction {
+impl From<BerachainTxEnvelope> for BerachainTxType {
     fn from(value: BerachainTxEnvelope) -> Self {
         todo!()
     }
@@ -77,8 +78,8 @@ impl From<BerachainTxEnvelope> for alloy_rpc_types_eth::transaction::Transaction
         todo!()
     }
 }
-impl From<BerachainTypedTransaction> for alloy_rpc_types_eth::transaction::TransactionRequest {
-    fn from(value: BerachainTypedTransaction) -> Self {
+impl From<BerachainTxType> for alloy_rpc_types_eth::transaction::TransactionRequest {
+    fn from(value: BerachainTxType) -> Self {
         todo!()
     }
 }
@@ -232,7 +233,7 @@ impl Network for BerachainNetwork {
 
     type TxEnvelope = BerachainTxEnvelope;
 
-    type UnsignedTx = BerachainTypedTransaction;
+    type UnsignedTx = BerachainTxType;
 
     type ReceiptEnvelope = BerachainReceiptEnvelope;
 

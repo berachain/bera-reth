@@ -5,7 +5,8 @@ mod txtype;
 pub const POL_TX_TYPE: u8 = 126; // 0x7E
 
 use alloy_consensus::{
-    EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar, TxEnvelope, TxType,
+    EthereumTxEnvelope, EthereumTypedTransaction, Signed, Transaction, TxEip4844,
+    TxEip4844WithSidecar, TxEnvelope, TxType,
     crypto::RecoveryError,
     error::ValueError,
     transaction::{Recovered, SignerRecoverable},
@@ -533,23 +534,24 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
             BerachainTxEnvelope::Ethereum(ethereum_tx) => {
                 TxEnv::from_encoded_tx(ethereum_tx, sender, encoded)
             }
-            _ => todo!(),
+            // TODO: Clean this up, not in critical path
+            BerachainTxEnvelope::Berachain(berachain_tx) => TxEnv {
+                tx_type: u8::from(BerachainTxType::Berachain),
+                caller: SYSTEM_ADDRESS,
+                gas_limit: berachain_tx.gas_limit(),
+                gas_price: berachain_tx.gas_price().unwrap_or_default(),
+                kind: berachain_tx.kind(),
+                value: berachain_tx.value().clone(),
+                data: berachain_tx.input().clone(),
+                nonce: berachain_tx.nonce(),
+                chain_id: berachain_tx.chain_id(),
+                access_list: AccessList { 0: vec![] },
+                gas_priority_fee: berachain_tx.max_priority_fee_per_gas(),
+                blob_hashes: vec![],
+                max_fee_per_blob_gas: 0,
+                authorization_list: vec![],
+            },
         }
-    }
-}
-
-impl From<BerachainTxType> for alloy_consensus::TxType {
-    fn from(custom: BerachainTxType) -> Self {
-        match custom {
-            BerachainTxType::Ethereum(eth_type) => eth_type,
-            BerachainTxType::Berachain => Self::Legacy, // fallback for POL transactions
-        }
-    }
-}
-
-impl<T> From<Signed<T>> for BerachainTxEnvelope {
-    fn from(value: Signed<T>) -> Self {
-        todo!()
     }
 }
 
@@ -558,15 +560,6 @@ impl From<reth_ethereum_primitives::TransactionSigned> for BerachainTxEnvelope {
         // Convert to EthereumTxEnvelope first, then wrap in BerachainTxEnvelope
         let ethereum_tx: EthereumTxEnvelope<TxEip4844> = tx_signed.into();
         Self::Ethereum(ethereum_tx.into())
-    }
-}
-
-// Enable FromConsensusTx for transactions that can be converted
-impl From<BerachainTxEnvelope>
-    for alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844Variant>
-{
-    fn from(berachain_tx: BerachainTxEnvelope) -> Self {
-        todo!()
     }
 }
 

@@ -81,7 +81,12 @@ pub struct BerachainHeader {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requests_hash: Option<B256>,
     /// Previous proposer public key for Berachain consensus.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "parentProposerPubkey",
+        alias = "prevProposerPubkey"
+    )]
     pub prev_proposer_pubkey: Option<BlsPublicKey>,
     /// An arbitrary byte array containing data relevant to this block. This must be 32 bytes or
     /// fewer. Must be last for Compact derive.

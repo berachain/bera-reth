@@ -51,11 +51,8 @@ impl NodeTypes for BerachainNode {
 
 impl TryIntoSimTx<BerachainTxEnvelope> for TransactionRequest {
     fn try_into_sim_tx(self) -> Result<BerachainTxEnvelope, ValueError<Self>> {
-        let tx = self
-            .build_typed_tx()
-            .map_err(|req| ValueError::new(req, "Transaction is not buildable"))?;
-        let signature = Signature::new(Default::default(), Default::default(), false);
-        Ok(tx.into_signed(signature).into())
+        // TODO: Add support for simulation API
+        Err(ValueError::new(self, "Simulation API is not support on bera-reth yet"))
     }
 }
 
