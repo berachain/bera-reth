@@ -532,7 +532,7 @@ impl Compact for BerachainHeader {
             gas_used: self.gas_used,
             timestamp: self.timestamp,
             mix_hash: self.mix_hash,
-            nonce: self.nonce.into(), // Convert B64 to u64 (same as reth L98)
+            nonce: self.nonce.into(),
             base_fee_per_gas: self.base_fee_per_gas,
             blob_gas_used: self.blob_gas_used,
             excess_blob_gas: self.excess_blob_gas,
@@ -553,7 +553,7 @@ impl Compact for BerachainHeader {
     /// original alloy consensus Header (without prev_proposer_pubkey field). Need proper format
     /// detection instead of panic-based fallback.
     fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
-        let (compact_header, remaining) = CompactBerachainHeader::from_compact(buf, len);
+        let (compact_header, _) = CompactBerachainHeader::from_compact(buf, len);
 
         let berachain_header = Self {
             parent_hash: compact_header.parent_hash,
@@ -580,7 +580,7 @@ impl Compact for BerachainHeader {
             extra_data: compact_header.extra_data,
         };
 
-        (berachain_header, remaining)
+        (berachain_header, buf)
     }
 }
 
