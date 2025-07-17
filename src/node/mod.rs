@@ -7,7 +7,7 @@ use crate::{
     consensus::BerachainConsensusBuilder,
     engine::{
         BerachainEngineTypes, builder::BerachainPayloadServiceBuilder,
-        validator::BerachainEngineValidatorBuilder,
+        rpc::BerachainEngineApiBuilder, validator::BerachainEngineValidatorBuilder,
     },
     node::evm::BerachainExecutorBuilder,
     pool::BerachainPoolBuilder,
@@ -129,7 +129,7 @@ where
     fn add_ons(&self) -> Self::AddOns {
         BerachainAddOns::default()
             .with_engine_validator(BerachainEngineValidatorBuilder::default())
-            .with_engine_api(BasicEngineApiBuilder::<BerachainEngineValidatorBuilder>::default())
+            .with_engine_api(BerachainEngineApiBuilder::<BerachainEngineValidatorBuilder>::default())
     }
 }
 

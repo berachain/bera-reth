@@ -13,7 +13,7 @@
 
 pub mod builder;
 pub mod payload;
-mod rpc;
+pub mod rpc;
 pub mod validator;
 
 use crate::{

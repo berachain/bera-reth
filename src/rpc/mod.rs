@@ -3,7 +3,7 @@ mod receipt;
 
 use crate::{
     chainspec::BerachainChainSpec,
-    engine::BerachainEngineTypes,
+    engine::{BerachainEngineTypes, rpc::BerachainEngineApiBuilder},
     node::evm::config::BerachainNextBlockEnvAttributes,
     primitives::BerachainPrimitives,
     rpc::api::{BerachainApi, BerachainNetwork},
@@ -75,7 +75,7 @@ pub struct BerachainAddOns<
     N: FullNodeComponents,
     EthB: EthApiBuilder<N>,
     EV,
-    EB = BasicEngineApiBuilder<EV>,
+    EB = BerachainEngineApiBuilder<EV>,
 > {
     inner: RpcAddOns<N, EthB, EV, EB>,
 }
@@ -95,7 +95,7 @@ where
             inner: RpcAddOns::new(
                 BerachainEthApiBuilder,
                 crate::engine::validator::BerachainEngineValidatorBuilder::default(),
-                BasicEngineApiBuilder::default(),
+                BerachainEngineApiBuilder::default(),
                 Default::default(),
             ),
         }
