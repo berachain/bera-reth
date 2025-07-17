@@ -1,16 +1,13 @@
-use crate::{
-    chainspec::BerachainChainSpec,
-    engine::{BerachainEngineTypes, validator::BerachainEngineValidator},
-};
+// No local imports needed
 use alloy_eips::{
     eip4844::{BlobAndProofV1, BlobAndProofV2},
     eip7685::RequestsOrHash,
 };
 use alloy_primitives::{B256, BlockHash, U64};
 use alloy_rpc_types::engine::{
-    ClientVersionV1, ExecutionData, ExecutionPayloadBodiesV1, ExecutionPayloadInputV2,
-    ExecutionPayloadV1, ExecutionPayloadV3, ForkchoiceState, ForkchoiceUpdated, PayloadId,
-    PayloadStatus,
+    CancunPayloadFields, ClientVersionV1, ExecutionData, ExecutionPayloadBodiesV1,
+    ExecutionPayloadInputV2, ExecutionPayloadSidecar, ExecutionPayloadV1, ExecutionPayloadV3,
+    ForkchoiceState, ForkchoiceUpdated, PayloadId, PayloadStatus, PraguePayloadFields,
 };
 use derive_more::Constructor;
 use jsonrpsee_core::{RpcResult, server::RpcModule};
@@ -20,15 +17,16 @@ use reth::{
     chainspec::EthereumHardforks,
     payload::PayloadStore,
     providers::{BlockReader, HeaderProvider, StateProviderFactory},
-    rpc::api::{EngineApiServer, IntoEngineApiRpcModule},
+    rpc::api::IntoEngineApiRpcModule,
 };
 use reth_engine_primitives::{EngineTypes, EngineValidator};
 use reth_node_api::{AddOnsContext, FullNodeComponents};
 use reth_node_builder::rpc::{EngineApiBuilder, EngineValidatorBuilder};
 use reth_node_core::version::{CARGO_PKG_VERSION, CLIENT_CODE, NAME_CLIENT, VERGEN_GIT_SHA};
 use reth_payload_primitives::PayloadTypes;
-use reth_rpc_engine_api::{EngineApi, EngineCapabilities};
+use reth_rpc_engine_api::{EngineApi, EngineApiError, EngineCapabilities};
 use reth_transaction_pool::TransactionPool;
+use tracing::{debug, trace};
 
 /// Builder for basic [`EngineApi`] implementation.
 ///
@@ -304,11 +302,19 @@ where
     ChainSpec: EthereumHardforks + Send + Sync + 'static,
 {
     async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_newPayloadV1");
+        let payload =
+            ExecutionData { payload: payload.into(), sidecar: ExecutionPayloadSidecar::none() };
+        Ok(self.inner.new_payload_v1_metered(payload).await?)
     }
 
     async fn new_payload_v2(&self, payload: ExecutionPayloadInputV2) -> RpcResult<PayloadStatus> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_newPayloadV2");
+        let payload = ExecutionData {
+            payload: payload.into_payload(),
+            sidecar: ExecutionPayloadSidecar::none(),
+        };
+        Ok(self.inner.new_payload_v2_metered(payload).await?)
     }
 
     async fn new_payload_v3(
@@ -317,7 +323,15 @@ where
         versioned_hashes: Vec<B256>,
         parent_beacon_block_root: B256,
     ) -> RpcResult<PayloadStatus> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_newPayloadV3");
+        let payload = ExecutionData {
+            payload: payload.into(),
+            sidecar: ExecutionPayloadSidecar::v3(CancunPayloadFields {
+                versioned_hashes,
+                parent_beacon_block_root,
+            }),
+        };
+        Ok(self.inner.new_payload_v3_metered(payload).await?)
     }
 
     async fn new_payload_v4(
@@ -327,7 +341,21 @@ where
         parent_beacon_block_root: B256,
         execution_requests: RequestsOrHash,
     ) -> RpcResult<PayloadStatus> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_newPayloadV4");
+
+        // Accept requests as a hash only if it is explicitly allowed
+        if execution_requests.is_hash() && !self.inner.accept_execution_requests_hash() {
+            return Err(EngineApiError::UnexpectedRequestsHash.into());
+        }
+
+        let payload = ExecutionData {
+            payload: payload.into(),
+            sidecar: ExecutionPayloadSidecar::v4(
+                CancunPayloadFields { versioned_hashes, parent_beacon_block_root },
+                PraguePayloadFields { requests: execution_requests },
+            ),
+        };
+        Ok(self.inner.new_payload_v4_metered(payload).await?)
     }
 
     async fn fork_choice_updated_v1(
@@ -335,7 +363,8 @@ where
         fork_choice_state: ForkchoiceState,
         payload_attributes: Option<EngineT::PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV1");
+        Ok(self.inner.fork_choice_updated_v1_metered(fork_choice_state, payload_attributes).await?)
     }
 
     async fn fork_choice_updated_v2(
@@ -343,7 +372,8 @@ where
         fork_choice_state: ForkchoiceState,
         payload_attributes: Option<EngineT::PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV2");
+        Ok(self.inner.fork_choice_updated_v2_metered(fork_choice_state, payload_attributes).await?)
     }
 
     async fn fork_choice_updated_v3(
@@ -351,49 +381,56 @@ where
         fork_choice_state: ForkchoiceState,
         payload_attributes: Option<EngineT::PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV3");
+        Ok(self.inner.fork_choice_updated_v3_metered(fork_choice_state, payload_attributes).await?)
     }
 
     async fn get_payload_v1(
         &self,
         payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV1> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getPayloadV1");
+        Ok(self.inner.get_payload_v1_metered(payload_id).await?)
     }
 
     async fn get_payload_v2(
         &self,
         payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV2> {
-        todo!()
+        debug!(target: "rpc::engine", id = %payload_id, "Serving engine_getPayloadV2");
+        Ok(self.inner.get_payload_v2_metered(payload_id).await?)
     }
 
     async fn get_payload_v3(
         &self,
         payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV3> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getPayloadV3");
+        Ok(self.inner.get_payload_v3_metered(payload_id).await?)
     }
 
     async fn get_payload_v4(
         &self,
         payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV4> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getPayloadV4");
+        Ok(self.inner.get_payload_v4_metered(payload_id).await?)
     }
 
     async fn get_payload_v5(
         &self,
         payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV5> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getPayloadV5");
+        Ok(self.inner.get_payload_v5_metered(payload_id).await?)
     }
 
     async fn get_payload_bodies_by_hash_v1(
         &self,
         block_hashes: Vec<BlockHash>,
     ) -> RpcResult<ExecutionPayloadBodiesV1> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getPayloadBodiesByHashV1");
+        Ok(self.inner.get_payload_bodies_by_hash_v1_metered(block_hashes).await?)
     }
 
     async fn get_payload_bodies_by_range_v1(
@@ -401,32 +438,36 @@ where
         start: U64,
         count: U64,
     ) -> RpcResult<ExecutionPayloadBodiesV1> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getPayloadBodiesByRangeV1");
+        Ok(self.inner.get_payload_bodies_by_range_v1_metered(start.to(), count.to()).await?)
     }
 
     async fn get_client_version_v1(
         &self,
         client_version: ClientVersionV1,
     ) -> RpcResult<Vec<ClientVersionV1>> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getClientVersionV1");
+        Ok(self.inner.get_client_version_v1(client_version)?)
     }
 
-    async fn exchange_capabilities(&self, capabilities: Vec<String>) -> RpcResult<Vec<String>> {
-        todo!()
+    async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
+        Ok(self.inner.capabilities().list())
     }
 
     async fn get_blobs_v1(
         &self,
         versioned_hashes: Vec<B256>,
     ) -> RpcResult<Vec<Option<BlobAndProofV1>>> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getBlobsV1");
+        Ok(self.inner.get_blobs_v1_metered(versioned_hashes)?)
     }
 
     async fn get_blobs_v2(
         &self,
         versioned_hashes: Vec<B256>,
     ) -> RpcResult<Option<Vec<BlobAndProofV2>>> {
-        todo!()
+        trace!(target: "rpc::engine", "Serving engine_getBlobsV2");
+        Ok(self.inner.get_blobs_v2_metered(versioned_hashes)?)
     }
 }
 
