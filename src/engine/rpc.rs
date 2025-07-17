@@ -1,4 +1,10 @@
-// No local imports needed
+use crate::{
+    engine::{
+        BerachainExecutionData, BerachainExecutionPayloadSidecar, validate_proposer_pubkey_prague1,
+    },
+    hardforks::BerachainHardforks,
+    primitives::header::BlsPublicKey,
+};
 use alloy_eips::{
     eip4844::{BlobAndProofV1, BlobAndProofV2},
     eip7685::RequestsOrHash,
@@ -6,12 +12,13 @@ use alloy_eips::{
 use alloy_primitives::{B256, BlockHash, U64};
 use alloy_rpc_types::engine::{
     CancunPayloadFields, ClientVersionV1, ExecutionData, ExecutionPayloadBodiesV1,
-    ExecutionPayloadInputV2, ExecutionPayloadSidecar, ExecutionPayloadV1, ExecutionPayloadV3,
-    ForkchoiceState, ForkchoiceUpdated, PayloadId, PayloadStatus, PraguePayloadFields,
+    ExecutionPayloadInputV2, ExecutionPayloadV1, ExecutionPayloadV3, ForkchoiceState,
+    ForkchoiceUpdated, PayloadId, PayloadStatus,
 };
-use derive_more::Constructor;
+// Constructor removed since we're using custom construction
 use jsonrpsee_core::{RpcResult, server::RpcModule};
 use jsonrpsee_proc_macros::rpc;
+use jsonrpsee_types;
 use reth::{
     api::NodeTypes,
     chainspec::EthereumHardforks,
@@ -24,8 +31,11 @@ use reth_node_api::{AddOnsContext, FullNodeComponents};
 use reth_node_builder::rpc::{EngineApiBuilder, EngineValidatorBuilder};
 use reth_node_core::version::{CARGO_PKG_VERSION, CLIENT_CODE, NAME_CLIENT, VERGEN_GIT_SHA};
 use reth_payload_primitives::PayloadTypes;
-use reth_rpc_engine_api::{EngineApi, EngineApiError, EngineCapabilities};
+use reth_rpc_engine_api::{
+    EngineApi, EngineApiError, EngineCapabilities, INVALID_PAYLOAD_ATTRIBUTES,
+};
 use reth_transaction_pool::TransactionPool;
+use std::sync::Arc;
 use tracing::{debug, trace};
 
 /// Builder for basic [`EngineApi`] implementation.
@@ -42,7 +52,7 @@ impl<N, EV> EngineApiBuilder<N> for BerachainEngineApiBuilder<EV>
 where
     N: FullNodeComponents<
         Types: NodeTypes<
-            ChainSpec: EthereumHardforks,
+            ChainSpec: EthereumHardforks + BerachainHardforks,
             Payload: PayloadTypes<ExecutionData = ExecutionData> + EngineTypes,
         >,
     >,
@@ -78,12 +88,14 @@ where
             engine_validator,
             ctx.config.engine.accept_execution_requests_hash,
         );
-        Ok(BerachainEngineApi { inner })
+        Ok(BerachainEngineApi { inner, chain_spec: ctx.config.chain.clone() })
     }
 }
 
-#[cfg_attr(not(feature = "client"), rpc(server, namespace = "engine"), server_bounds(Engine::PayloadAttributes: jsonrpsee::core::DeserializeOwned))]
-#[cfg_attr(feature = "client", rpc(server, client, namespace = "engine", client_bounds(Engine::PayloadAttributes: jsonrpsee::core::Serialize + Clone), server_bounds(Engine::PayloadAttributes: jsonrpsee::core::DeserializeOwned)))]
+#[cfg_attr(not(feature = "client"), rpc(server, namespace = "engine"), server_bounds(Engine::PayloadAttributes: jsonrpsee::core::DeserializeOwned
+))]
+#[cfg_attr(feature = "client", rpc(server, client, namespace = "engine", client_bounds(Engine::PayloadAttributes: jsonrpsee::core::Serialize + Clone
+), server_bounds(Engine::PayloadAttributes: jsonrpsee::core::DeserializeOwned)))]
 pub trait BerachainEngineApi<Engine: EngineTypes> {
     /// See also <https://github.com/ethereum/execution-apis/blob/6709c2a795b707202e93c4f2867fa0bf2640a84f/src/engine/paris.md#engine_newpayloadv1>
     /// Caution: This should not accept the `withdrawals` field
@@ -115,6 +127,7 @@ pub trait BerachainEngineApi<Engine: EngineTypes> {
         versioned_hashes: Vec<B256>,
         parent_beacon_block_root: B256,
         execution_requests: RequestsOrHash,
+        parent_proposer_pub_key: Option<BlsPublicKey>,
     ) -> RpcResult<PayloadStatus>;
 
     /// See also <https://github.com/ethereum/execution-apis/blob/6709c2a795b707202e93c4f2867fa0bf2640a84f/src/engine/paris.md#engine_forkchoiceupdatedv1>
@@ -286,9 +299,10 @@ pub trait BerachainEngineApi<Engine: EngineTypes> {
     ) -> RpcResult<Option<Vec<BlobAndProofV2>>>;
 }
 
-#[derive(Debug, Constructor)]
+#[derive(Debug)]
 pub struct BerachainEngineApi<Provider, PayloadT: PayloadTypes, Pool, Validator, ChainSpec> {
     inner: EngineApi<Provider, PayloadT, Pool, Validator, ChainSpec>,
+    chain_spec: Arc<ChainSpec>,
 }
 
 #[async_trait::async_trait]
@@ -299,22 +313,22 @@ where
     EngineT: EngineTypes<ExecutionData = ExecutionData>,
     Pool: TransactionPool + 'static,
     Validator: EngineValidator<EngineT>,
-    ChainSpec: EthereumHardforks + Send + Sync + 'static,
+    ChainSpec: EthereumHardforks + BerachainHardforks + Send + Sync + 'static,
 {
     async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV1");
-        let payload =
-            ExecutionData { payload: payload.into(), sidecar: ExecutionPayloadSidecar::none() };
-        Ok(self.inner.new_payload_v1_metered(payload).await?)
+        let berachain_payload =
+            BerachainExecutionData::new(payload.into(), BerachainExecutionPayloadSidecar::none());
+        Ok(self.inner.new_payload_v1_metered(berachain_payload.into_execution_data()).await?)
     }
 
     async fn new_payload_v2(&self, payload: ExecutionPayloadInputV2) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV2");
-        let payload = ExecutionData {
-            payload: payload.into_payload(),
-            sidecar: ExecutionPayloadSidecar::none(),
-        };
-        Ok(self.inner.new_payload_v2_metered(payload).await?)
+        let berachain_payload = BerachainExecutionData::new(
+            payload.into_payload(),
+            BerachainExecutionPayloadSidecar::none(),
+        );
+        Ok(self.inner.new_payload_v2_metered(berachain_payload.into_execution_data()).await?)
     }
 
     async fn new_payload_v3(
@@ -324,14 +338,14 @@ where
         parent_beacon_block_root: B256,
     ) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV3");
-        let payload = ExecutionData {
-            payload: payload.into(),
-            sidecar: ExecutionPayloadSidecar::v3(CancunPayloadFields {
+        let berachain_payload = BerachainExecutionData::new(
+            payload.into(),
+            BerachainExecutionPayloadSidecar::v3(CancunPayloadFields {
                 versioned_hashes,
                 parent_beacon_block_root,
             }),
-        };
-        Ok(self.inner.new_payload_v3_metered(payload).await?)
+        );
+        Ok(self.inner.new_payload_v3_metered(berachain_payload.into_execution_data()).await?)
     }
 
     async fn new_payload_v4(
@@ -340,22 +354,43 @@ where
         versioned_hashes: Vec<B256>,
         parent_beacon_block_root: B256,
         execution_requests: RequestsOrHash,
+        parent_proposer_pub_key: Option<BlsPublicKey>,
     ) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV4");
+        trace!(target: "rpc::engine", "received parent_proposer_pub_key {:?}", parent_proposer_pub_key);
+
+        // Validate parent_proposer_pub_key presence based on Prague1 activation
+        validate_proposer_pubkey_prague1(
+            &*self.chain_spec,
+            payload.timestamp(),
+            parent_proposer_pub_key,
+        )
+        .map_err(|error| {
+            EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
+                INVALID_PAYLOAD_ATTRIBUTES,
+                error.to_string(),
+                None::<()>,
+            ))
+        })?;
 
         // Accept requests as a hash only if it is explicitly allowed
         if execution_requests.is_hash() && !self.inner.accept_execution_requests_hash() {
             return Err(EngineApiError::UnexpectedRequestsHash.into());
         }
 
-        let payload = ExecutionData {
-            payload: payload.into(),
-            sidecar: ExecutionPayloadSidecar::v4(
+        let berachain_payload = BerachainExecutionData::new(
+            payload.into(),
+            BerachainExecutionPayloadSidecar::v4(
                 CancunPayloadFields { versioned_hashes, parent_beacon_block_root },
-                PraguePayloadFields { requests: execution_requests },
+                execution_requests,
+                parent_proposer_pub_key,
             ),
-        };
-        Ok(self.inner.new_payload_v4_metered(payload).await?)
+        );
+
+        // Convert to standard ExecutionData for inner Engine API compatibility
+        let standard_payload = berachain_payload.into_execution_data();
+
+        Ok(self.inner.new_payload_v4_metered(standard_payload).await?)
     }
 
     async fn fork_choice_updated_v1(

@@ -1,5 +1,6 @@
 use crate::{
     chainspec::BerachainChainSpec,
+    engine::validate_proposer_pubkey_prague1,
     hardforks::BerachainHardforks,
     node::evm::{
         block_context::BerachainBlockExecutionCtx, config::BerachainEvmConfig,
@@ -81,13 +82,17 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         use reth::revm::DatabaseCommit;
         use reth_evm::block::StateChangeSource;
 
-        // Check if Prague1 hardfork is active
-        if !self.spec.is_prague1_active_at_timestamp(self.evm.block().timestamp.saturating_to()) {
+        let timestamp = self.evm.block().timestamp.saturating_to();
+
+        // Validate proposer pubkey presence for Prague1
+        validate_proposer_pubkey_prague1(&*self.spec, timestamp, self.ctx.prev_proposer_pubkey)?;
+
+        // Check if Prague1 hardfork is active (after validation)
+        if !self.spec.is_prague1_active_at_timestamp(timestamp) {
             return Ok(());
         }
 
-        let prev_proposer_pubkey =
-            self.ctx.prev_proposer_pubkey.ok_or(BerachainExecutionError::MissingProposerPubkey)?;
+        let prev_proposer_pubkey = self.ctx.prev_proposer_pubkey.unwrap();
 
         // Use shared POL transaction creation logic
         let base_fee = self.evm.block().basefee;
@@ -215,10 +220,13 @@ where
 
             // Additional validation: Verify POL transaction matches expected synthetic transaction
             // Create the canonical POL transaction and compare hashes
-            let prev_proposer_pubkey = self
-                .ctx
-                .prev_proposer_pubkey
-                .ok_or(BerachainExecutionError::MissingProposerPubkey)?;
+            let timestamp = self.evm.block().timestamp.saturating_to();
+            validate_proposer_pubkey_prague1(
+                &*self.spec,
+                timestamp,
+                self.ctx.prev_proposer_pubkey,
+            )?;
+            let prev_proposer_pubkey = self.ctx.prev_proposer_pubkey.unwrap();
             let base_fee = self.evm.block().basefee;
             let expected_pol_envelope = match create_pol_transaction(
                 self.spec.clone(),

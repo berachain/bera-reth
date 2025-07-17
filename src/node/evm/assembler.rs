@@ -1,5 +1,6 @@
 use crate::{
     chainspec::BerachainChainSpec,
+    engine::validate_proposer_pubkey_prague1,
     hardforks::BerachainHardforks,
     node::evm::{block_context::BerachainBlockExecutionCtx, error::BerachainExecutionError},
     primitives::{BerachainBlock, BerachainHeader},
@@ -63,10 +64,12 @@ where
 
         let timestamp = evm_env.block_env.timestamp.saturating_to();
 
+        // Validate proposer pubkey presence for Prague1
+        validate_proposer_pubkey_prague1(&*self.chain_spec, timestamp, ctx.prev_proposer_pubkey)?;
+
         // Check if Prague1 is active and we need to inject POL transaction
         if self.chain_spec.is_prague1_active_at_timestamp(timestamp) {
-            let prev_proposer_pubkey =
-                ctx.prev_proposer_pubkey.ok_or(BerachainExecutionError::MissingProposerPubkey)?;
+            let prev_proposer_pubkey = ctx.prev_proposer_pubkey.unwrap();
 
             // Synthesize POL transaction and prepend to transactions list
             let base_fee = evm_env.block_env.basefee;

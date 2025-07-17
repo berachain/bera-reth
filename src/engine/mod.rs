@@ -20,14 +20,16 @@ use crate::{
     engine::payload::{
         BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
     },
+    hardforks::BerachainHardforks,
+    node::evm::error::BerachainExecutionError,
     primitives::header::BlsPublicKey,
 };
-use alloy_eips::{eip4895::Withdrawal, eip7685::Requests};
+use alloy_eips::eip7685::{Requests, RequestsOrHash};
 use alloy_primitives::B256;
 use alloy_rpc_types::engine::{
-    ExecutionData, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
-    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadSidecar,
-    ExecutionPayloadV1,
+    CancunPayloadFields, ExecutionData, ExecutionPayload, ExecutionPayloadEnvelopeV2,
+    ExecutionPayloadEnvelopeV3, ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5,
+    ExecutionPayloadSidecar, ExecutionPayloadV1, PraguePayloadFields,
 };
 use reth::{
     api::{BuiltPayload, EngineTypes, NodePrimitives, PayloadTypes},
@@ -94,4 +96,125 @@ impl EngineTypes for BerachainEngineTypes {
     type ExecutionPayloadEnvelopeV3 = ExecutionPayloadEnvelopeV3;
     type ExecutionPayloadEnvelopeV4 = ExecutionPayloadEnvelopeV4;
     type ExecutionPayloadEnvelopeV5 = ExecutionPayloadEnvelopeV5;
+}
+
+/// Berachain-specific Prague payload fields that extend the standard Prague fields
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct BerachainPraguePayloadFields {
+    /// EIP-7685 requests
+    pub requests: RequestsOrHash,
+    /// Berachain-specific: Parent proposer public key (BRIP-0004)
+    pub parent_proposer_pub_key: Option<BlsPublicKey>,
+}
+
+impl BerachainPraguePayloadFields {
+    /// Create new Berachain Prague payload fields
+    pub fn new(requests: RequestsOrHash, parent_proposer_pub_key: Option<BlsPublicKey>) -> Self {
+        Self { requests, parent_proposer_pub_key }
+    }
+}
+
+/// Berachain-specific ExecutionPayloadSidecar that extends the standard sidecar
+/// with additional fields for Berachain consensus requirements
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct BerachainExecutionPayloadSidecar {
+    /// Standard ExecutionPayloadSidecar for compatibility
+    #[serde(flatten)]
+    pub inner: ExecutionPayloadSidecar,
+    /// Berachain-specific: Parent proposer public key (BRIP-0004)
+    pub parent_proposer_pub_key: Option<BlsPublicKey>,
+}
+
+impl BerachainExecutionPayloadSidecar {
+    /// Creates a new instance with no additional fields (pre-Cancun)
+    pub fn none() -> Self {
+        Self { inner: ExecutionPayloadSidecar::none(), parent_proposer_pub_key: None }
+    }
+
+    /// Creates a new instance for Cancun (v3)
+    pub fn v3(cancun: CancunPayloadFields) -> Self {
+        Self { inner: ExecutionPayloadSidecar::v3(cancun), parent_proposer_pub_key: None }
+    }
+
+    /// Creates a new instance for Prague (v4) with Berachain-specific fields
+    pub fn v4(
+        cancun: CancunPayloadFields,
+        requests: RequestsOrHash,
+        parent_proposer_pub_key: Option<BlsPublicKey>,
+    ) -> Self {
+        Self {
+            inner: ExecutionPayloadSidecar::v4(cancun, PraguePayloadFields { requests }),
+            parent_proposer_pub_key,
+        }
+    }
+
+    /// Returns the parent proposer public key if present
+    pub fn parent_proposer_pub_key(&self) -> Option<BlsPublicKey> {
+        self.parent_proposer_pub_key
+    }
+
+    /// Returns the EIP-7685 requests if available
+    pub fn requests(&self) -> Option<&alloy_eips::eip7685::Requests> {
+        self.inner.requests()
+    }
+
+    /// Returns the parent beacon block root if available
+    pub fn parent_beacon_block_root(&self) -> Option<B256> {
+        self.inner.parent_beacon_block_root()
+    }
+
+    /// Returns the versioned hashes if available
+    pub fn versioned_hashes(&self) -> Option<&Vec<B256>> {
+        self.inner.versioned_hashes()
+    }
+
+    /// Convert to standard ExecutionPayloadSidecar for compatibility
+    pub fn into_inner(self) -> ExecutionPayloadSidecar {
+        self.inner
+    }
+
+    /// Get reference to inner ExecutionPayloadSidecar
+    pub fn inner(&self) -> &ExecutionPayloadSidecar {
+        &self.inner
+    }
+}
+
+/// Berachain-specific ExecutionData that uses BerachainExecutionPayloadSidecar
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct BerachainExecutionData {
+    /// The execution payload
+    pub payload: ExecutionPayload,
+    /// Berachain-specific sidecar with additional fields
+    pub sidecar: BerachainExecutionPayloadSidecar,
+}
+
+impl BerachainExecutionData {
+    /// Create new BerachainExecutionData
+    pub fn new(payload: ExecutionPayload, sidecar: BerachainExecutionPayloadSidecar) -> Self {
+        Self { payload, sidecar }
+    }
+
+    /// Convert to standard ExecutionData for compatibility with inner Engine API
+    /// Should only be called before NewPayloadV4 requests.
+    pub fn into_execution_data(self) -> ExecutionData {
+        ExecutionData { payload: self.payload, sidecar: self.sidecar.into_inner() }
+    }
+}
+
+/// Validates that proposer pubkey is present after Prague1 and absent before Prague1
+pub fn validate_proposer_pubkey_prague1<ChainSpec: BerachainHardforks>(
+    chain_spec: &ChainSpec,
+    timestamp: u64,
+    proposer_pub_key: Option<BlsPublicKey>,
+) -> Result<(), BerachainExecutionError> {
+    if chain_spec.is_prague1_active_at_timestamp(timestamp) {
+        if proposer_pub_key.is_none() {
+            return Err(BerachainExecutionError::MissingProposerPubkey);
+        }
+    } else {
+        if proposer_pub_key.is_some() {
+            return Err(BerachainExecutionError::ProposerPubkeyNotAllowed);
+        }
+    }
+    Ok(())
 }
