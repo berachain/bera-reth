@@ -3,24 +3,23 @@ mod receipt;
 
 use crate::{
     chainspec::BerachainChainSpec,
-    engine::{BerachainEngineTypes, rpc::BerachainEngineApiBuilder},
+    engine::{BerachainEngineTypes, BerachainExecutionData, rpc::BerachainEngineApiBuilder},
     node::evm::config::BerachainNextBlockEnvAttributes,
     primitives::BerachainPrimitives,
     rpc::api::{BerachainApi, BerachainNetwork},
 };
-use alloy_rpc_types::engine::ExecutionData;
 use reth::{
     api::FullNodeComponents,
     chainspec::EthereumHardforks,
     revm::context::TxEnv,
-    rpc::{api::eth::FromEvmError, compat::TxInfoMapper, server_types::eth::EthApiError},
+    rpc::{api::eth::FromEvmError, server_types::eth::EthApiError},
 };
 use reth_chainspec::EthChainSpec;
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor};
 use reth_node_api::{AddOnsContext, FullNodeTypes, NodeAddOns, NodeTypes};
 use reth_node_builder::rpc::{
-    BasicEngineApiBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
-    EthApiBuilder, EthApiCtx, RethRpcAddOns, RpcAddOns, RpcHandle,
+    EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, EthApiBuilder, EthApiCtx,
+    RethRpcAddOns, RpcAddOns, RpcHandle,
 };
 
 /// Builds [`BerachainEthApi`] for Berachain.
@@ -135,7 +134,9 @@ where
             Types: NodeTypes<
                 ChainSpec: EthChainSpec + EthereumHardforks,
                 Primitives = BerachainPrimitives,
-                Payload: reth_engine_primitives::EngineTypes<ExecutionData = ExecutionData>,
+                Payload: reth_engine_primitives::EngineTypes<
+                    ExecutionData = BerachainExecutionData,
+                >,
             >,
             Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
         >,
@@ -161,7 +162,9 @@ where
             Types: NodeTypes<
                 ChainSpec: EthChainSpec + EthereumHardforks,
                 Primitives = BerachainPrimitives,
-                Payload: reth_engine_primitives::EngineTypes<ExecutionData = ExecutionData>,
+                Payload: reth_engine_primitives::EngineTypes<
+                    ExecutionData = BerachainExecutionData,
+                >,
             >,
             Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
         >,
@@ -184,7 +187,9 @@ where
             Types: NodeTypes<
                 ChainSpec: EthChainSpec + EthereumHardforks,
                 Primitives = BerachainPrimitives,
-                Payload: reth_engine_primitives::EngineTypes<ExecutionData = ExecutionData>,
+                Payload: reth_engine_primitives::EngineTypes<
+                    ExecutionData = BerachainExecutionData,
+                >,
             >,
             Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
         >,

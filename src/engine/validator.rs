@@ -2,12 +2,15 @@
 
 use crate::{
     chainspec::BerachainChainSpec,
-    engine::{BerachainEngineTypes, payload::BerachainPayloadAttributes},
+    engine::{
+        BerachainEngineTypes, BerachainExecutionData, BerachainExecutionPayloadSidecar,
+        payload::BerachainPayloadAttributes,
+    },
     hardforks::BerachainHardforks,
     primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives},
     transaction::BerachainTxEnvelope,
 };
-use alloy_rpc_types::engine::{ExecutionData, ExecutionPayloadSidecar};
+use alloy_rpc_types::engine::ExecutionPayloadSidecar;
 use reth_engine_primitives::{EngineValidator, PayloadValidator};
 use reth_ethereum_payload_builder::EthereumExecutionPayloadValidator;
 use reth_node_api::{AddOnsContext, FullNodeComponents, NodeTypes, PayloadTypes};
@@ -40,17 +43,17 @@ impl BerachainEngineValidator {
     fn parse_berachain_block(
         &self,
         payload: alloy_rpc_types::engine::ExecutionPayload,
-        sidecar: &ExecutionPayloadSidecar,
+        sidecar: &BerachainExecutionPayloadSidecar,
     ) -> Result<SealedBlock<BerachainBlock>, NewPayloadError> {
         // Use the standard try_into_block_with_sidecar method to parse the block
         let standard_block = payload
-            .try_into_block_with_sidecar::<BerachainTxEnvelope>(&sidecar)
+            .try_into_block_with_sidecar::<BerachainTxEnvelope>(&sidecar.inner)
             .map_err(|e| NewPayloadError::Other(e.into()))?;
 
         // Convert header from standard to BerachainHeader
-        let berachain_header = BerachainHeader::from(standard_block.header.clone());
+        let mut berachain_header = BerachainHeader::from(standard_block.header.clone());
 
-        // TODO: Add the proposer pub key to the header here.
+        berachain_header.prev_proposer_pubkey = sidecar.parent_proposer_pub_key;
 
         // Create BerachainBlock with converted header and body
         let berachain_ommers: Vec<BerachainHeader> =
@@ -71,7 +74,7 @@ impl BerachainEngineValidator {
     fn validate_hardfork_fields(
         &self,
         _sealed_block: &SealedBlock<BerachainBlock>,
-        _sidecar: &ExecutionPayloadSidecar,
+        _sidecar: &BerachainExecutionPayloadSidecar,
     ) -> Result<(), NewPayloadError> {
         // For simplicity, we'll skip the standard hardfork validations here
         // since they expect standard headers. The inner validator already
@@ -134,13 +137,13 @@ impl BerachainEngineValidator {
 
 impl PayloadValidator for BerachainEngineValidator {
     type Block = BerachainBlock;
-    type ExecutionData = <BerachainEngineTypes as PayloadTypes>::ExecutionData;
+    type ExecutionData = BerachainExecutionData;
 
     fn ensure_well_formed_payload(
         &self,
-        payload: ExecutionData,
+        payload: BerachainExecutionData,
     ) -> Result<RecoveredBlock<Self::Block>, NewPayloadError> {
-        let ExecutionData { payload, sidecar } = payload;
+        let BerachainExecutionData { payload, sidecar } = payload;
         let expected_hash = payload.block_hash();
 
         // Parse the block directly to BerachainBlock
@@ -170,8 +173,10 @@ impl PayloadValidator for BerachainEngineValidator {
 
 impl<Types> EngineValidator<Types> for BerachainEngineValidator
 where
-    Types:
-        PayloadTypes<PayloadAttributes = BerachainPayloadAttributes, ExecutionData = ExecutionData>,
+    Types: PayloadTypes<
+            PayloadAttributes = BerachainPayloadAttributes,
+            ExecutionData = BerachainExecutionData,
+        >,
 {
     fn validate_version_specific_fields(
         &self,

@@ -128,23 +128,6 @@ where
         &self,
         args: BuildArguments<Self::Attributes, BerachainBuiltPayload>,
     ) -> Result<BuildOutcome<BerachainBuiltPayload>, PayloadBuilderError> {
-        // let eth_config = PayloadConfig {
-        //     parent_header: args.config.parent_header,
-        //     // TODO: Convert BerachainPayloadBuilderAttributes to EthPayloadBuilderAttributes for
-        //     // compatibility
-        //     attributes: EthPayloadBuilderAttributes::new(
-        //         args.config.attributes.parent,
-        //         args.config.attributes.to_eth_payload_attributes(),
-        //     ),
-        // };
-        //
-        // let eth_args = BuildArguments {
-        //     cached_reads: args.cached_reads,
-        //     config: eth_config,
-        //     cancel: args.cancel,
-        //     best_payload: args.best_payload,
-        // };
-
         default_berachain_payload(
             self.evm_config.clone(),
             self.client.clone(),

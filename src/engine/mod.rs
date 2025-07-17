@@ -27,15 +27,16 @@ use crate::{
 use alloy_eips::eip7685::{Requests, RequestsOrHash};
 use alloy_primitives::B256;
 use alloy_rpc_types::engine::{
-    CancunPayloadFields, ExecutionData, ExecutionPayload, ExecutionPayloadEnvelopeV2,
-    ExecutionPayloadEnvelopeV3, ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5,
-    ExecutionPayloadSidecar, ExecutionPayloadV1, PraguePayloadFields,
+    CancunPayloadFields, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
+    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadInputV2,
+    ExecutionPayloadSidecar, ExecutionPayloadV1, ExecutionPayloadV3, PraguePayloadFields,
 };
 use reth::{
     api::{BuiltPayload, EngineTypes, NodePrimitives, PayloadTypes},
     core::primitives::SealedBlock,
 };
 use reth_node_ethereum::EthEngineTypes;
+use reth_payload_primitives::ExecutionPayload as ExecutionPayloadTrait;
 
 /// Berachain engine types configuration
 ///
@@ -47,7 +48,7 @@ use reth_node_ethereum::EthEngineTypes;
 pub struct BerachainEngineTypes;
 
 impl PayloadTypes for BerachainEngineTypes {
-    type ExecutionData = <EthEngineTypes as PayloadTypes>::ExecutionData;
+    type ExecutionData = BerachainExecutionData;
 
     type BuiltPayload = BerachainBuiltPayload;
     type PayloadAttributes = BerachainPayloadAttributes;
@@ -58,9 +59,16 @@ impl PayloadTypes for BerachainEngineTypes {
             <<Self::BuiltPayload as BuiltPayload>::Primitives as NodePrimitives>::Block,
         >,
     ) -> Self::ExecutionData {
+        let prev_proposer_pubkey = block.prev_proposer_pubkey;
         let (payload, sidecar) =
             ExecutionPayload::from_block_unchecked(block.hash(), &block.into_block());
-        ExecutionData { payload, sidecar }
+        BerachainExecutionData::new(
+            payload,
+            BerachainExecutionPayloadSidecar {
+                inner: sidecar,
+                parent_proposer_pub_key: prev_proposer_pubkey,
+            },
+        )
     }
 }
 
@@ -193,11 +201,47 @@ impl BerachainExecutionData {
     pub fn new(payload: ExecutionPayload, sidecar: BerachainExecutionPayloadSidecar) -> Self {
         Self { payload, sidecar }
     }
+}
 
-    /// Convert to standard ExecutionData for compatibility with inner Engine API
-    /// Should only be called before NewPayloadV4 requests.
-    pub fn into_execution_data(self) -> ExecutionData {
-        ExecutionData { payload: self.payload, sidecar: self.sidecar.into_inner() }
+impl ExecutionPayloadTrait for BerachainExecutionData {
+    fn parent_hash(&self) -> B256 {
+        self.payload.parent_hash()
+    }
+
+    fn block_hash(&self) -> B256 {
+        self.payload.block_hash()
+    }
+
+    fn block_number(&self) -> u64 {
+        self.payload.block_number()
+    }
+
+    fn withdrawals(&self) -> Option<&Vec<alloy_eips::eip4895::Withdrawal>> {
+        self.payload.withdrawals()
+    }
+
+    fn parent_beacon_block_root(&self) -> Option<B256> {
+        self.sidecar.parent_beacon_block_root()
+    }
+
+    fn timestamp(&self) -> u64 {
+        self.payload.timestamp()
+    }
+
+    fn gas_used(&self) -> u64 {
+        self.payload.as_v1().gas_used
+    }
+}
+
+impl From<ExecutionPayloadV1> for BerachainExecutionData {
+    fn from(payload: ExecutionPayloadV1) -> Self {
+        Self { payload: payload.into(), sidecar: BerachainExecutionPayloadSidecar::none() }
+    }
+}
+
+impl From<ExecutionPayloadInputV2> for BerachainExecutionData {
+    fn from(payload: ExecutionPayloadInputV2) -> Self {
+        Self { payload: payload.into_payload(), sidecar: BerachainExecutionPayloadSidecar::none() }
     }
 }
 

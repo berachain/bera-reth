@@ -11,9 +11,9 @@ use alloy_eips::{
 };
 use alloy_primitives::{B256, BlockHash, U64};
 use alloy_rpc_types::engine::{
-    CancunPayloadFields, ClientVersionV1, ExecutionData, ExecutionPayloadBodiesV1,
-    ExecutionPayloadInputV2, ExecutionPayloadV1, ExecutionPayloadV3, ForkchoiceState,
-    ForkchoiceUpdated, PayloadId, PayloadStatus,
+    CancunPayloadFields, ClientVersionV1, ExecutionPayloadBodiesV1, ExecutionPayloadInputV2,
+    ExecutionPayloadV1, ExecutionPayloadV3, ForkchoiceState, ForkchoiceUpdated, PayloadId,
+    PayloadStatus,
 };
 // Constructor removed since we're using custom construction
 use jsonrpsee_core::{RpcResult, server::RpcModule};
@@ -53,7 +53,7 @@ where
     N: FullNodeComponents<
         Types: NodeTypes<
             ChainSpec: EthereumHardforks + BerachainHardforks,
-            Payload: PayloadTypes<ExecutionData = ExecutionData> + EngineTypes,
+            Payload: PayloadTypes<ExecutionData = BerachainExecutionData> + EngineTypes,
         >,
     >,
     EV: EngineValidatorBuilder<N>,
@@ -310,25 +310,21 @@ impl<Provider, EngineT, Pool, Validator, ChainSpec> BerachainEngineApiServer<Eng
     for BerachainEngineApi<Provider, EngineT, Pool, Validator, ChainSpec>
 where
     Provider: HeaderProvider + BlockReader + StateProviderFactory + 'static,
-    EngineT: EngineTypes<ExecutionData = ExecutionData>,
+    EngineT: EngineTypes<ExecutionData = BerachainExecutionData>,
     Pool: TransactionPool + 'static,
     Validator: EngineValidator<EngineT>,
     ChainSpec: EthereumHardforks + BerachainHardforks + Send + Sync + 'static,
 {
     async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV1");
-        let berachain_payload =
-            BerachainExecutionData::new(payload.into(), BerachainExecutionPayloadSidecar::none());
-        Ok(self.inner.new_payload_v1_metered(berachain_payload.into_execution_data()).await?)
+        let berachain_payload = BerachainExecutionData::from(payload);
+        Ok(self.inner.new_payload_v1_metered(berachain_payload).await?)
     }
 
     async fn new_payload_v2(&self, payload: ExecutionPayloadInputV2) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV2");
-        let berachain_payload = BerachainExecutionData::new(
-            payload.into_payload(),
-            BerachainExecutionPayloadSidecar::none(),
-        );
-        Ok(self.inner.new_payload_v2_metered(berachain_payload.into_execution_data()).await?)
+        let berachain_payload = BerachainExecutionData::from(payload);
+        Ok(self.inner.new_payload_v2_metered(berachain_payload).await?)
     }
 
     async fn new_payload_v3(
@@ -345,7 +341,7 @@ where
                 parent_beacon_block_root,
             }),
         );
-        Ok(self.inner.new_payload_v3_metered(berachain_payload.into_execution_data()).await?)
+        Ok(self.inner.new_payload_v3_metered(berachain_payload).await?)
     }
 
     async fn new_payload_v4(
@@ -387,10 +383,7 @@ where
             ),
         );
 
-        // Convert to standard ExecutionData for inner Engine API compatibility
-        let standard_payload = berachain_payload.into_execution_data();
-
-        Ok(self.inner.new_payload_v4_metered(standard_payload).await?)
+        Ok(self.inner.new_payload_v4_metered(berachain_payload).await?)
     }
 
     async fn fork_choice_updated_v1(
