@@ -7451,6 +7451,7 @@ name = "reth-node-ethereum"
 version = "1.5.1"
 dependencies = [
  "alloy-eips",
+ "alloy-network",
  "alloy-rpc-types-engine",
  "alloy-rpc-types-eth",
  "eyre",
@@ -8081,7 +8082,6 @@ dependencies = [
  "reth-consensus",
  "reth-engine-primitives",
  "reth-errors",
- "reth-ethereum-primitives",
  "reth-evm",
  "reth-evm-ethereum",
  "reth-execution-types",

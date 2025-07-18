@@ -108,21 +108,28 @@ impl BerachainEngineValidator {
             return Ok(());
         }
 
-        // Rule 1: The first transaction must be a PoL transaction
-        let first_tx = transactions[0];
-        if !self.is_pol_transaction(first_tx) {
-            return Err(NewPayloadError::Other(
-                "First transaction must be a PoL transaction".into(),
-            ));
-        }
-
-        // Rule 2: No other transaction should be a PoL transaction
-        for (index, tx) in transactions.iter().enumerate().skip(1) {
-            if self.is_pol_transaction(tx) {
+        // PoL transaction rules only apply after Prague1 activation
+        if is_prague1_active {
+            // Rule 1: The first transaction must be a PoL transaction. Guaranteed at least 1 tx
+            // due to empty check beforehand.
+            let first_tx = transactions[0];
+            if !self.is_pol_transaction(first_tx) {
                 return Err(NewPayloadError::Other(
-                    format!("PoL transaction found at index {} but only allowed at index 0", index)
-                        .into(),
+                    "First transaction must be a PoL transaction".into(),
                 ));
+            }
+
+            // Rule 2: No other transaction should be a PoL transaction
+            for (index, tx) in transactions.iter().enumerate().skip(1) {
+                if self.is_pol_transaction(tx) {
+                    return Err(NewPayloadError::Other(
+                        format!(
+                            "PoL transaction found at index {} but only allowed at index 0",
+                            index
+                        )
+                        .into(),
+                    ));
+                }
             }
         }
 

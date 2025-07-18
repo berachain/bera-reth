@@ -30,6 +30,7 @@ jsonrpsee-proc-macros = "0.25.1"
 jsonrpsee-server = "0.25.1"
 jsonrpsee-types = "0.25.1"
 
+async-trait = "0.1.88"
 modular-bitfield = "0.11.2"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "a0b92ae705e9eb167dc3f25da751dd201b5992e3" }
@@ -70,7 +71,6 @@ test-fuzz = "7"
 thiserror = "2.0"
 tokio = "1.46.0"
 tracing = "0.1.41"
-async-trait = "0.1.88"
 
 [features]
 default = ["jemalloc"]
