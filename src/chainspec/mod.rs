@@ -350,7 +350,7 @@ impl From<Genesis> for BerachainChainSpec {
         let inner = ChainSpec {
             chain: genesis.config.chain_id.into(),
             genesis_header: SealedHeader::new_unhashed(make_genesis_header(&genesis, &hardforks)),
-            genesis,
+            genesis: genesis.clone(),
             hardforks,
             paris_block_and_final_difficulty,
             deposit_contract,
@@ -360,10 +360,12 @@ impl From<Genesis> for BerachainChainSpec {
         };
 
         let mut genesis_header = BerachainHeader::from(inner.genesis_header());
-        // Set prev_proposer_pubkey to known value for genesis block
 
-        // TODO: Gate behind Prague1
-        genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
+        // Set prev_proposer_pubkey only if Prague1 is active at genesis timestamp
+        let chain_spec_temp = Self { inner: inner.clone(), genesis_header: genesis_header.clone() };
+        if chain_spec_temp.is_prague1_active_at_timestamp(genesis.timestamp) {
+            genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
+        }
         Self { inner, genesis_header }
     }
 }
