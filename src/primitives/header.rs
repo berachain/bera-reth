@@ -331,7 +331,7 @@ impl alloy_consensus::BlockHeader for BerachainHeader {
     }
 
     fn nonce(&self) -> Option<B64> {
-        Some(self.nonce.into())
+        Some(self.nonce)
     }
 
     fn base_fee_per_gas(&self) -> Option<u64> {

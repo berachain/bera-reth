@@ -1,40 +1,52 @@
-use crate::transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE};
-use alloy_consensus::{
-    Eip658Value, Receipt, ReceiptWithBloom, TxReceipt, TxType, Typed2718,
-    transaction::{Recovered, TransactionMeta},
+use crate::{
+    primitives::BerachainPrimitives,
+    transaction::{BerachainTxType, POL_TX_TYPE},
 };
-use alloy_eips::{
-    eip2718::{Decodable2718, Eip2718Result, Encodable2718, IsTyped2718},
-    eip7840::BlobParams,
-};
-use alloy_primitives::{Bloom, Log as PrimitiveLog};
-use alloy_rlp::{BufMut, Decodable, Encodable};
-use alloy_rpc_types_eth::TransactionReceipt;
-use reth_ethereum_primitives::Receipt as RethReceipt;
+use alloy_consensus::{Eip658Value, Receipt, ReceiptWithBloom, TxReceipt, TxType, Typed2718};
+use alloy_eips::eip2718::{Decodable2718, Eip2718Result, Encodable2718, IsTyped2718};
+use alloy_primitives::Bloom;
+use alloy_rlp::BufMut;
+use alloy_rpc_types_eth::{Log, TransactionReceipt};
+use reth_chainspec::EthChainSpec;
 use reth_primitives_traits::InMemorySize;
-use reth_rpc_eth_types::receipt::build_receipt;
-use std::borrow::Cow;
-
-pub struct BerachainEthReceiptBuilder {
-    base: TransactionReceipt<BerachainReceiptEnvelope>,
-}
+use reth_rpc_convert::transaction::{ConvertReceiptInput, ReceiptConverter};
+use reth_rpc_eth_types::{EthApiError, receipt::build_receipt};
+use std::sync::Arc;
 
 /// Minimal receipt envelope for Berachain transactions
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
-pub enum BerachainReceiptEnvelope {
+pub enum BerachainReceiptEnvelope<T = Log> {
     #[serde(rename = "0x0")]
-    Legacy(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
+    Legacy(ReceiptWithBloom<Receipt<T>>),
     #[serde(rename = "0x1")]
-    Eip2930(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
+    Eip2930(ReceiptWithBloom<Receipt<T>>),
     #[serde(rename = "0x2")]
-    Eip1559(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
+    Eip1559(ReceiptWithBloom<Receipt<T>>),
     #[serde(rename = "0x3")]
-    Eip4844(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
+    Eip4844(ReceiptWithBloom<Receipt<T>>),
     #[serde(rename = "0x4")]
-    Eip7702(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
+    Eip7702(ReceiptWithBloom<Receipt<T>>),
     #[serde(rename = "0x7e")]
-    Berachain(ReceiptWithBloom<Receipt<alloy_rpc_types_eth::Log>>),
+    Berachain(ReceiptWithBloom<Receipt<T>>),
+}
+
+impl BerachainReceiptEnvelope {
+    pub fn from_typed<R>(tx_type: BerachainTxType, receipt: R) -> Self
+    where
+        R: Into<ReceiptWithBloom<Receipt<Log>>>,
+    {
+        match tx_type {
+            BerachainTxType::Ethereum(tx_type) => match tx_type {
+                TxType::Legacy => Self::Legacy(receipt.into()),
+                TxType::Eip2930 => Self::Eip2930(receipt.into()),
+                TxType::Eip1559 => Self::Eip1559(receipt.into()),
+                TxType::Eip4844 => Self::Eip4844(receipt.into()),
+                TxType::Eip7702 => Self::Eip7702(receipt.into()),
+            },
+            BerachainTxType::Berachain => Self::Berachain(receipt.into()),
+        }
+    }
 }
 
 impl BerachainReceiptEnvelope {
@@ -147,57 +159,45 @@ impl InMemorySize for BerachainReceiptEnvelope {
     }
 }
 
-impl BerachainEthReceiptBuilder {
-    /// Returns a new builder with the base response body (L1 fields) set.
-    ///
-    /// Note: This requires _all_ block receipts because we need to calculate the gas used by the
-    /// transaction.
-    pub fn new(
-        transaction: Recovered<&BerachainTxEnvelope>,
-        meta: TransactionMeta,
-        receipt: Cow<'_, reth_ethereum_primitives::Receipt<BerachainTxType>>,
-        all_receipts: &[reth_ethereum_primitives::Receipt<BerachainTxType>],
-        blob_params: Option<BlobParams>,
-    ) -> Self {
-        let tx_type = receipt.tx_type;
+#[derive(Debug)]
+pub struct BerachainEthReceiptConverter<ChainSpec> {
+    chain_spec: Arc<ChainSpec>,
+}
 
-        let base = build_receipt(
-            transaction,
-            meta,
-            receipt,
-            all_receipts,
-            blob_params,
-            |receipt_with_bloom| {
-                // Use the receipt's transaction type to properly handle all transaction types
-                match tx_type {
-                    BerachainTxType::Ethereum(eth_type) => match eth_type {
-                        alloy_consensus::TxType::Legacy => {
-                            BerachainReceiptEnvelope::Legacy(receipt_with_bloom)
-                        }
-                        alloy_consensus::TxType::Eip2930 => {
-                            BerachainReceiptEnvelope::Eip2930(receipt_with_bloom)
-                        }
-                        alloy_consensus::TxType::Eip1559 => {
-                            BerachainReceiptEnvelope::Eip1559(receipt_with_bloom)
-                        }
-                        alloy_consensus::TxType::Eip4844 => {
-                            BerachainReceiptEnvelope::Eip4844(receipt_with_bloom)
-                        }
-                        alloy_consensus::TxType::Eip7702 => {
-                            BerachainReceiptEnvelope::Eip7702(receipt_with_bloom)
-                        }
-                    },
-                    BerachainTxType::Berachain => {
-                        BerachainReceiptEnvelope::Berachain(receipt_with_bloom)
-                    }
-                }
-            },
-        );
-        Self { base }
+impl<ChainSpec> Clone for BerachainEthReceiptConverter<ChainSpec> {
+    fn clone(&self) -> Self {
+        Self { chain_spec: self.chain_spec.clone() }
     }
+}
 
-    /// Builds a receipt response from the base response body, and any set additional fields.
-    pub fn build(self) -> TransactionReceipt<BerachainReceiptEnvelope> {
-        self.base
+impl<ChainSpec> BerachainEthReceiptConverter<ChainSpec> {
+    /// Creates a new converter with the given chain spec.
+    pub const fn new(chain_spec: Arc<ChainSpec>) -> Self {
+        Self { chain_spec }
+    }
+}
+
+impl<ChainSpec> ReceiptConverter<BerachainPrimitives> for BerachainEthReceiptConverter<ChainSpec>
+where
+    ChainSpec: EthChainSpec,
+{
+    type RpcReceipt = TransactionReceipt<BerachainReceiptEnvelope>;
+    type Error = EthApiError;
+
+    fn convert_receipts(
+        &self,
+        inputs: Vec<ConvertReceiptInput<'_, BerachainPrimitives>>,
+    ) -> Result<Vec<Self::RpcReceipt>, Self::Error> {
+        let mut receipts = Vec::with_capacity(inputs.len());
+
+        for input in inputs {
+            let tx_type = input.receipt.tx_type;
+            let blob_params = self.chain_spec.blob_params_at_timestamp(input.meta.timestamp);
+            receipts.push(build_receipt(&input, blob_params, |receipt_with_bloom| {
+                BerachainReceiptEnvelope::from_typed(tx_type, receipt_with_bloom)
+            }));
+        }
+
+        Ok(receipts)
     }
 }

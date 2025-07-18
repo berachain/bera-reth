@@ -2,58 +2,75 @@ mod api;
 mod receipt;
 
 use crate::{
-    chainspec::BerachainChainSpec,
-    engine::{BerachainEngineTypes, BerachainExecutionData, rpc::BerachainEngineApiBuilder},
+    engine::{BerachainExecutionData, rpc::BerachainEngineApiBuilder},
     node::evm::config::BerachainNextBlockEnvAttributes,
     primitives::BerachainPrimitives,
-    rpc::api::{BerachainApi, BerachainNetwork},
+    rpc::{
+        api::{BerachainApi, BerachainNetwork},
+        receipt::BerachainEthReceiptConverter,
+    },
 };
 use reth::{
-    api::FullNodeComponents,
+    api::{FullNodeComponents, HeaderTy, PrimitivesTy},
     chainspec::EthereumHardforks,
     revm::context::TxEnv,
     rpc::{api::eth::FromEvmError, server_types::eth::EthApiError},
 };
-use reth_chainspec::EthChainSpec;
-use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor};
+use reth_chainspec::{ChainSpecProvider, EthChainSpec};
+use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, TxEnvFor};
 use reth_node_api::{AddOnsContext, FullNodeTypes, NodeAddOns, NodeTypes};
 use reth_node_builder::rpc::{
     EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, EthApiBuilder, EthApiCtx,
     RethRpcAddOns, RpcAddOns, RpcHandle,
 };
+use reth_rpc_convert::{RpcConvert, RpcConverter};
+use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
 
 /// Builds [`BerachainEthApi`] for Berachain.
 #[derive(Debug, Default)]
 pub struct BerachainEthApiBuilder;
 
+pub type BerachainEthRpcConverterFor<N> = RpcConverter<
+    BerachainNetwork,
+    <N as FullNodeComponents>::Evm,
+    BerachainEthReceiptConverter<<<N as FullNodeTypes>::Provider as ChainSpecProvider>::ChainSpec>,
+>;
+
 impl<N> EthApiBuilder<N> for BerachainEthApiBuilder
 where
     N: FullNodeComponents<
-            Types: NodeTypes<
-                ChainSpec = BerachainChainSpec,
-                Primitives = BerachainPrimitives,
-                Payload = BerachainEngineTypes,
-            >,
-            Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
+            Types: NodeTypes<ChainSpec: EthereumHardforks, Primitives = BerachainPrimitives>,
+            Evm: ConfigureEvm<NextBlockEnvCtx: BuildPendingEnv<HeaderTy<N::Types>>>,
+        >,
+    BerachainEthRpcConverterFor<N>: RpcConvert<
+            Primitives = PrimitivesTy<N::Types>,
+            TxEnv = TxEnvFor<N::Evm>,
+            Error = EthApiError,
+            Network = BerachainNetwork,
         >,
     EthApiError: FromEvmError<N::Evm>,
-    EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
     type EthApi = BerachainApi<
         <N as FullNodeTypes>::Provider,
         <N as FullNodeComponents>::Pool,
         <N as FullNodeComponents>::Network,
         <N as FullNodeComponents>::Evm,
-        BerachainNetwork,
+        BerachainEthRpcConverterFor<N>,
     >;
 
     async fn build_eth_api(self, ctx: EthApiCtx<'_, N>) -> eyre::Result<Self::EthApi> {
+        let tx_resp_builder = BerachainEthRpcConverterFor::<N>::new(
+            BerachainEthReceiptConverter::new(ctx.components.provider().clone().chain_spec()),
+            (),
+        );
+
         let api = reth_rpc::EthApiBuilder::new(
             ctx.components.provider().clone(),
             ctx.components.pool().clone(),
             ctx.components.network().clone(),
             ctx.components.evm_config().clone(),
         )
+        .with_rpc_converter(tx_resp_builder.clone())
         .eth_cache(ctx.cache)
         .task_spawner(ctx.components.task_executor().clone())
         .gas_cap(ctx.config.rpc_gas_cap.into())
@@ -64,7 +81,7 @@ where
         .gas_oracle_config(ctx.config.gas_oracle)
         .build();
 
-        Ok(BerachainApi { inner: api, tx_resp_builder: Default::default() })
+        Ok(BerachainApi { inner: api })
     }
 }
 

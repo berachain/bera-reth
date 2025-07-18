@@ -1,6 +1,6 @@
 //! Compact implementation for [`BerachainTxType`]
 
-use crate::transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE};
+use crate::transaction::{BerachainTxType, POL_TX_TYPE};
 use alloy_consensus::TxType;
 use bytes::{Buf, BufMut};
 use reth::providers::errors::db::DatabaseError;

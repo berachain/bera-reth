@@ -29,13 +29,12 @@ use alloy_primitives::B256;
 use alloy_rpc_types::engine::{
     CancunPayloadFields, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadInputV2,
-    ExecutionPayloadSidecar, ExecutionPayloadV1, ExecutionPayloadV3, PraguePayloadFields,
+    ExecutionPayloadSidecar, ExecutionPayloadV1, PraguePayloadFields,
 };
 use reth::{
     api::{BuiltPayload, EngineTypes, NodePrimitives, PayloadTypes},
     core::primitives::SealedBlock,
 };
-use reth_node_ethereum::EthEngineTypes;
 use reth_payload_primitives::ExecutionPayload as ExecutionPayloadTrait;
 
 /// Berachain engine types configuration
@@ -255,10 +254,8 @@ pub fn validate_proposer_pubkey_prague1<ChainSpec: BerachainHardforks>(
         if proposer_pub_key.is_none() {
             return Err(BerachainExecutionError::MissingProposerPubkey);
         }
-    } else {
-        if proposer_pub_key.is_some() {
-            return Err(BerachainExecutionError::ProposerPubkeyNotAllowed);
-        }
+    } else if proposer_pub_key.is_some() {
+        return Err(BerachainExecutionError::ProposerPubkeyNotAllowed);
     }
     Ok(())
 }

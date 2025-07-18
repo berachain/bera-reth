@@ -2,7 +2,7 @@ mod transaction;
 
 use crate::{
     chainspec::BerachainChainSpec, pool::transaction::BerachainPooledTransaction,
-    primitives::BerachainPrimitives, transaction::BerachainTxEnvelope,
+    primitives::BerachainPrimitives,
 };
 use alloy_eips::{eip7840::BlobParams, merge::EPOCH_SLOTS};
 use reth::{
@@ -15,7 +15,6 @@ use reth_node_builder::{
     BuilderContext,
     components::{PoolBuilder, TxPoolBuilder},
 };
-use reth_primitives_traits::NodePrimitives;
 use reth_transaction_pool::TransactionValidationTaskExecutor;
 use std::{fmt::Debug, time::SystemTime};
 use tracing::{debug, info};

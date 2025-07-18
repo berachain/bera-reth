@@ -5,8 +5,8 @@ mod txtype;
 pub const POL_TX_TYPE: u8 = 126; // 0x7E
 
 use alloy_consensus::{
-    EthereumTxEnvelope, EthereumTypedTransaction, Signed, Transaction, TxEip4844,
-    TxEip4844WithSidecar, TxEnvelope, TxType,
+    EthereumTxEnvelope, EthereumTypedTransaction, SignableTransaction, Signed, Transaction,
+    TxEip4844, TxEip4844WithSidecar, TxEnvelope,
     crypto::RecoveryError,
     error::ValueError,
     transaction::{Recovered, SignerRecoverable},
@@ -15,10 +15,13 @@ use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
     eip7002::SYSTEM_ADDRESS, eip7594::BlobTransactionSidecarVariant, eip7702::SignedAuthorization,
 };
+use alloy_network::TxSigner;
 use alloy_primitives::{
-    Address, B256, Bytes, ChainId, Sealable, Sealed, TxHash, TxKind, U256, bytes::BufMut, keccak256,
+    Address, B256, Bytes, ChainId, Sealable, Sealed, Signature, TxHash, TxKind, U256,
+    bytes::BufMut, keccak256,
 };
 use alloy_rlp::{Decodable, Encodable};
+use alloy_rpc_types_eth::TransactionRequest;
 use jsonrpsee_core::Serialize;
 use reth::{providers::errors::db::DatabaseError, revm::context::TxEnv};
 use reth_codecs::Compact;
@@ -27,6 +30,7 @@ use reth_evm::{Evm, FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
 };
+use reth_rpc_convert::{SignTxRequestError, SignableTxRequest};
 use serde::Deserialize;
 use std::{hash::Hash, mem::size_of};
 
@@ -442,7 +446,7 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                 let (pol_tx, remaining_buf) = PoLTx::from_compact(buf, len);
                 return (Self::Berachain(Sealed::new(pol_tx)), remaining_buf);
             }
-            _ => panic!("Unknown transaction type: {}", tx_type_byte),
+            _ => panic!("Unknown transaction type: {tx_type_byte}"),
         };
 
         let (signature, mut buf) = alloy_primitives::Signature::from_compact(buf, len);
@@ -477,7 +481,7 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                         let (base_tx, buf) = alloy_consensus::TxEip4844::from_compact(buf, len);
                         (alloy_consensus::TxEip4844Variant::TxEip4844(base_tx), buf)
                     }
-                    _ => panic!("Invalid TxEip4844Variant flag: {}", variant_flag),
+                    _ => panic!("Invalid TxEip4844Variant flag: {variant_flag}"),
                 };
                 let signed = Signed::new_unhashed(tx_variant, signature);
                 (TxEnvelope::Eip4844(signed), buf)
@@ -541,11 +545,11 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
                 gas_limit: berachain_tx.gas_limit(),
                 gas_price: berachain_tx.gas_price().unwrap_or_default(),
                 kind: berachain_tx.kind(),
-                value: berachain_tx.value().clone(),
+                value: berachain_tx.value(),
                 data: berachain_tx.input().clone(),
                 nonce: berachain_tx.nonce(),
                 chain_id: berachain_tx.chain_id(),
-                access_list: AccessList { 0: vec![] },
+                access_list: AccessList(vec![]),
                 gas_priority_fee: berachain_tx.max_priority_fee_per_gas(),
                 blob_hashes: vec![],
                 max_fee_per_blob_gas: 0,
@@ -558,7 +562,7 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
 impl From<reth_ethereum_primitives::TransactionSigned> for BerachainTxEnvelope {
     fn from(tx_signed: reth_ethereum_primitives::TransactionSigned) -> Self {
         // Convert to EthereumTxEnvelope first, then wrap in BerachainTxEnvelope
-        let ethereum_tx: EthereumTxEnvelope<TxEip4844> = tx_signed.into();
+        let ethereum_tx: EthereumTxEnvelope<TxEip4844> = tx_signed;
         Self::Ethereum(ethereum_tx.into())
     }
 }
@@ -607,6 +611,58 @@ impl From<BerachainTxEnvelope>
                 TxEnvelope::Eip7702(tx) => EthereumTxEnvelope::Eip7702(tx),
             },
             BerachainTxEnvelope::Berachain(_) => todo!(),
+        }
+    }
+}
+
+impl SignableTxRequest<BerachainTxEnvelope> for TransactionRequest {
+    async fn try_build_and_sign(
+        self,
+        signer: impl TxSigner<Signature> + Send,
+    ) -> Result<BerachainTxEnvelope, SignTxRequestError> {
+        let mut tx =
+            self.build_typed_tx().map_err(|_| SignTxRequestError::InvalidTransactionRequest)?;
+        let signature = signer.sign_transaction(&mut tx).await?;
+        let signed = match tx {
+            EthereumTypedTransaction::Legacy(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Legacy(tx.into_signed(signature)))
+            }
+            EthereumTypedTransaction::Eip2930(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Eip2930(tx.into_signed(signature)))
+            }
+            EthereumTypedTransaction::Eip1559(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Eip1559(tx.into_signed(signature)))
+            }
+            EthereumTypedTransaction::Eip4844(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Eip4844(
+                    TxEip4844::from(tx)
+                        .into_signed(signature)
+                        .map(alloy_consensus::TxEip4844Variant::TxEip4844),
+                ))
+            }
+            EthereumTypedTransaction::Eip7702(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Eip7702(tx.into_signed(signature)))
+            }
+        };
+        Ok(signed)
+    }
+}
+
+impl From<BerachainTxEnvelope> for EthereumTxEnvelope<alloy_consensus::TxEip4844Variant> {
+    fn from(berachain_tx: BerachainTxEnvelope) -> Self {
+        match berachain_tx {
+            BerachainTxEnvelope::Ethereum(tx) => match tx {
+                TxEnvelope::Legacy(tx) => EthereumTxEnvelope::Legacy(tx),
+                TxEnvelope::Eip2930(tx) => EthereumTxEnvelope::Eip2930(tx),
+                TxEnvelope::Eip1559(tx) => EthereumTxEnvelope::Eip1559(tx),
+                TxEnvelope::Eip4844(tx) => EthereumTxEnvelope::Eip4844(tx),
+                TxEnvelope::Eip7702(tx) => EthereumTxEnvelope::Eip7702(tx),
+            },
+            BerachainTxEnvelope::Berachain(_) => {
+                // For now, we can't convert PoL transactions to Ethereum format
+                // This should be handled at a higher level
+                panic!("Cannot convert Berachain PoL transaction to Ethereum format")
+            }
         }
     }
 }

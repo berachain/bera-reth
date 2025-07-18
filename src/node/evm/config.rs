@@ -21,6 +21,7 @@ use reth_chainspec::EthChainSpec;
 use reth_evm::{ConfigureEvm, EthEvmFactory, EvmEnv, EvmEnvFor, ExecutionCtxFor};
 use reth_evm_ethereum::{revm_spec, revm_spec_by_timestamp_and_block_number};
 use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
+use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
 use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 
 #[derive(Debug, Clone)]
@@ -217,6 +218,20 @@ impl ConfigureEvm for BerachainEvmConfig {
             ommers: &[],
             withdrawals: attributes.withdrawals.map(Cow::Owned),
             prev_proposer_pubkey: attributes.prev_proposer_pubkey,
+        }
+    }
+}
+
+impl BuildPendingEnv<BerachainHeader> for BerachainNextBlockEnvAttributes {
+    fn build_pending_env(parent: &SealedHeader<BerachainHeader>) -> Self {
+        Self {
+            timestamp: parent.timestamp().saturating_add(2),
+            suggested_fee_recipient: parent.beneficiary(),
+            prev_randao: B256::random(),
+            gas_limit: parent.gas_limit(),
+            parent_beacon_block_root: parent.parent_beacon_block_root().map(|_| B256::ZERO),
+            withdrawals: parent.withdrawals_root().map(|_| Default::default()),
+            prev_proposer_pubkey: parent.header().prev_proposer_pubkey,
         }
     }
 }

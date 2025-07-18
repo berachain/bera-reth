@@ -15,8 +15,7 @@ use crate::{
     rpc::{BerachainAddOns, BerachainEthApiBuilder},
     transaction::BerachainTxEnvelope,
 };
-use alloy_consensus::{SignableTransaction, error::ValueError};
-use alloy_primitives::Signature;
+use alloy_consensus::error::ValueError;
 use alloy_rpc_types::TransactionRequest;
 use reth::{
     api::{BlockTy, FullNodeTypes, NodeTypes},
@@ -28,7 +27,6 @@ use reth_node_api::FullNodeComponents;
 use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder},
-    rpc::BasicEngineApiBuilder,
 };
 use reth_node_ethereum::{EthereumNode, node::EthereumNetworkBuilder};
 use reth_payload_primitives::{PayloadAttributesBuilder, PayloadTypes};
@@ -116,7 +114,7 @@ where
     fn components_builder(&self) -> Self::ComponentsBuilder {
         ComponentsBuilder::default()
             .node_types()
-            .pool(BerachainPoolBuilder::default())
+            .pool(BerachainPoolBuilder)
             .executor(BerachainExecutorBuilder)
             .payload(BasicPayloadServiceBuilder::new(BerachainPayloadServiceBuilder::default()))
             .network(EthereumNetworkBuilder::default())

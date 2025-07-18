@@ -35,8 +35,7 @@ pub fn create_pol_transaction(
     let nonce = nonce_u256.try_into().map_err(|_| {
         BlockExecutionError::Internal(InternalBlockExecutionError::Other(
             format!(
-                "block number overflow for u64 nonce: block_number={}, nonce_u256={}",
-                block_number, nonce_u256
+                "block number overflow for u64 nonce: block_number={block_number}, nonce_u256={nonce_u256}"
             )
             .into(),
         ))

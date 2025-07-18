@@ -10,7 +10,6 @@ use crate::{
     primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives},
     transaction::BerachainTxEnvelope,
 };
-use alloy_rpc_types::engine::ExecutionPayloadSidecar;
 use reth_engine_primitives::{EngineValidator, PayloadValidator};
 use reth_ethereum_payload_builder::EthereumExecutionPayloadValidator;
 use reth_node_api::{AddOnsContext, FullNodeComponents, NodeTypes, PayloadTypes};
@@ -124,8 +123,7 @@ impl BerachainEngineValidator {
                 if self.is_pol_transaction(tx) {
                     return Err(NewPayloadError::Other(
                         format!(
-                            "PoL transaction found at index {} but only allowed at index 0",
-                            index
+                            "PoL transaction found at index {index} but only allowed at index 0"
                         )
                         .into(),
                     ));
