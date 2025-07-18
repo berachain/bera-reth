@@ -267,17 +267,16 @@ where
             return Ok(Some(0));
         }
 
-        // Validate that non-POL transactions follow the Prague1 rules
-        if is_prague1_active {
-            // In Prague1 blocks, the first transaction MUST be a POL transaction
-            if self.transaction_index == 0 {
-                tracing::error!(
-                    target: "executor",
-                    "First transaction in Prague1 block must be a POL transaction"
-                );
-                return Err(BerachainExecutionError::MissingPolTransactionAtIndex0.into());
-            }
-        }
+        // TODO: This check is disabled as technically, the transaction index needs to be checked
+        // during block assembly, since that's when the PoL Tx is inserted.
+        // if is_prague1_active && self.transaction_index == 0 {
+        //     // In Prague1 blocks, the first transaction MUST be a POL transaction
+        //     tracing::error!(
+        //         target: "executor",
+        //         "First transaction in Prague1 block must be a POL transaction"
+        //     );
+        //     return Err(BerachainExecutionError::MissingPolTransactionAtIndex0.into());
+        // }
 
         // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
         // must be no greater than the block's gasLimit.

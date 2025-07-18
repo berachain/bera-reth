@@ -25,14 +25,21 @@ impl Compact for BerachainTxType {
     // For backwards compatibility purposes only 2 bits of the type are encoded in the identifier
     // parameter. In the case of a [`COMPACT_EXTENDED_IDENTIFIER_FLAG`], the full transaction type
     // is read from the buffer as a single byte.
-    fn from_compact(mut buf: &[u8], _len: usize) -> (Self, &[u8]) {
-        let tx_type_byte = buf.get_u8();
-        let tx_type = match tx_type_byte {
-            POL_TX_TYPE => Self::Berachain,
-            0..=4 => Self::Ethereum(
-                alloy_consensus::TxType::try_from(tx_type_byte).unwrap_or(TxType::Legacy),
-            ),
-            _ => Self::Ethereum(TxType::Legacy),
+    fn from_compact(mut buf: &[u8], identifier: usize) -> (Self, &[u8]) {
+        use reth_codecs::txtype::*;
+
+        let tx_type = match identifier {
+            COMPACT_IDENTIFIER_LEGACY => Self::Ethereum(TxType::Legacy),
+            COMPACT_IDENTIFIER_EIP2930 => Self::Ethereum(TxType::Eip2930),
+            COMPACT_IDENTIFIER_EIP1559 => Self::Ethereum(TxType::Eip1559),
+            COMPACT_EXTENDED_IDENTIFIER_FLAG => {
+                let tx_type_byte = buf.get_u8();
+                match tx_type_byte {
+                    POL_TX_TYPE => Self::Berachain,
+                    _ => panic!("Invalid identifier"), // TODO: sus this
+                }
+            }
+            _ => panic!("Invalid identifier"), // TODO: sus this
         };
         (tx_type, buf)
     }
