@@ -419,7 +419,6 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                         signed_tx.signature().to_compact(buf);
                         signed_tx.tx().to_compact(buf)
                     }
-                    _ => 0,
                 }
             }
             Self::Berachain(tx) => {
