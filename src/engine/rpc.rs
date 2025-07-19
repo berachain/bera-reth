@@ -127,7 +127,19 @@ pub trait BerachainEngineApi<Engine: EngineTypes> {
         versioned_hashes: Vec<B256>,
         parent_beacon_block_root: B256,
         execution_requests: RequestsOrHash,
-        parent_proposer_pub_key: Option<BlsPublicKey>,
+    ) -> RpcResult<PayloadStatus>;
+
+    /// Post Prague/Electra1 payload handler
+    ///
+    /// See also <https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#engine_newpayloadv4>
+    #[method(name = "newPayloadV4P11")]
+    async fn new_payload_v4_p11(
+        &self,
+        payload: ExecutionPayloadV3,
+        versioned_hashes: Vec<B256>,
+        parent_beacon_block_root: B256,
+        execution_requests: RequestsOrHash,
+        parent_proposer_pub_key: BlsPublicKey,
     ) -> RpcResult<PayloadStatus>;
 
     /// See also <https://github.com/ethereum/execution-apis/blob/6709c2a795b707202e93c4f2867fa0bf2640a84f/src/engine/paris.md#engine_forkchoiceupdatedv1>
@@ -165,6 +177,18 @@ pub trait BerachainEngineApi<Engine: EngineTypes> {
     /// See also <https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#engine_forkchoiceupdatedv3>
     #[method(name = "forkchoiceUpdatedV3")]
     async fn fork_choice_updated_v3(
+        &self,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<Engine::PayloadAttributes>,
+    ) -> RpcResult<ForkchoiceUpdated>;
+
+    /// Post Prague/Electra1 forkchoice update handler
+    ///
+    /// Enhanced forkchoice update for Electra1 with additional validation requirements.
+    ///
+    /// See also <https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#engine_forkchoiceupdatedv3>
+    #[method(name = "forkchoiceUpdatedV3P11")]
+    async fn fork_choice_updated_v3_p11(
         &self,
         fork_choice_state: ForkchoiceState,
         payload_attributes: Option<Engine::PayloadAttributes>,
@@ -218,6 +242,21 @@ pub trait BerachainEngineApi<Engine: EngineTypes> {
     /// > Provider software MAY stop the corresponding build process after serving this call.
     #[method(name = "getPayloadV4")]
     async fn get_payload_v4(
+        &self,
+        payload_id: PayloadId,
+    ) -> RpcResult<Engine::ExecutionPayloadEnvelopeV4>;
+
+    /// Post Prague/Electra1 payload handler.
+    ///
+    /// Enhanced payload retrieval for Electra1 with additional validation requirements.
+    ///
+    /// See also <https://github.com/ethereum/execution-apis/blob/main/src/engine/prague.md#engine_getpayloadv4>
+    ///
+    /// Returns the most recent version of the payload that is available in the corresponding
+    /// payload build process at the time of receiving this call. Note:
+    /// > Provider software MAY stop the corresponding build process after serving this call.
+    #[method(name = "getPayloadV4P11")]
+    async fn get_payload_v4_p11(
         &self,
         payload_id: PayloadId,
     ) -> RpcResult<Engine::ExecutionPayloadEnvelopeV4>;
@@ -350,16 +389,61 @@ where
         versioned_hashes: Vec<B256>,
         parent_beacon_block_root: B256,
         execution_requests: RequestsOrHash,
-        parent_proposer_pub_key: Option<BlsPublicKey>,
     ) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV4");
+
+        // Accept requests as a hash only if it is explicitly allowed
+        if execution_requests.is_hash() && !self.inner.accept_execution_requests_hash() {
+            return Err(EngineApiError::UnexpectedRequestsHash.into());
+        }
+
+        if self.chain_spec.is_prague1_active_at_timestamp(payload.timestamp()) {
+            // TODO: Return the appropriate error
+        }
+
+        // Validate Electra1 requirements - parent_proposer_pub_key is None
+        validate_proposer_pubkey_prague1(&*self.chain_spec, payload.timestamp(), None).map_err(
+            |error| {
+                EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
+                    INVALID_PAYLOAD_ATTRIBUTES,
+                    error.to_string(),
+                    None::<()>,
+                ))
+            },
+        )?;
+
+        let berachain_payload = BerachainExecutionData::new(
+            payload.into(),
+            BerachainExecutionPayloadSidecar::v4(
+                CancunPayloadFields { versioned_hashes, parent_beacon_block_root },
+                execution_requests,
+                None,
+            ),
+        );
+
+        Ok(self.inner.new_payload_v4_metered(berachain_payload).await?)
+    }
+
+    async fn new_payload_v4_p11(
+        &self,
+        payload: ExecutionPayloadV3,
+        versioned_hashes: Vec<B256>,
+        parent_beacon_block_root: B256,
+        execution_requests: RequestsOrHash,
+        parent_proposer_pub_key: BlsPublicKey,
+    ) -> RpcResult<PayloadStatus> {
+        trace!(target: "rpc::engine", "Serving engine_newPayloadV4P11");
         trace!(target: "rpc::engine", "received parent_proposer_pub_key {:?}", parent_proposer_pub_key);
 
-        // Validate parent_proposer_pub_key presence based on Prague1 activation
+        if !self.chain_spec.is_prague1_active_at_timestamp(payload.timestamp()) {
+            // TODO: Return the appropriate error
+        }
+
+        // Validate Electra1 requirements - parent_proposer_pub_key is required for P11
         validate_proposer_pubkey_prague1(
             &*self.chain_spec,
             payload.timestamp(),
-            parent_proposer_pub_key,
+            Some(parent_proposer_pub_key),
         )
         .map_err(|error| {
             EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
@@ -379,7 +463,7 @@ where
             BerachainExecutionPayloadSidecar::v4(
                 CancunPayloadFields { versioned_hashes, parent_beacon_block_root },
                 execution_requests,
-                parent_proposer_pub_key,
+                Some(parent_proposer_pub_key),
             ),
         );
 
@@ -413,6 +497,15 @@ where
         Ok(self.inner.fork_choice_updated_v3_metered(fork_choice_state, payload_attributes).await?)
     }
 
+    async fn fork_choice_updated_v3_p11(
+        &self,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<EngineT::PayloadAttributes>,
+    ) -> RpcResult<ForkchoiceUpdated> {
+        trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV3P11");
+        Ok(self.inner.fork_choice_updated_v3_metered(fork_choice_state, payload_attributes).await?)
+    }
+
     async fn get_payload_v1(
         &self,
         payload_id: PayloadId,
@@ -442,6 +535,14 @@ where
         payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV4> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadV4");
+        Ok(self.inner.get_payload_v4_metered(payload_id).await?)
+    }
+
+    async fn get_payload_v4_p11(
+        &self,
+        payload_id: PayloadId,
+    ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV4> {
+        trace!(target: "rpc::engine", "Serving engine_getPayloadV4P11");
         Ok(self.inner.get_payload_v4_metered(payload_id).await?)
     }
 
