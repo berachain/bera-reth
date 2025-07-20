@@ -181,7 +181,7 @@ impl From<Genesis> for BerachainChainSpec {
     fn from(genesis: Genesis) -> Self {
         let berachain_genesis_config =
             BerachainGenesisConfig::try_from(&genesis.config.extra_fields).unwrap_or_else(|e| {
-                panic!("Failed to parse berachain genesis config: {}. Please ensure the genesis file contains a valid 'berachain' configuration section with Prague1 settings including polDistributorAddress.", e);
+                panic!("Failed to parse berachain genesis config: {e}. Please ensure the genesis file contains a valid 'berachain' configuration section with Prague1 settings including polDistributorAddress.");
             });
 
         // Berachain networks must start with Cancun at genesis
@@ -235,8 +235,7 @@ impl From<Genesis> for BerachainChainSpec {
         match (genesis.config.prague_time, berachain_genesis_config.prague1.time) {
             (Some(prague_time), prague1_time) if prague1_time < prague_time => {
                 panic!(
-                    "Prague1 hardfork must activate at or after Prague hardfork. Prague time: {}, Prague1 time: {}. Check that Prague1 time is not malformed (should be a valid Unix timestamp).",
-                    prague_time, prague1_time
+                    "Prague1 hardfork must activate at or after Prague hardfork. Prague time: {prague_time}, Prague1 time: {prague1_time}. Check that Prague1 time is not malformed (should be a valid Unix timestamp).",
                 );
             }
             _ => {}
