@@ -181,7 +181,8 @@ impl From<Genesis> for BerachainChainSpec {
     fn from(genesis: Genesis) -> Self {
         let berachain_genesis_config =
             BerachainGenesisConfig::try_from(&genesis.config.extra_fields).unwrap_or_else(|e| {
-                panic!("Failed to parse berachain genesis config: {e}. Please ensure the genesis file contains a valid 'berachain' configuration section with Prague1 settings including polDistributorAddress.");
+                tracing::warn!("Failed to parse berachain genesis config, using defaults: {e}. Please ensure the genesis file contains a valid 'berachain' configuration section with Prague1 settings including polDistributorAddress.");
+                BerachainGenesisConfig::default()
             });
 
         // Berachain networks must start with Cancun at genesis
