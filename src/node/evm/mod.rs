@@ -1,11 +1,16 @@
 //! Berachain EVM executor using standard Ethereum execution with Berachain chain spec
 
-use alloy_primitives::Bytes;
+mod assembler;
+mod block_context;
+pub mod config;
+pub mod error;
+pub mod executor;
+pub mod receipt;
 
-use crate::{chainspec::BerachainChainSpec, node::BerachainNode};
+use crate::node::{BerachainNode, evm::config::BerachainEvmConfig};
+use alloy_primitives::Bytes;
 use reth_evm::EthEvmFactory;
 use reth_node_builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder};
-use reth_node_ethereum::EthEvmConfig;
 
 /// Default extra data for Berachain blocks
 fn default_extra_data() -> String {
@@ -26,13 +31,12 @@ where
     Node: FullNodeTypes<Types = BerachainNode>,
 {
     /// The EVM configuration type that will be built
-    type EVM = EthEvmConfig<BerachainChainSpec, EthEvmFactory>;
+    type EVM = BerachainEvmConfig;
 
     /// Builds standard Ethereum EVM config with Berachain chain spec
     async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
-        // Always use Berachain-specific extra_data
         let evm_config =
-            EthEvmConfig::new_with_evm_factory(ctx.chain_spec().clone(), EthEvmFactory::default())
+            BerachainEvmConfig::new_with_evm_factory(ctx.chain_spec(), EthEvmFactory::default())
                 .with_extra_data(default_extra_data_bytes());
         Ok(evm_config)
     }

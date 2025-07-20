@@ -3,6 +3,7 @@
 use crate::{
     genesis::BerachainGenesisConfig,
     hardforks::{BerachainHardfork, BerachainHardforks},
+    primitives::{BerachainHeader, header::BlsPublicKey},
 };
 use alloy_consensus::BlockHeader;
 use alloy_eips::{
@@ -10,13 +11,14 @@ use alloy_eips::{
     eip2124::{ForkFilter, ForkId, Head},
 };
 use alloy_genesis::Genesis;
+use alloy_primitives::Sealable;
 use derive_more::{Constructor, Into};
 use reth::{
     chainspec::{
         BaseFeeParams, BaseFeeParamsKind, Chain, ChainHardforks, EthereumHardfork,
         EthereumHardforks, ForkCondition, Hardfork,
     },
-    primitives::{Header, SealedHeader},
+    primitives::SealedHeader,
     revm::primitives::{Address, B256, U256, b256},
 };
 use reth_chainspec::{ChainSpec, DepositContract, EthChainSpec, Hardforks, make_genesis_header};
@@ -36,9 +38,19 @@ const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
     inner: ChainSpec,
+    genesis_header: BerachainHeader,
+    /// PoL contract address loaded from configuration
+    pol_contract_address: Address,
 }
+
+impl BerachainChainSpec {
+    pub fn pol_contract(&self) -> Address {
+        self.pol_contract_address
+    }
+}
+
 impl EthChainSpec for BerachainChainSpec {
-    type Header = Header;
+    type Header = BerachainHeader;
 
     fn chain(&self) -> Chain {
         self.inner.chain()
@@ -63,7 +75,7 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn genesis_hash(&self) -> B256 {
-        self.inner.genesis_hash()
+        self.genesis_header.hash_slow()
     }
 
     fn prune_delete_limit(&self) -> usize {
@@ -75,7 +87,7 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn genesis_header(&self) -> &Self::Header {
-        self.inner.genesis_header()
+        &self.genesis_header
     }
 
     fn genesis(&self) -> &alloy_genesis::Genesis {
@@ -90,11 +102,7 @@ impl EthChainSpec for BerachainChainSpec {
         self.inner.final_paris_total_difficulty()
     }
 
-    fn next_block_base_fee<H>(&self, parent: &H, _: u64) -> Option<u64>
-    where
-        Self: Sized,
-        H: BlockHeader,
-    {
+    fn next_block_base_fee(&self, parent: &Self::Header, _: u64) -> Option<u64> {
         // Note that we use this parent block timestamp to determine whether Prague 1 is active.
         // This means that we technically start the base_fee changes the block after the fork
         // block. This is a conscious decision to minimize fork diffs across execution clients.
@@ -343,7 +351,7 @@ impl From<Genesis> for BerachainChainSpec {
         let inner = ChainSpec {
             chain: genesis.config.chain_id.into(),
             genesis_header: SealedHeader::new_unhashed(make_genesis_header(&genesis, &hardforks)),
-            genesis,
+            genesis: genesis.clone(),
             hardforks,
             paris_block_and_final_difficulty,
             deposit_contract,
@@ -351,7 +359,23 @@ impl From<Genesis> for BerachainChainSpec {
             base_fee_params,
             ..Default::default()
         };
-        Self { inner }
+
+        let mut genesis_header = BerachainHeader::from(inner.genesis_header());
+
+        // Set prev_proposer_pubkey only if Prague1 is active at genesis timestamp
+        let chain_spec_temp = Self {
+            inner: inner.clone(),
+            genesis_header: genesis_header.clone(),
+            pol_contract_address: berachain_genesis_config.prague1.pol_distributor_address,
+        };
+        if chain_spec_temp.is_prague1_active_at_timestamp(genesis.timestamp) {
+            genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
+        }
+        Self {
+            inner,
+            genesis_header,
+            pol_contract_address: berachain_genesis_config.prague1.pol_distributor_address,
+        }
     }
 }
 
@@ -406,7 +430,8 @@ mod tests {
                 "prague1": {
                     "time": 0,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -438,7 +463,8 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -475,7 +501,8 @@ mod tests {
                 "prague1": {
                     "time": 0,
                     "baseFeeChangeDenominator": 100,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -517,7 +544,8 @@ mod tests {
                 "prague1": {
                     "time": 1500,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -544,7 +572,8 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -554,16 +583,22 @@ mod tests {
         let chain_spec = BerachainChainSpec::from(genesis);
 
         // Create a parent block before Prague1
-        let parent_header =
-            Header { timestamp: 999, base_fee_per_gas: Some(100_000_000), ..Default::default() };
+        let parent_header = BerachainHeader {
+            timestamp: 999,
+            base_fee_per_gas: Some(100_000_000),
+            ..Default::default()
+        };
 
         // Before Prague1, base fee can go below 1 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
         assert!(next_base_fee.unwrap() < PRAGUE1_MIN_BASE_FEE_WEI);
 
         // Create a parent block at Prague1 activation
-        let parent_header =
-            Header { timestamp: 1000, base_fee_per_gas: Some(100_000_000), ..Default::default() };
+        let parent_header = BerachainHeader {
+            timestamp: 1000,
+            base_fee_per_gas: Some(100_000_000),
+            ..Default::default()
+        };
 
         // After Prague1, base fee should be at least 1 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
@@ -629,7 +664,8 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -649,7 +685,8 @@ mod tests {
                 "prague1": {
                     "time": 2000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -670,7 +707,8 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
