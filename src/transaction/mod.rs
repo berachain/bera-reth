@@ -26,7 +26,7 @@ use jsonrpsee_core::Serialize;
 use reth::{providers::errors::db::DatabaseError, revm::context::TxEnv};
 use reth_codecs::Compact;
 use reth_db::table::{Compress, Decompress};
-use reth_evm::{Evm, FromRecoveredTx, FromTxWithEncoded};
+use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
 };
@@ -272,10 +272,9 @@ impl BerachainTxEnvelope {
     /// Returns the [`TxEip4844`] variant if the transaction is an EIP-4844 transaction.
     pub fn as_eip4844(&self) -> Option<Signed<TxEip4844>> {
         match self {
-            Self::Ethereum(tx) => match tx {
-                TxEnvelope::Eip4844(tx) => Some(tx.clone().map(|variant| variant.into())),
-                _ => None,
-            },
+            Self::Ethereum(TxEnvelope::Eip4844(tx)) => {
+                Some(tx.clone().map(|variant| variant.into()))
+            }
             _ => None,
         }
     }
@@ -599,7 +598,7 @@ impl From<BerachainTxEnvelope>
                 TxEnvelope::Legacy(tx) => EthereumTxEnvelope::Legacy(tx),
                 TxEnvelope::Eip2930(tx) => EthereumTxEnvelope::Eip2930(tx),
                 TxEnvelope::Eip1559(tx) => EthereumTxEnvelope::Eip1559(tx),
-                TxEnvelope::Eip4844(tx) => {
+                TxEnvelope::Eip4844(_tx) => {
                     // For consensus transactions without sidecars, we can't convert to pooled
                     // format This should only be called in contexts where we
                     // have the sidecar available

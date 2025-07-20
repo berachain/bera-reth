@@ -39,7 +39,7 @@ fn main() {
             cli_components_builder,
             async move |builder, _| {
                 info!(target: "reth::cli", "Launching Berachain node");
-                let NodeHandle { node, node_exit_future } =
+                let NodeHandle { node: _, node_exit_future } =
                     builder.node(BerachainNode::default()).launch_with_debug_capabilities().await?;
 
                 node_exit_future.await

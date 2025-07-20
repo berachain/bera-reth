@@ -59,18 +59,18 @@ impl fmt::Display for BerachainTxType {
 }
 
 impl From<BerachainTxEnvelope> for BerachainTxType {
-    fn from(value: BerachainTxEnvelope) -> Self {
+    fn from(_value: BerachainTxEnvelope) -> Self {
         todo!()
     }
 }
 
 impl From<BerachainTxEnvelope> for alloy_rpc_types_eth::transaction::TransactionRequest {
-    fn from(value: BerachainTxEnvelope) -> Self {
+    fn from(_value: BerachainTxEnvelope) -> Self {
         todo!()
     }
 }
 impl From<BerachainTxType> for alloy_rpc_types_eth::transaction::TransactionRequest {
-    fn from(value: BerachainTxType) -> Self {
+    fn from(_value: BerachainTxType) -> Self {
         todo!()
     }
 }
@@ -80,7 +80,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_chain_id(&mut self, chain_id: ChainId) {
+    fn set_chain_id(&mut self, _chain_id: ChainId) {
         todo!()
     }
 
@@ -88,7 +88,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_nonce(&mut self, nonce: u64) {
+    fn set_nonce(&mut self, _nonce: u64) {
         todo!()
     }
 
@@ -100,7 +100,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_input<T: Into<Bytes>>(&mut self, input: T) {
+    fn set_input<T: Into<Bytes>>(&mut self, _input: T) {
         todo!()
     }
 
@@ -108,7 +108,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_from(&mut self, from: Address) {
+    fn set_from(&mut self, _from: Address) {
         todo!()
     }
 
@@ -120,7 +120,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_kind(&mut self, kind: TxKind) {
+    fn set_kind(&mut self, _kind: TxKind) {
         todo!()
     }
 
@@ -128,7 +128,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_value(&mut self, value: U256) {
+    fn set_value(&mut self, _value: U256) {
         todo!()
     }
 
@@ -136,7 +136,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_gas_price(&mut self, gas_price: u128) {
+    fn set_gas_price(&mut self, _gas_price: u128) {
         todo!()
     }
 
@@ -144,7 +144,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_max_fee_per_gas(&mut self, max_fee_per_gas: u128) {
+    fn set_max_fee_per_gas(&mut self, _max_fee_per_gas: u128) {
         todo!()
     }
 
@@ -152,7 +152,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_max_priority_fee_per_gas(&mut self, max_priority_fee_per_gas: u128) {
+    fn set_max_priority_fee_per_gas(&mut self, _max_priority_fee_per_gas: u128) {
         todo!()
     }
 
@@ -160,7 +160,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_gas_limit(&mut self, gas_limit: u64) {
+    fn set_gas_limit(&mut self, _gas_limit: u64) {
         todo!()
     }
 
@@ -168,13 +168,13 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         todo!()
     }
 
-    fn set_access_list(&mut self, access_list: AccessList) {
+    fn set_access_list(&mut self, _access_list: AccessList) {
         todo!()
     }
 
     fn complete_type(
         &self,
-        ty: <BerachainNetwork as Network>::TxType,
+        _ty: <BerachainNetwork as Network>::TxType,
     ) -> Result<(), Vec<&'static str>> {
         todo!()
     }
@@ -207,7 +207,7 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
 
     async fn build<W: NetworkWallet<BerachainNetwork>>(
         self,
-        wallet: &W,
+        _wallet: &W,
     ) -> Result<<BerachainNetwork as Network>::TxEnvelope, TransactionBuilderError<BerachainNetwork>>
     {
         todo!()

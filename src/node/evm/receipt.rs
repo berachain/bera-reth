@@ -5,8 +5,8 @@ use reth_evm::{
     eth::receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
 };
 
-/// A builder that operates on Reth primitive types, specifically [`TransactionSigned`] and
-/// [`Receipt`].
+/// A builder that operates on Reth primitive types, specifically `TransactionSigned` and
+/// `Receipt`.
 #[derive(Debug, Clone, Copy, Default)]
 #[non_exhaustive]
 pub struct BerachainReceiptBuilder;

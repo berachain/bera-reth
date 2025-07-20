@@ -496,7 +496,7 @@ impl From<Header> for BerachainHeader {
 /// Internal header struct for Compact derive
 ///
 /// This mirrors the pattern used in reth for alloy consensus Header at:
-/// https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs
+/// <https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs>
 ///
 /// The pattern is used because some field types (like B64) cannot derive Compact directly,
 /// so we create an internal struct with compatible types (u64 for nonce) and bridge between them.
@@ -530,7 +530,7 @@ impl Compact for BerachainHeader {
     /// Converts BerachainHeader to compact format using internal CompactBerachainHeader
     ///
     /// This follows the same pattern as reth's implementation for alloy consensus Header.
-    /// See: https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs#L76-L107
+    /// See: <https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs#L76-L107>
     fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: BufMut + AsMut<[u8]>,
@@ -565,7 +565,7 @@ impl Compact for BerachainHeader {
     /// Converts from compact format to BerachainHeader using internal CompactBerachainHeader
     ///
     /// This follows the same pattern as reth's implementation for alloy consensus Header.
-    /// See: https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs#L109-L136
+    /// See: <https://github.com/paradigmxyz/reth/blob/main/crates/storage/codecs/src/alloy/header.rs#L109-L136>
     ///
     /// TODO: Implement backwards compatibility to decompress headers that were compressed as the
     /// original alloy consensus Header (without prev_proposer_pubkey field). Need proper format

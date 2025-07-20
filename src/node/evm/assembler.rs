@@ -30,7 +30,7 @@ pub struct BerachainBlockAssembler {
 }
 
 impl BerachainBlockAssembler {
-    /// Creates a new [`EthBlockAssembler`].
+    /// Creates a new [`BerachainBlockAssembler`].
     pub fn new(chain_spec: Arc<BerachainChainSpec>) -> Self {
         Self { chain_spec, extra_data: Default::default() }
     }

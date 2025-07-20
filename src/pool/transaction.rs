@@ -16,7 +16,7 @@ use reth_primitives_traits::{InMemorySize, SignedTransaction};
 use reth_transaction_pool::{EthBlobTransactionSidecar, EthPoolTransaction, PoolTransaction};
 use std::{convert::Infallible, sync::Arc};
 
-/// The default [`PoolTransaction`] for the [Pool](crate::Pool) for Ethereum.
+/// The default `PoolTransaction` for the Pool for Ethereum.
 ///
 /// This type wraps a consensus transaction with additional cached data that's
 /// frequently accessed by the pool for transaction ordering and validation:
@@ -121,12 +121,12 @@ impl Transaction for BerachainPooledTransaction {
     }
 }
 
-/// A type alias for [`PooledTransaction`] that's also generic over blob sidecar.
+/// A type alias for `PooledTransaction` that's also generic over blob sidecar.
 pub type BerachainPooledTransactionVariant =
     alloy_consensus::EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>;
 
 impl From<Recovered<BerachainPooledTransactionVariant>> for BerachainPooledTransaction {
-    fn from(value: Recovered<BerachainPooledTransactionVariant>) -> Self {
+    fn from(_value: Recovered<BerachainPooledTransactionVariant>) -> Self {
         todo!()
     }
 }
