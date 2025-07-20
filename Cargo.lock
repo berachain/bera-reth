@@ -227,6 +227,7 @@ dependencies = [
 [[package]]
 name = "alloy-evm"
 version = "0.14.0"
+source = "git+https://github.com/berachain/evm?branch=bera-reth-version-v14#e4b18aab6e9e8057e27c21d703b415d7e54d8914"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -339,6 +340,7 @@ dependencies = [
 [[package]]
 name = "alloy-op-evm"
 version = "0.14.0"
+source = "git+https://github.com/berachain/evm?branch=bera-reth-version-v14#e4b18aab6e9e8057e27c21d703b415d7e54d8914"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
