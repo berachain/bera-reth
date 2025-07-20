@@ -11,7 +11,7 @@ use alloy_eips::{
     eip2124::{ForkFilter, ForkId, Head},
 };
 use alloy_genesis::Genesis;
-use alloy_primitives::{Sealable, address};
+use alloy_primitives::Sealable;
 use derive_more::{Constructor, Into};
 use reth::{
     chainspec::{
@@ -39,12 +39,13 @@ pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
     inner: ChainSpec,
     genesis_header: BerachainHeader,
+    /// PoL contract address loaded from configuration
+    pol_contract_address: Address,
 }
 
 impl BerachainChainSpec {
     pub fn pol_contract(&self) -> Address {
-        // TODO: Load from genesis config
-        address!("4200000000000000000000000000000000000042")
+        self.pol_contract_address
     }
 }
 
@@ -362,11 +363,19 @@ impl From<Genesis> for BerachainChainSpec {
         let mut genesis_header = BerachainHeader::from(inner.genesis_header());
 
         // Set prev_proposer_pubkey only if Prague1 is active at genesis timestamp
-        let chain_spec_temp = Self { inner: inner.clone(), genesis_header: genesis_header.clone() };
+        let chain_spec_temp = Self {
+            inner: inner.clone(),
+            genesis_header: genesis_header.clone(),
+            pol_contract_address: berachain_genesis_config.prague1.pol_distributor_address,
+        };
         if chain_spec_temp.is_prague1_active_at_timestamp(genesis.timestamp) {
             genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
         }
-        Self { inner, genesis_header }
+        Self {
+            inner,
+            genesis_header,
+            pol_contract_address: berachain_genesis_config.prague1.pol_distributor_address,
+        }
     }
 }
 
@@ -421,7 +430,8 @@ mod tests {
                 "prague1": {
                     "time": 0,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -453,7 +463,8 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -490,7 +501,8 @@ mod tests {
                 "prague1": {
                     "time": 0,
                     "baseFeeChangeDenominator": 100,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -532,7 +544,8 @@ mod tests {
                 "prague1": {
                     "time": 1500,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -559,7 +572,8 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -650,7 +664,8 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -670,7 +685,8 @@ mod tests {
                 "prague1": {
                     "time": 2000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });
@@ -691,7 +707,8 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });

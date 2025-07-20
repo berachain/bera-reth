@@ -36,10 +36,10 @@ impl Compact for BerachainTxType {
                 let tx_type_byte = buf.get_u8();
                 match tx_type_byte {
                     POL_TX_TYPE => Self::Berachain,
-                    _ => panic!("Invalid identifier"), // TODO: sus this
+                    _ => panic!("Unsupported BerachainTxType extended identifier: {tx_type_byte}"),
                 }
             }
-            _ => panic!("Invalid identifier"), // TODO: sus this
+            _ => panic!("Unknown identifier for BerachainTxType: {identifier}"),
         };
         (tx_type, buf)
     }

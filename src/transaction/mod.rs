@@ -376,7 +376,6 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
     where
         B: BufMut + AsMut<[u8]>,
     {
-        // TODO: @rez sus validity
         match self {
             Self::Ethereum(tx) => {
                 // Manually implement the compact encoding following the reth pattern
@@ -444,7 +443,7 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                 let (pol_tx, remaining_buf) = PoLTx::from_compact(buf, len);
                 return (Self::Berachain(Sealed::new(pol_tx)), remaining_buf);
             }
-            _ => panic!("Unknown transaction type: {tx_type_byte}"),
+            _ => panic!("Unsupported BerachainTxEnvelope transaction type: {tx_type_byte}"),
         };
 
         let (signature, mut buf) = alloy_primitives::Signature::from_compact(buf, len);
@@ -479,7 +478,9 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
                         let (base_tx, buf) = alloy_consensus::TxEip4844::from_compact(buf, len);
                         (alloy_consensus::TxEip4844Variant::TxEip4844(base_tx), buf)
                     }
-                    _ => panic!("Invalid TxEip4844Variant flag: {variant_flag}"),
+                    _ => panic!(
+                        "Unsupported TxEip4844Variant flag in BerachainTxEnvelope: {variant_flag}"
+                    ),
                 };
                 let signed = Signed::new_unhashed(tx_variant, signature);
                 (TxEnvelope::Eip4844(signed), buf)
@@ -498,7 +499,6 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
 impl FromRecoveredTx<PoLTx> for TxEnv {
     fn from_recovered_tx(tx: &PoLTx, caller: Address) -> Self {
         Self {
-            // TODO: Maybe clean up?
             tx_type: tx.ty(),
             caller,
             gas_limit: tx.gas_limit(),
@@ -536,7 +536,6 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
             BerachainTxEnvelope::Ethereum(ethereum_tx) => {
                 TxEnv::from_encoded_tx(ethereum_tx, sender, encoded)
             }
-            // TODO: Clean this up, not in critical path
             BerachainTxEnvelope::Berachain(berachain_tx) => TxEnv {
                 tx_type: u8::from(BerachainTxType::Berachain),
                 caller: SYSTEM_ADDRESS,

@@ -92,7 +92,6 @@ normal = ["test-fuzz"]
 
 [patch.crates-io]
 alloy-evm = { git = "https://github.com/berachain/evm", rev = "e4b18aab6e9e8057e27c21d703b415d7e54d8914" }
-alloy-op-evm = { git = "https://github.com/berachain/evm", rev = "e4b18aab6e9e8057e27c21d703b415d7e54d8914" }
 
 # [patch."https://github.com/paradigmxyz/reth"]
 # reth = { path = "../reth/bin/reth" }

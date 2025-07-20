@@ -1,7 +1,10 @@
 //! Berachain genesis configuration parsing and validation
 
 use jsonrpsee_core::__reexports::serde_json;
-use reth::rpc::types::serde_helpers::OtherFields;
+use reth::{
+    revm::primitives::{Address, address},
+    rpc::types::serde_helpers::OtherFields,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -23,6 +26,10 @@ pub enum BerachainConfigError {
     /// Fork activation time is invalid (e.g., in the past for future forks)
     #[error("Invalid fork activation time: {0}")]
     InvalidActivationTime(u64),
+
+    /// PoL distributor address is missing from Prague1 configuration
+    #[error("PoL distributor address is required in Prague1 configuration but was not provided")]
+    MissingPoLDistributorAddress,
 }
 
 /// Configuration for a Berachain hardfork activation
@@ -35,6 +42,8 @@ pub struct BerachainForkConfig {
     pub base_fee_change_denominator: u128,
     /// Minimum base fee in wei enforced after activation
     pub minimum_base_fee_wei: u64,
+    /// PoL distributor contract address
+    pub pol_distributor_address: Address,
 }
 
 /// Complete Berachain genesis configuration from JSON "berachain" field
@@ -45,6 +54,11 @@ pub struct BerachainGenesisConfig {
     pub prague1: BerachainForkConfig,
 }
 
+/// Default PoL contract address
+fn default_pol_contract_address() -> Address {
+    address!("4200000000000000000000000000000000000042")
+}
+
 impl Default for BerachainGenesisConfig {
     /// Default config with Prague1 activated immediately at genesis
     fn default() -> Self {
@@ -53,6 +67,7 @@ impl Default for BerachainGenesisConfig {
                 time: 0,                             // Activate immediately at genesis
                 base_fee_change_denominator: 48,     // Berachain standard value
                 minimum_base_fee_wei: 1_000_000_000, // 1 gwei
+                pol_distributor_address: default_pol_contract_address(),
             },
         }
     }
@@ -64,11 +79,17 @@ impl BerachainForkConfig {
         time: u64,
         base_fee_change_denominator: u128,
         minimum_base_fee_wei: u64,
+        pol_distributor_address: Address,
     ) -> Result<Self, BerachainConfigError> {
         if base_fee_change_denominator == 0 {
             return Err(BerachainConfigError::InvalidDenominator);
         }
-        Ok(Self { time, base_fee_change_denominator, minimum_base_fee_wei })
+        Ok(Self {
+            time,
+            base_fee_change_denominator,
+            minimum_base_fee_wei,
+            pol_distributor_address,
+        })
     }
 }
 
@@ -77,16 +98,33 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
 
     /// Parse BerachainGenesisConfig from genesis "berachain" field
     fn try_from(others: &OtherFields) -> Result<Self, Self::Error> {
+        use tracing::info;
+
         match others.get_deserialized::<Self>("berachain") {
             Some(Ok(cfg)) => {
                 // Validate the parsed configuration
                 if cfg.prague1.base_fee_change_denominator == 0 {
                     return Err(BerachainConfigError::InvalidDenominator);
                 }
+                if cfg.prague1.pol_distributor_address.is_zero() {
+                    return Err(BerachainConfigError::MissingPoLDistributorAddress);
+                }
+
+                info!(
+                    "Loaded Berachain genesis configuration: Prague1 time={}, base_fee_denominator={}, min_base_fee={} gwei, pol_distributor={}",
+                    cfg.prague1.time,
+                    cfg.prague1.base_fee_change_denominator,
+                    cfg.prague1.minimum_base_fee_wei / 1_000_000_000,
+                    cfg.prague1.pol_distributor_address
+                );
+
                 Ok(cfg)
             }
             Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
-            None => Err(BerachainConfigError::MissingBerachainField),
+            None => {
+                info!("No berachain configuration found in genesis, using defaults");
+                Err(BerachainConfigError::MissingBerachainField)
+            }
         }
     }
 }
@@ -142,7 +180,8 @@ mod tests {
             "prague1": {
                 "time": 1620000000,
                 "baseFeeChangeDenominator": 48,
-                "minimumBaseFeeWei": 1000000000
+                "minimumBaseFeeWei": 1000000000,
+                "polDistributorAddress": "0x4200000000000000000000000000000000000042"
             }
           }
         }
@@ -157,5 +196,56 @@ mod tests {
         assert_eq!(cfg.prague1.time, 1620000000);
         assert_eq!(cfg.prague1.minimum_base_fee_wei, 1000000000);
         assert_eq!(cfg.prague1.base_fee_change_denominator, 48);
+    }
+
+    #[test]
+    fn test_genesis_config_missing_pol_distributor_address() {
+        let json = r#"
+        {
+          "berachain": {
+            "prague1": {
+                "time": 1620000000,
+                "baseFeeChangeDenominator": 48,
+                "minimumBaseFeeWei": 1000000000
+            }
+          }
+        }
+        "#;
+
+        let v: Value = serde_json::from_str(json).unwrap();
+        let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
+
+        let res = BerachainGenesisConfig::try_from(&other_fields);
+        assert!(
+            res.expect_err("must be an error")
+                .to_string()
+                .contains("missing field `polDistributorAddress`")
+        );
+    }
+
+    #[test]
+    fn test_genesis_config_zero_pol_distributor_address() {
+        let json = r#"
+        {
+          "berachain": {
+            "prague1": {
+                "time": 1620000000,
+                "baseFeeChangeDenominator": 48,
+                "minimumBaseFeeWei": 1000000000,
+                "polDistributorAddress": "0x0000000000000000000000000000000000000000"
+            }
+          }
+        }
+        "#;
+
+        let v: Value = serde_json::from_str(json).unwrap();
+        let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
+
+        let res = BerachainGenesisConfig::try_from(&other_fields);
+        assert!(
+            res.expect_err("must be an error")
+                .to_string()
+                .contains("PoL distributor address is required")
+        );
     }
 }

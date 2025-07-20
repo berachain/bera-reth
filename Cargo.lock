@@ -11531,8 +11531,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "alloy-op-evm"
-version = "0.14.0"
-source = "git+https://github.com/berachain/evm?rev=e4b18aab6e9e8057e27c21d703b415d7e54d8914#e4b18aab6e9e8057e27c21d703b415d7e54d8914"

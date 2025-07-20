@@ -50,7 +50,7 @@ impl NodeTypes for BerachainNode {
 impl TryIntoSimTx<BerachainTxEnvelope> for TransactionRequest {
     fn try_into_sim_tx(self) -> Result<BerachainTxEnvelope, ValueError<Self>> {
         // TODO: Add support for simulation API
-        Err(ValueError::new(self, "Simulation API is not support on bera-reth yet"))
+        Err(ValueError::new(self, "Simulation API is not supported on bera-reth yet"))
     }
 }
 

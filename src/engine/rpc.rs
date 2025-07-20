@@ -398,7 +398,13 @@ where
         }
 
         if self.chain_spec.is_prague1_active_at_timestamp(payload.timestamp()) {
-            // TODO: Return the appropriate error
+            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
+                INVALID_PAYLOAD_ATTRIBUTES,
+                "newPayloadV4P11 required for Prague1 fork, use newPayloadV4P11 instead"
+                    .to_string(),
+                None::<()>,
+            ))
+            .into());
         }
 
         // Validate Electra1 requirements - parent_proposer_pub_key is None
@@ -436,7 +442,12 @@ where
         trace!(target: "rpc::engine", "received parent_proposer_pub_key {:?}", parent_proposer_pub_key);
 
         if !self.chain_spec.is_prague1_active_at_timestamp(payload.timestamp()) {
-            // TODO: Return the appropriate error
+            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
+                INVALID_PAYLOAD_ATTRIBUTES,
+                "Prague1 fork not active, use newPayloadV4 instead".to_string(),
+                None::<()>,
+            ))
+            .into());
         }
 
         // Validate Electra1 requirements - parent_proposer_pub_key is required for P11

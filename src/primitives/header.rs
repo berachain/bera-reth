@@ -8,7 +8,6 @@ use reth_codecs::Compact;
 use reth_db_api::table::{Compress, Decompress};
 use reth_primitives_traits::{BlockHeader, InMemorySize, serde_bincode_compat::RlpBincode};
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
 /// 48-byte BLS12-381 public key for Berachain consensus
 pub type BlsPublicKey = FixedBytes<48>;
@@ -361,37 +360,9 @@ impl alloy_consensus::BlockHeader for BerachainHeader {
 
 impl Sealable for BerachainHeader {
     fn hash_slow(&self) -> B256 {
-        info!("BerachainHeader hash_slow - all fields:");
-        info!("  parent_hash: {:?}", self.parent_hash);
-        info!("  ommers_hash: {:?}", self.ommers_hash);
-        info!("  beneficiary: {:?}", self.beneficiary);
-        info!("  state_root: {:?}", self.state_root);
-        info!("  transactions_root: {:?}", self.transactions_root);
-        info!("  receipts_root: {:?}", self.receipts_root);
-        info!("  withdrawals_root: {:?}", self.withdrawals_root);
-        info!("  logs_bloom: {:?}", self.logs_bloom);
-        info!("  difficulty: {:?}", self.difficulty);
-        info!("  number: {:?}", self.number);
-        info!("  gas_limit: {:?}", self.gas_limit);
-        info!("  gas_used: {:?}", self.gas_used);
-        info!("  timestamp: {:?}", self.timestamp);
-        info!("  mix_hash: {:?}", self.mix_hash);
-        info!("  nonce: {:?}", self.nonce);
-        info!("  base_fee_per_gas: {:?}", self.base_fee_per_gas);
-        info!("  blob_gas_used: {:?}", self.blob_gas_used);
-        info!("  excess_blob_gas: {:?}", self.excess_blob_gas);
-        info!("  parent_beacon_block_root: {:?}", self.parent_beacon_block_root);
-        info!("  requests_hash: {:?}", self.requests_hash);
-        info!("  prev_proposer_pubkey: {:?}", self.prev_proposer_pubkey);
-        info!("  extra_data: {:?}", self.extra_data);
-
         let mut out = Vec::<u8>::new();
         self.encode(&mut out);
-        let hash = keccak256(&out);
-        info!("  calculated hash: {:?}", hash);
-        info!("  rlp bytes length: {}", out.len());
-        info!("  rlp bytes: {:?}", hex::encode(&out));
-        hash
+        keccak256(&out)
     }
 }
 

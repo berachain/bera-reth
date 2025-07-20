@@ -175,7 +175,6 @@ impl InMemorySize for BerachainPooledTransaction {
     }
 }
 
-// TODO: Revisit this
 impl PoolTransaction for BerachainPooledTransaction {
     type TryFromConsensusError = Infallible;
 
