@@ -62,7 +62,7 @@ pub fn validate_pol_transaction(
 ) -> Result<(), ConsensusError> {
     let expected_tx = create_pol_transaction(chain_spec, expected_pubkey, block_number, base_fee)
         .map_err(|e| {
-        ConsensusError::Other(format!("Failed to create expected PoL transaction: {}", e).into())
+        ConsensusError::Other(format!("Failed to create expected PoL transaction: {e}"))
     })?;
 
     let expected_sealed_pol_tx = match expected_tx {
@@ -71,14 +71,11 @@ pub fn validate_pol_transaction(
     };
 
     if pol_tx.hash() != expected_sealed_pol_tx.hash() {
-        return Err(ConsensusError::Other(
-            format!(
-                "PoL transaction hash mismatch: expected {}, got {}",
-                expected_sealed_pol_tx.hash(),
-                pol_tx.hash()
-            )
-            .into(),
-        ));
+        return Err(ConsensusError::Other(format!(
+            "PoL transaction hash mismatch: expected {}, got {}",
+            expected_sealed_pol_tx.hash(),
+            pol_tx.hash()
+        )));
     }
 
     Ok(())

@@ -68,9 +68,9 @@ impl BerachainBeaconConsensus {
         // Check no other transactions are PoL
         for (index, tx) in transactions.iter().enumerate().skip(1) {
             if matches!(tx, BerachainTxEnvelope::Berachain(_)) {
-                return Err(ConsensusError::Other(
-                    format!("PoL transaction found at invalid position {}, only first transaction can be PoL", index).into(),
-                ));
+                return Err(ConsensusError::Other(format!(
+                    "PoL transaction found at invalid position {index}, only first transaction can be PoL"
+                )));
             }
         }
 
