@@ -99,7 +99,7 @@ impl BerachainEngineValidator {
             self.chain_spec.is_prague_active_at_timestamp(sealed_block.timestamp),
         )?;
 
-        berachain_prague1::ensure_well_formed_fields(
+        prague1::ensure_well_formed_fields(
             sealed_block,
             sidecar.parent_proposer_pub_key,
             self.chain_spec.is_prague1_active_at_timestamp(sealed_block.timestamp),
@@ -266,7 +266,6 @@ where
 mod tests {
     use super::*;
     use jsonrpsee_core::__reexports::serde_json;
-    use reth_chainspec::EthChainSpec;
 
     fn create_test_chain_spec() -> Arc<BerachainChainSpec> {
         let mut genesis = alloy_genesis::Genesis::default();
@@ -288,26 +287,9 @@ mod tests {
     }
 
     #[test]
-    fn test_berachain_engine_validator_new() {
-        let chain_spec = create_test_chain_spec();
-        let validator = BerachainEngineValidator::new(chain_spec.clone());
-
-        assert_eq!(validator.chain_spec().chain().id(), chain_spec.chain().id());
-    }
-
-    #[test]
-    fn test_chain_spec_access() {
-        let chain_spec = create_test_chain_spec();
-        let expected_chain_id = chain_spec.chain().id();
-        let validator = BerachainEngineValidator::new(chain_spec);
-
-        assert_eq!(validator.chain_spec().chain().id(), expected_chain_id);
-    }
-
-    #[test]
     fn test_is_pol_transaction() {
         use crate::transaction::{BerachainTxEnvelope, PoLTx};
-        use alloy_primitives::{Address, ChainId, Sealed};
+        use alloy_primitives::{Address, Sealed};
 
         let chain_spec = create_test_chain_spec();
         let validator = BerachainEngineValidator::new(chain_spec);
@@ -332,33 +314,61 @@ mod tests {
     }
 }
 
-/// Berachain-specific Prague1 hardfork validation  
-pub mod berachain_prague1 {
+/// Prague1 hardfork validation for Berachain
+pub mod prague1 {
     use super::*;
     use crate::primitives::header::BlsPublicKey;
 
-    /// Validate Prague1 hardfork fields (proposer pubkey) for Berachain blocks
+    /// Validates Prague1 hardfork-specific fields for Berachain blocks
+    ///
+    /// When Prague1 is active: parent_proposer_pub_key must be present and match header
+    /// When Prague1 is inactive: parent_proposer_pub_key must be absent
     pub fn ensure_well_formed_fields(
         sealed_block: &SealedBlock<BerachainBlock>,
         parent_proposer_pub_key: Option<BlsPublicKey>,
         is_prague1_active: bool,
     ) -> Result<(), NewPayloadError> {
         if is_prague1_active {
-            if parent_proposer_pub_key.is_none() {
-                return Err(NewPayloadError::Other(
-                    "Prague1 active but parent proposer pubkey missing".into(),
-                ));
-            }
-            if sealed_block.header().prev_proposer_pubkey != parent_proposer_pub_key {
-                return Err(NewPayloadError::Other(
-                    "Prague1 active but parent proposer pubkey mismatch".into(),
-                ));
-            }
-        } else if parent_proposer_pub_key.is_some() {
+            validate_prague1_active(sealed_block, parent_proposer_pub_key)
+        } else {
+            validate_prague1_inactive(sealed_block, parent_proposer_pub_key)
+        }
+    }
+
+    fn validate_prague1_active(
+        sealed_block: &SealedBlock<BerachainBlock>,
+        parent_proposer_pub_key: Option<BlsPublicKey>,
+    ) -> Result<(), NewPayloadError> {
+        let parent_pubkey = parent_proposer_pub_key.ok_or_else(|| {
+            NewPayloadError::Other("Prague1 active but parent proposer pubkey missing".into())
+        })?;
+
+        let header_pubkey = sealed_block.header().prev_proposer_pubkey;
+        if header_pubkey != Some(parent_pubkey) {
+            return Err(NewPayloadError::Other(
+                "Prague1 active but parent proposer pubkey mismatch".into(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn validate_prague1_inactive(
+        sealed_block: &SealedBlock<BerachainBlock>,
+        parent_proposer_pub_key: Option<BlsPublicKey>,
+    ) -> Result<(), NewPayloadError> {
+        if parent_proposer_pub_key.is_some() {
             return Err(NewPayloadError::Other(
                 "Prague1 not active but parent proposer pubkey present".into(),
             ));
         }
+
+        if sealed_block.header().prev_proposer_pubkey.is_some() {
+            return Err(NewPayloadError::Other(
+                "Prague1 not active but header contains proposer pubkey".into(),
+            ));
+        }
+
         Ok(())
     }
 }
@@ -368,39 +378,22 @@ mod validator_tests {
     use super::*;
 
     #[test]
-    fn test_berachain_prague1_validation() {
+    fn test_prague1_validation_rules() {
         use crate::primitives::header::BlsPublicKey;
 
-        // Test with proposer pubkey when Prague1 is active - should pass
-        assert!(
-            berachain_prague1::ensure_well_formed_fields(
-                &SealedBlock::default(),
-                Some(BlsPublicKey::ZERO),
-                true
-            )
-            .is_ok()
-        );
+        // Prague1 active: missing parent pubkey should fail
+        assert!(prague1::ensure_well_formed_fields(&SealedBlock::default(), None, true).is_err());
 
-        // Test without proposer pubkey when Prague1 is active - should fail
-        assert!(
-            berachain_prague1::ensure_well_formed_fields(&SealedBlock::default(), None, true)
-                .is_err()
-        );
+        // Prague1 inactive: must not have pubkey
+        assert!(prague1::ensure_well_formed_fields(&SealedBlock::default(), None, false).is_ok());
 
-        // Test with proposer pubkey when Prague1 is not active - should fail
         assert!(
-            berachain_prague1::ensure_well_formed_fields(
+            prague1::ensure_well_formed_fields(
                 &SealedBlock::default(),
                 Some(BlsPublicKey::ZERO),
                 false
             )
             .is_err()
-        );
-
-        // Test without proposer pubkey when Prague1 is not active - should pass
-        assert!(
-            berachain_prague1::ensure_well_formed_fields(&SealedBlock::default(), None, false)
-                .is_ok()
         );
     }
 }

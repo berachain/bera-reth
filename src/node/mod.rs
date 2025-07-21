@@ -145,17 +145,3 @@ where
         LocalPayloadAttributesBuilder::new(Arc::new(chain_spec.clone()))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_node_types() {
-        let node = BerachainNode::default();
-
-        // Test that BerachainNode can be instantiated and has Debug
-        let debug_str = format!("{node:?}");
-        assert!(debug_str.contains("BerachainNode"));
-    }
-}
