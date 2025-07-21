@@ -10,6 +10,7 @@ use crate::{
 };
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
+use alloy_primitives::hex;
 use reth::{
     chainspec::{EthereumHardfork, EthereumHardforks},
     providers::BlockExecutionResult,
@@ -242,9 +243,60 @@ where
                 }
             };
 
+            // Log detailed transaction inputs for debugging before hash comparison
+            let received_tx = tx.tx();
+            let expected_tx = match &expected_pol_envelope {
+                BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx.inner(),
+                _ => {
+                    tracing::error!(target: "executor", "Expected POL transaction envelope is not Berachain type");
+                    return Err(BerachainExecutionError::InvalidPolTransactionType.into());
+                }
+            };
+
+            tracing::info!(
+                target: "executor",
+                "POL Transaction Input Validation - Received Transaction:"
+            );
+            tracing::info!(target: "executor", "  Chain ID: {}", received_tx.chain_id().unwrap_or_default());
+            tracing::info!(target: "executor", "  From: {:?}", received_tx.recover_signer().unwrap_or_default());
+            tracing::info!(target: "executor", "  To: {:?}", received_tx.kind());
+            tracing::info!(target: "executor", "  Nonce: {}", received_tx.nonce());
+            tracing::info!(target: "executor", "  Gas Limit: {}", received_tx.gas_limit());
+            tracing::info!(target: "executor", "  Gas Price: {:?}", received_tx.gas_price());
+            tracing::info!(target: "executor", "  Input Length: {} bytes", received_tx.input().len());
+            tracing::info!(target: "executor", "  Input (hex): {}", hex::encode(received_tx.input()));
+
+            tracing::info!(
+                target: "executor",
+                "POL Transaction Input Validation - Expected Transaction:"
+            );
+            tracing::info!(target: "executor", "  Chain ID: {}", expected_tx.chain_id);
+            tracing::info!(target: "executor", "  From: {:?}", expected_tx.from);
+            tracing::info!(target: "executor", "  To: {:?}", expected_tx.to);
+            tracing::info!(target: "executor", "  Nonce: {}", expected_tx.nonce);
+            tracing::info!(target: "executor", "  Gas Limit: {}", expected_tx.gas_limit);
+            tracing::info!(target: "executor", "  Gas Price: {}", expected_tx.gas_price);
+            tracing::info!(target: "executor", "  Input Length: {} bytes", expected_tx.input.len());
+            tracing::info!(target: "executor", "  Input (hex): {}", hex::encode(&expected_tx.input));
+
+            tracing::info!(
+                target: "executor",
+                "POL Transaction Creation Parameters:"
+            );
+            tracing::info!(target: "executor", "  Block Number: {}", self.evm.block().number);
+            tracing::info!(target: "executor", "  Block Timestamp: {}", self.evm.block().timestamp);
+            tracing::info!(target: "executor", "  Base Fee: {}", base_fee);
+            tracing::info!(target: "executor", "  Prev Proposer Pubkey: {:?}", prev_proposer_pubkey);
+            tracing::info!(target: "executor", "  Chain Spec Chain ID: {}", self.spec.chain().id());
+            tracing::info!(target: "executor", "  POL Contract Address: {:?}", self.spec.pol_contract());
+
             // Compare transaction hashes - this validates the entire transaction shape
             let received_tx_hash = tx.tx().trie_hash();
             let expected_tx_hash = expected_pol_envelope.trie_hash();
+
+            tracing::info!(target: "executor", "Hash Comparison:");
+            tracing::info!(target: "executor", "  Received Hash: {:?}", received_tx_hash);
+            tracing::info!(target: "executor", "  Expected Hash: {:?}", expected_tx_hash);
 
             if received_tx_hash != expected_tx_hash {
                 tracing::error!(

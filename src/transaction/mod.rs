@@ -1,4 +1,5 @@
 pub mod pol;
+mod pol_hash_test;
 mod txtype;
 
 /// Transaction type identifier for Berachain POL transactions
