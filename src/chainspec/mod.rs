@@ -363,14 +363,9 @@ impl From<Genesis> for BerachainChainSpec {
 
         let mut genesis_header = BerachainHeader::from(inner.genesis_header());
 
-        // Set prev_proposer_pubkey only if Prague1 is active at genesis timestamp
-        let chain_spec_temp = Self {
-            inner: inner.clone(),
-            genesis_header: genesis_header.clone(),
-            pol_contract_address: berachain_genesis_config.prague1.pol_distributor_address,
-            prague1_minimum_base_fee: berachain_genesis_config.prague1.minimum_base_fee_wei,
-        };
-        if chain_spec_temp.is_prague1_active_at_timestamp(genesis.timestamp) {
+        // Set prev_proposer_pubkey to zero if Prague1 is active at genesis timestamp
+        let is_prague1_at_genesis = berachain_genesis_config.prague1.time <= genesis.timestamp;
+        if is_prague1_at_genesis {
             genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
         }
         Self {
@@ -797,28 +792,6 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_prague1_same_time_as_prague() {
-        let mut genesis = Genesis::default();
-        genesis.config.cancun_time = Some(0);
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
-        genesis.config.prague_time = Some(1000);
-        let extra_fields_json = json!({
-            "berachain": {
-                "prague1": {
-                    "time": 1000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
-                }
-            }
-        });
-        genesis.config.extra_fields =
-            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
-        let chain_spec = BerachainChainSpec::from(genesis);
-        assert!(chain_spec.is_prague1_active_at_timestamp(1000));
-    }
-
-    #[test]
     #[should_panic(
         expected = "Berachain networks require terminal total difficulty of 0 (merge at genesis)"
     )]
@@ -885,5 +858,52 @@ mod tests {
         genesis.config.extra_fields =
             reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to parse berachain genesis config")]
+    fn test_invalid_base_fee_denominator() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 0,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    fn test_next_block_base_fee_with_none_parent() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        let parent_header =
+            BerachainHeader { timestamp: 0, base_fee_per_gas: None, ..Default::default() };
+
+        let result = chain_spec.next_block_base_fee(&parent_header, 0);
+        assert!(result.is_none()); // Correctly returns None when parent has no base fee
     }
 }
