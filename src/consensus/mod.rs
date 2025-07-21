@@ -10,10 +10,12 @@ use reth_node_api::FullNodeTypes;
 use reth_node_builder::{BuilderContext, components::ConsensusBuilder};
 use std::sync::Arc;
 
+/// Berachain consensus builder that delegates to Ethereum beacon consensus.
+///
+/// This wrapper is required to provide type compatibility with BerachainPrimitives
+/// while using standard Ethereum consensus validation.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct BerachainConsensusBuilder {
-    // TODO add closure to modify consensus
-}
+pub struct BerachainConsensusBuilder;
 
 impl<Node> ConsensusBuilder<Node> for BerachainConsensusBuilder
 where
