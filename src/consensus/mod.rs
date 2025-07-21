@@ -139,7 +139,6 @@ impl Consensus<BerachainBlock> for BerachainBeaconConsensus {
         if self.chain_spec.is_prague1_active_at_timestamp(block.header().timestamp) {
             self.validate_pol_transaction(block)?;
         }
-
         Ok(())
     }
 }
