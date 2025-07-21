@@ -4,19 +4,15 @@ use crate::{
     hardforks::BerachainHardforks,
     node::evm::{block_context::BerachainBlockExecutionCtx, error::BerachainExecutionError},
     primitives::{BerachainBlock, BerachainHeader},
-    transaction::{BerachainTxEnvelope, BerachainTxType, PoLTx, pol::create_pol_transaction},
+    transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
 };
 use alloy_consensus::{
     Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, Signed, Transaction, TxEnvelope,
     TxLegacy, TxReceipt, proofs,
 };
 use alloy_eips::merge::BEACON_NONCE;
-use alloy_primitives::{B256, Bytes, Sealed, Signature, TxKind, U256, logs_bloom};
-use reth::{
-    chainspec::EthereumHardforks,
-    providers::BlockExecutionResult,
-    revm::{handler::SYSTEM_ADDRESS, primitives::eip7825},
-};
+use alloy_primitives::{B256, Bytes, Signature, TxKind, U256, logs_bloom};
+use reth::{chainspec::EthereumHardforks, providers::BlockExecutionResult};
 use reth_chainspec::EthChainSpec;
 use reth_ethereum_primitives::Receipt;
 use reth_evm::{
