@@ -39,7 +39,6 @@ reth-cli = { git = "https://github.com/paradigmxyz/reth", rev = "03ceac7e79d4e81
 reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", rev = "03ceac7e79d4e8151c5e12f636c48da2525dff02" }
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", rev = "03ceac7e79d4e8151c5e12f636c48da2525dff02" }
 reth-codecs = { git = "https://github.com/paradigmxyz/reth", rev = "03ceac7e79d4e8151c5e12f636c48da2525dff02" }
-reth-codecs-derive = { git = "https://github.com/paradigmxyz/reth", rev = "03ceac7e79d4e8151c5e12f636c48da2525dff02" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "03ceac7e79d4e8151c5e12f636c48da2525dff02" }
 reth-db-api = { git = "https://github.com/paradigmxyz/reth", rev = "03ceac7e79d4e8151c5e12f636c48da2525dff02" }
 reth-engine-local = { git = "https://github.com/paradigmxyz/reth", rev = "03ceac7e79d4e8151c5e12f636c48da2525dff02" }

@@ -88,7 +88,7 @@ impl BerachainEngineValidator {
         )?;
 
         cancun::ensure_well_formed_fields(
-            &sealed_block,
+            sealed_block,
             sidecar.inner.cancun(),
             self.chain_spec.is_cancun_active_at_timestamp(sealed_block.timestamp),
         )?;

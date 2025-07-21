@@ -118,7 +118,7 @@ where
             .executor(BerachainExecutorBuilder)
             .payload(BasicPayloadServiceBuilder::new(BerachainPayloadServiceBuilder::default()))
             .network(EthereumNetworkBuilder::default())
-            .consensus(BerachainConsensusBuilder::default())
+            .consensus(BerachainConsensusBuilder)
     }
 
     fn add_ons(&self) -> Self::AddOns {
