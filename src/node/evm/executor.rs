@@ -190,7 +190,8 @@ where
             self.spec.is_prague1_active_at_timestamp(self.evm.block().timestamp.saturating_to());
 
         // Check if this is a POL transaction - skip validation since it's already executed as
-        // system call
+        // systemcall. We check that the transaction is in the correct index, i.e. first of the
+        // block as part of the BerachainBeaconConsensus.
         if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
             // POL transactions are executed in apply_pre_execution_changes() as system calls
             // During block validation, we just return 0 gas used and skip re-execution
