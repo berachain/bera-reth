@@ -1,5 +1,5 @@
 # Fast debug build Dockerfile for bera-reth development
-FROM rust:1.78-slim AS debug-builder
+FROM rust:1.83-slim AS debug-builder
 
 WORKDIR /app
 
