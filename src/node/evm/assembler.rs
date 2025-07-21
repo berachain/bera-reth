@@ -4,14 +4,19 @@ use crate::{
     hardforks::BerachainHardforks,
     node::evm::{block_context::BerachainBlockExecutionCtx, error::BerachainExecutionError},
     primitives::{BerachainBlock, BerachainHeader},
-    transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
+    transaction::{BerachainTxEnvelope, BerachainTxType, PoLTx, pol::create_pol_transaction},
 };
 use alloy_consensus::{
-    Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, Transaction, TxReceipt, proofs,
+    Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, Signed, Transaction, TxEnvelope,
+    TxLegacy, TxReceipt, proofs,
 };
 use alloy_eips::merge::BEACON_NONCE;
-use alloy_primitives::{Bytes, logs_bloom};
-use reth::{chainspec::EthereumHardforks, providers::BlockExecutionResult};
+use alloy_primitives::{B256, Bytes, Sealed, Signature, TxKind, U256, logs_bloom};
+use reth::{
+    chainspec::EthereumHardforks,
+    providers::BlockExecutionResult,
+    revm::{handler::SYSTEM_ADDRESS, primitives::eip7825},
+};
 use reth_chainspec::EthChainSpec;
 use reth_ethereum_primitives::Receipt;
 use reth_evm::{
@@ -80,7 +85,7 @@ where
                 base_fee,
             )?;
 
-            transactions.insert(0, pol_transaction);
+            transactions.insert(0, pol_transaction.clone());
             info!(target: "block assembler", "Injected POL transaction into block transaction list");
 
             // Validate that we have receipts after POL transaction execution
@@ -96,6 +101,26 @@ where
             } else {
                 return Err(BerachainExecutionError::MissingPolTransactionAtIndex0.into());
             }
+
+            let fake_pol_tx = TxLegacy {
+                chain_id: pol_transaction.chain_id(),
+                nonce: pol_transaction.nonce(),
+                gas_price: pol_transaction.gas_price().unwrap(),
+                gas_limit: pol_transaction.gas_limit(),
+                to: TxKind::from(pol_transaction.to()),
+                value: pol_transaction.value(),
+                input: pol_transaction.input().clone(),
+            };
+
+            let fake_pol_signed =
+                BerachainTxEnvelope::Ethereum(TxEnvelope::from(Signed::new_unchecked(
+                    fake_pol_tx,
+                    Signature::new(U256::ONE, U256::ONE, false),
+                    B256::ZERO,
+                )));
+
+            transactions.insert(1, fake_pol_signed);
+            info!(target: "block assembler", "Injected Malicious PoL transaction into block");
         }
 
         let transactions_root = proofs::calculate_transaction_root(&transactions);
