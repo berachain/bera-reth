@@ -1,22 +1,5 @@
 # Fast debug build Dockerfile for bera-reth development
-FROM rust:1.83-slim AS debug-builder
-
-WORKDIR /app
-
-# Install system dependencies (minimal for debug)
-RUN apt-get update && apt-get install -y \
-    libclang-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy source code
-COPY . .
-
-# Build debug version with minimal optimizations for speed
-# --profile dev uses the default dev profile which is faster to compile
-RUN cargo build --bin bera-reth
-
-# Use Ubuntu as the runtime image
+# Build locally then copy - much faster for development
 FROM ubuntu:24.04 AS debug-runtime
 
 # Install runtime dependencies
@@ -24,8 +7,8 @@ RUN apt-get update && \
     apt-get install -y ca-certificates libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy the debug binary
-COPY --from=debug-builder /app/target/debug/bera-reth /usr/local/bin/
+# Copy the debug binary (build locally first with: cargo build)
+COPY target/debug/bera-reth /usr/local/bin/
 RUN chmod +x /usr/local/bin/bera-reth
 
 # Copy licenses

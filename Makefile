@@ -46,6 +46,9 @@ docker-build-local: ## Build a Docker image for local use.
 
 .PHONY: docker-build-debug
 docker-build-debug: ## Build a fast debug Docker image for local development.
+	@echo "Building debug binary locally first..."
+	cargo build --bin bera-reth
+	@echo "Creating debug Docker image..."
 	docker build --file Dockerfile.debug --tag $(DOCKER_IMAGE_NAME):debug \
 		--build-arg COMMIT=$(GIT_SHA) \
 		--build-arg VERSION=$(GIT_TAG) \
