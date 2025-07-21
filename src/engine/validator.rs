@@ -244,12 +244,25 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jsonrpsee_core::__reexports::serde_json;
     use reth_chainspec::EthChainSpec;
 
     fn create_test_chain_spec() -> Arc<BerachainChainSpec> {
         let mut genesis = alloy_genesis::Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(alloy_primitives::U256::ZERO);
+        let extra_fields_json = serde_json::json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         Arc::new(BerachainChainSpec::from(genesis))
     }
 

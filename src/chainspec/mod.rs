@@ -27,9 +27,6 @@ use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
-/// Minimum base fee enforced after Prague1 hardfork (1 gwei)
-const PRAGUE1_MIN_BASE_FEE_WEI: u64 = 1_000_000_000;
-
 /// Default minimum base fee when Prague1 is not active.
 const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 
@@ -41,6 +38,8 @@ pub struct BerachainChainSpec {
     genesis_header: BerachainHeader,
     /// PoL contract address loaded from configuration
     pol_contract_address: Address,
+    /// The minimum base fee in wei
+    prague1_minimum_base_fee: u64,
 }
 
 impl BerachainChainSpec {
@@ -114,7 +113,7 @@ impl EthChainSpec for BerachainChainSpec {
         );
 
         let min_base_fee = if self.is_prague1_active_at_timestamp(parent.timestamp()) {
-            PRAGUE1_MIN_BASE_FEE_WEI
+            self.prague1_minimum_base_fee
         } else {
             DEFAULT_MIN_BASE_FEE_WEI
         };
@@ -178,11 +177,11 @@ impl ChainSpecParser for BerachainChainSpecParser {
 }
 
 impl From<Genesis> for BerachainChainSpec {
+    /// Intentionally panics if required fields are missing from genesis or invalid.
     fn from(genesis: Genesis) -> Self {
         let berachain_genesis_config =
             BerachainGenesisConfig::try_from(&genesis.config.extra_fields).unwrap_or_else(|e| {
-                tracing::warn!("Failed to parse berachain genesis config, using defaults: {e}. Please ensure the genesis file contains a valid 'berachain' configuration section with Prague1 settings including polDistributorAddress.");
-                BerachainGenesisConfig::default()
+                panic!("Failed to parse berachain genesis config: {e}. Please ensure the genesis file contains a valid 'berachain' configuration section with Prague1 settings");
             });
 
         // Berachain networks must start with Cancun at genesis
@@ -369,6 +368,7 @@ impl From<Genesis> for BerachainChainSpec {
             inner: inner.clone(),
             genesis_header: genesis_header.clone(),
             pol_contract_address: berachain_genesis_config.prague1.pol_distributor_address,
+            prague1_minimum_base_fee: berachain_genesis_config.prague1.minimum_base_fee_wei,
         };
         if chain_spec_temp.is_prague1_active_at_timestamp(genesis.timestamp) {
             genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
@@ -377,6 +377,7 @@ impl From<Genesis> for BerachainChainSpec {
             inner,
             genesis_header,
             pol_contract_address: berachain_genesis_config.prague1.pol_distributor_address,
+            prague1_minimum_base_fee: berachain_genesis_config.prague1.minimum_base_fee_wei,
         }
     }
 }
@@ -411,6 +412,18 @@ mod tests {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0); // Required for Berachain
         genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let chain_spec = BerachainChainSpec::from(genesis);
 
         // Should create a valid chain spec
@@ -519,20 +532,39 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Failed to parse berachain genesis config")]
     fn test_base_fee_params_missing_berachain_config() {
-        // Test fallback when berachain config is missing
+        // Test panic when berachain config is missing
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
         genesis.config.cancun_time = Some(0); // Required for Berachain
         genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
-        // No berachain config in extra_fields
+        // No berachain config in extra_fields - should panic
 
-        let chain_spec = BerachainChainSpec::from(genesis);
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
 
-        // Should use default config (Prague1 at time 0, denominator 48)
-        let params = chain_spec.base_fee_params_at_timestamp(0);
-        assert_eq!(params.max_change_denominator, 48);
-        assert_eq!(params.elasticity_multiplier, 2);
+    #[test]
+    #[should_panic(expected = "Failed to parse berachain genesis config")]
+    fn test_missing_pol_distributor_address() {
+        // Test panic when polDistributorAddress is missing
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000
+                    // Missing polDistributorAddress - should panic
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
     #[test]
@@ -564,6 +596,7 @@ mod tests {
 
     #[test]
     fn test_next_block_base_fee_with_prague1() {
+        let prague1_base_fee = 10_000_000_000;
         // Create genesis with Prague1 at timestamp 1000
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
@@ -574,7 +607,7 @@ mod tests {
                 "prague1": {
                     "time": 1000,
                     "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000,
+                    "minimumBaseFeeWei": 10000000000i64,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
@@ -591,9 +624,9 @@ mod tests {
             ..Default::default()
         };
 
-        // Before Prague1, base fee can go below 1 gwei
+        // Before Prague1, base fee can go below 10 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
-        assert!(next_base_fee.unwrap() < PRAGUE1_MIN_BASE_FEE_WEI);
+        assert!(next_base_fee.unwrap() < prague1_base_fee);
 
         // Create a parent block at Prague1 activation
         let parent_header = BerachainHeader {
@@ -602,9 +635,9 @@ mod tests {
             ..Default::default()
         };
 
-        // After Prague1, base fee should be at least 1 gwei
+        // After Prague1, base fee should be at least 10 gwei
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
-        assert_eq!(next_base_fee.unwrap(), PRAGUE1_MIN_BASE_FEE_WEI);
+        assert_eq!(next_base_fee.unwrap(), prague1_base_fee);
     }
 
     #[test]
@@ -614,6 +647,18 @@ mod tests {
     fn test_panic_on_missing_ttd() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         // No terminal_total_difficulty set
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
@@ -621,7 +666,21 @@ mod tests {
     #[test]
     #[should_panic(expected = "Berachain networks require Cancun hardfork at genesis (time = 0)")]
     fn test_panic_on_missing_cancun() {
-        let genesis = Genesis::default();
+        let mut genesis = Genesis::default();
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        // No cancun_time set - should panic
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
@@ -630,6 +689,19 @@ mod tests {
     fn test_panic_on_cancun_not_at_genesis() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(100);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
@@ -640,7 +712,20 @@ mod tests {
     fn test_panic_on_london_not_at_genesis() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.london_block = Some(5);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
@@ -651,7 +736,20 @@ mod tests {
     fn test_panic_on_shanghai_not_at_genesis() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.shanghai_time = Some(500);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
@@ -728,6 +826,18 @@ mod tests {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::from(1000));
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
@@ -738,6 +848,18 @@ mod tests {
         genesis.config.cancun_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.merge_netsplit_block = Some(5);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
@@ -750,6 +872,18 @@ mod tests {
         genesis.config.cancun_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.dao_fork_block = Some(5);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let _chain_spec = BerachainChainSpec::from(genesis);
     }
 }
