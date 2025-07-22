@@ -32,34 +32,18 @@ use reth_primitives_traits::{
 };
 use reth_rpc_convert::{SignTxRequestError, SignableTxRequest};
 use serde::Deserialize;
-use std::{fmt, hash::Hash, mem::size_of};
+use std::{hash::Hash, mem::size_of};
 
 /// Error type for transaction conversion failures
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TxConversionError {
     /// Cannot convert EIP-4844 consensus transaction to pooled format without sidecar
+    #[error("Cannot convert EIP-4844 consensus transaction to pooled format without sidecar")]
     Eip4844MissingSidecar,
     /// Cannot convert Berachain POL transaction to Ethereum format
+    #[error("Cannot convert Berachain POL transaction to Ethereum format")]
     UnsupportedBerachainTransaction,
 }
-
-impl fmt::Display for TxConversionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Eip4844MissingSidecar => {
-                write!(
-                    f,
-                    "Cannot convert EIP-4844 consensus transaction to pooled format without sidecar"
-                )
-            }
-            Self::UnsupportedBerachainTransaction => {
-                write!(f, "Cannot convert Berachain POL transaction to Ethereum format")
-            }
-        }
-    }
-}
-
-impl std::error::Error for TxConversionError {}
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
 pub struct PoLTx {
