@@ -64,18 +64,18 @@ impl From<BerachainTxEnvelope> for BerachainTxType {
     }
 }
 
-impl From<BerachainTxEnvelope> for alloy_rpc_types_eth::transaction::TransactionRequest {
+impl From<BerachainTxEnvelope> for TransactionRequest {
     fn from(_value: BerachainTxEnvelope) -> Self {
         todo!()
     }
 }
-impl From<BerachainTxType> for alloy_rpc_types_eth::transaction::TransactionRequest {
+impl From<BerachainTxType> for TransactionRequest {
     fn from(_value: BerachainTxType) -> Self {
         todo!()
     }
 }
 
-impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::TransactionRequest {
+impl TransactionBuilder<BerachainNetwork> for TransactionRequest {
     fn chain_id(&self) -> Option<ChainId> {
         todo!()
     }
