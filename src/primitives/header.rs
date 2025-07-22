@@ -764,107 +764,87 @@ mod tests {
             // Verify all standard Ethereum fields match exactly
             assert_eq!(
                 decompressed.parent_hash, reth_header.parent_hash,
-                "Test case {}: parent_hash mismatch",
-                i
+                "Test case {i}: parent_hash mismatch"
             );
             assert_eq!(
                 decompressed.ommers_hash, reth_header.ommers_hash,
-                "Test case {}: ommers_hash mismatch",
-                i
+                "Test case {i}: ommers_hash mismatch"
             );
             assert_eq!(
                 decompressed.beneficiary, reth_header.beneficiary,
-                "Test case {}: beneficiary mismatch",
-                i
+                "Test case {i}: beneficiary mismatch"
             );
             assert_eq!(
                 decompressed.state_root, reth_header.state_root,
-                "Test case {}: state_root mismatch",
-                i
+                "Test case {i}: state_root mismatch"
             );
             assert_eq!(
                 decompressed.transactions_root, reth_header.transactions_root,
-                "Test case {}: transactions_root mismatch",
-                i
+                "Test case {i}: transactions_root mismatch"
             );
             assert_eq!(
                 decompressed.receipts_root, reth_header.receipts_root,
-                "Test case {}: receipts_root mismatch",
-                i
+                "Test case {i}: receipts_root mismatch"
             );
             assert_eq!(
                 decompressed.withdrawals_root, reth_header.withdrawals_root,
-                "Test case {}: withdrawals_root mismatch",
-                i
+                "Test case {i}: withdrawals_root mismatch"
             );
             assert_eq!(
                 decompressed.logs_bloom, reth_header.logs_bloom,
-                "Test case {}: logs_bloom mismatch",
-                i
+                "Test case {i}: logs_bloom mismatch"
             );
             assert_eq!(
                 decompressed.difficulty, reth_header.difficulty,
-                "Test case {}: difficulty mismatch",
-                i
+                "Test case {i}: difficulty mismatch"
             );
-            assert_eq!(decompressed.number, reth_header.number, "Test case {}: number mismatch", i);
+            assert_eq!(decompressed.number, reth_header.number, "Test case {i}: number mismatch");
             assert_eq!(
                 decompressed.gas_limit, reth_header.gas_limit,
-                "Test case {}: gas_limit mismatch",
-                i
+                "Test case {i}: gas_limit mismatch"
             );
             assert_eq!(
                 decompressed.gas_used, reth_header.gas_used,
-                "Test case {}: gas_used mismatch",
-                i
+                "Test case {i}: gas_used mismatch"
             );
             assert_eq!(
                 decompressed.timestamp, reth_header.timestamp,
-                "Test case {}: timestamp mismatch",
-                i
+                "Test case {i}: timestamp mismatch"
             );
             assert_eq!(
                 decompressed.mix_hash, reth_header.mix_hash,
-                "Test case {}: mix_hash mismatch",
-                i
+                "Test case {i}: mix_hash mismatch"
             );
-            assert_eq!(decompressed.nonce, reth_header.nonce, "Test case {}: nonce mismatch", i);
+            assert_eq!(decompressed.nonce, reth_header.nonce, "Test case {i}: nonce mismatch");
             assert_eq!(
                 decompressed.base_fee_per_gas, reth_header.base_fee_per_gas,
-                "Test case {}: base_fee_per_gas mismatch",
-                i
+                "Test case {i}: base_fee_per_gas mismatch"
             );
             assert_eq!(
                 decompressed.blob_gas_used, reth_header.blob_gas_used,
-                "Test case {}: blob_gas_used mismatch",
-                i
+                "Test case {i}: blob_gas_used mismatch"
             );
             assert_eq!(
                 decompressed.excess_blob_gas, reth_header.excess_blob_gas,
-                "Test case {}: excess_blob_gas mismatch",
-                i
+                "Test case {i}: excess_blob_gas mismatch"
             );
             assert_eq!(
                 decompressed.parent_beacon_block_root, reth_header.parent_beacon_block_root,
-                "Test case {}: parent_beacon_block_root mismatch",
-                i
+                "Test case {i}: parent_beacon_block_root mismatch"
             );
             assert_eq!(
                 decompressed.requests_hash, reth_header.requests_hash,
-                "Test case {}: requests_hash mismatch",
-                i
+                "Test case {i}: requests_hash mismatch"
             );
             assert_eq!(
                 decompressed.extra_data, reth_header.extra_data,
-                "Test case {}: extra_data mismatch",
-                i
+                "Test case {i}: extra_data mismatch"
             );
 
             // Verify Berachain-specific field is None (backwards compatibility)
             assert_eq!(
                 decompressed.prev_proposer_pubkey, None,
-                "Test case {}: prev_proposer_pubkey should be None for backwards compatibility",
-                i
+                "Test case {i}: prev_proposer_pubkey should be None for backwards compatibility"
             );
         }
     }
