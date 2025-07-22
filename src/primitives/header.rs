@@ -610,33 +610,332 @@ mod tests {
 
     #[test]
     fn test_reth_header_compatability() {
-        let reth_header = Header {
-            parent_hash: Default::default(),
-            ommers_hash: Default::default(),
-            beneficiary: Default::default(),
-            state_root: Default::default(),
-            transactions_root: Default::default(),
-            receipts_root: Default::default(),
-            logs_bloom: Default::default(),
-            difficulty: Default::default(),
-            number: 0,
-            gas_limit: 0,
-            gas_used: 0,
-            timestamp: 0,
-            extra_data: Default::default(),
-            mix_hash: Default::default(),
-            nonce: Default::default(),
-            base_fee_per_gas: None,
-            withdrawals_root: None,
-            blob_gas_used: None,
-            excess_blob_gas: None,
-            parent_beacon_block_root: None,
-            requests_hash: None,
+        use alloy_primitives::hex::FromHex;
+
+        // Test with various AlloyHeader configurations
+        let test_cases = vec![
+            // Basic header with minimal fields
+            Header {
+                parent_hash: B256::random(),
+                ommers_hash: B256::from_hex(
+                    "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                )
+                .unwrap(),
+                beneficiary: Address::random(),
+                state_root: B256::random(),
+                transactions_root: B256::random(),
+                receipts_root: B256::random(),
+                logs_bloom: Bloom::random(),
+                difficulty: U256::from(12345),
+                number: 1000000,
+                gas_limit: 30000000,
+                gas_used: 21000,
+                timestamp: 1640995200,
+                extra_data: Bytes::from_hex("0x657468657265756d").unwrap(),
+                mix_hash: B256::random(),
+                nonce: B64::random(),
+                base_fee_per_gas: None,
+                withdrawals_root: None,
+                blob_gas_used: None,
+                excess_blob_gas: None,
+                parent_beacon_block_root: None,
+                requests_hash: None,
+            },
+            // Header with EIP-1559 (London fork)
+            Header {
+                parent_hash: B256::random(),
+                ommers_hash: B256::from_hex(
+                    "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                )
+                .unwrap(),
+                beneficiary: Address::random(),
+                state_root: B256::random(),
+                transactions_root: B256::random(),
+                receipts_root: B256::random(),
+                logs_bloom: Bloom::random(),
+                difficulty: U256::from(54321),
+                number: 2000000,
+                gas_limit: 30000000,
+                gas_used: 15000000,
+                timestamp: 1640995300,
+                extra_data: Bytes::from_hex("0x626572612d72657468").unwrap(),
+                mix_hash: B256::random(),
+                nonce: B64::random(),
+                base_fee_per_gas: Some(1000000000), // 1 gwei
+                withdrawals_root: None,
+                blob_gas_used: None,
+                excess_blob_gas: None,
+                parent_beacon_block_root: None,
+                requests_hash: None,
+            },
+            // Header with Shanghai fork (withdrawals)
+            Header {
+                parent_hash: B256::from_hex(
+                    "0x3234567890123456789012345678901234567890123456789012345678901234",
+                )
+                .unwrap(),
+                ommers_hash: B256::from_hex(
+                    "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                )
+                .unwrap(),
+                beneficiary: Address::random(),
+                state_root: B256::random(),
+                transactions_root: B256::random(),
+                receipts_root: B256::random(),
+                logs_bloom: Bloom::random(),
+                difficulty: U256::ZERO,
+                number: 3000000,
+                gas_limit: 30000000,
+                gas_used: 20000000,
+                timestamp: 1678886400,
+                extra_data: Bytes::from_hex("0x62657261636861696e").unwrap(),
+                mix_hash: B256::random(),
+                nonce: B64::ZERO,
+                base_fee_per_gas: Some(500000000), // 0.5 gwei
+                withdrawals_root: Some(B256::random()),
+                blob_gas_used: None,
+                excess_blob_gas: None,
+                parent_beacon_block_root: Some(B256::random()),
+                requests_hash: None,
+            },
+            // Header with Cancun fork (blobs)
+            Header {
+                parent_hash: B256::random(),
+                ommers_hash: B256::from_hex(
+                    "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                )
+                .unwrap(),
+                beneficiary: Address::random(),
+                state_root: B256::random(),
+                transactions_root: B256::random(),
+                receipts_root: B256::random(),
+                logs_bloom: Bloom::random(),
+                difficulty: U256::ZERO,
+                number: 4000000,
+                gas_limit: 30000000,
+                gas_used: 25000000,
+                timestamp: 1710441600,
+                extra_data: Bytes::from_hex("0x70726167756531").unwrap(),
+                mix_hash: B256::random(),
+                nonce: B64::ZERO,
+                base_fee_per_gas: Some(2000000000), // 2 gwei
+                withdrawals_root: Some(B256::random()),
+                blob_gas_used: Some(131072),   // 128KB
+                excess_blob_gas: Some(262144), // 256KB
+                parent_beacon_block_root: Some(B256::random()),
+                requests_hash: None,
+            },
+            // Header with Prague fork (requests)
+            Header {
+                parent_hash: B256::random(),
+                ommers_hash: B256::from_hex(
+                    "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                )
+                .unwrap(),
+                beneficiary: Address::random(),
+                state_root: B256::random(),
+                transactions_root: B256::random(),
+                receipts_root: B256::random(),
+                logs_bloom: Bloom::random(),
+                difficulty: U256::ZERO,
+                number: 5000000,
+                gas_limit: 30000000,
+                gas_used: 28000000,
+                timestamp: 1735689600, // Future timestamp
+                extra_data: Bytes::from_hex("0x626572616368696b6974").unwrap(),
+                mix_hash: B256::random(),
+                nonce: B64::ZERO,
+                base_fee_per_gas: Some(1500000000), // 1.5 gwei
+                withdrawals_root: Some(B256::random()),
+                blob_gas_used: Some(524288),    // 512KB
+                excess_blob_gas: Some(1048576), // 1MB
+                parent_beacon_block_root: Some(B256::random()),
+                requests_hash: Some(B256::random()),
+            },
+        ];
+
+        for (i, reth_header) in test_cases.iter().enumerate() {
+            // Test compression and decompression
+            let buf = &mut Vec::new();
+            reth_header.compress_to_buf(buf);
+
+            let decompressed = BerachainHeader::decompress(buf.as_slice()).unwrap();
+
+            // Verify all standard Ethereum fields match exactly
+            assert_eq!(
+                decompressed.parent_hash, reth_header.parent_hash,
+                "Test case {}: parent_hash mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.ommers_hash, reth_header.ommers_hash,
+                "Test case {}: ommers_hash mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.beneficiary, reth_header.beneficiary,
+                "Test case {}: beneficiary mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.state_root, reth_header.state_root,
+                "Test case {}: state_root mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.transactions_root, reth_header.transactions_root,
+                "Test case {}: transactions_root mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.receipts_root, reth_header.receipts_root,
+                "Test case {}: receipts_root mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.withdrawals_root, reth_header.withdrawals_root,
+                "Test case {}: withdrawals_root mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.logs_bloom, reth_header.logs_bloom,
+                "Test case {}: logs_bloom mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.difficulty, reth_header.difficulty,
+                "Test case {}: difficulty mismatch",
+                i
+            );
+            assert_eq!(decompressed.number, reth_header.number, "Test case {}: number mismatch", i);
+            assert_eq!(
+                decompressed.gas_limit, reth_header.gas_limit,
+                "Test case {}: gas_limit mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.gas_used, reth_header.gas_used,
+                "Test case {}: gas_used mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.timestamp, reth_header.timestamp,
+                "Test case {}: timestamp mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.mix_hash, reth_header.mix_hash,
+                "Test case {}: mix_hash mismatch",
+                i
+            );
+            assert_eq!(decompressed.nonce, reth_header.nonce, "Test case {}: nonce mismatch", i);
+            assert_eq!(
+                decompressed.base_fee_per_gas, reth_header.base_fee_per_gas,
+                "Test case {}: base_fee_per_gas mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.blob_gas_used, reth_header.blob_gas_used,
+                "Test case {}: blob_gas_used mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.excess_blob_gas, reth_header.excess_blob_gas,
+                "Test case {}: excess_blob_gas mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.parent_beacon_block_root, reth_header.parent_beacon_block_root,
+                "Test case {}: parent_beacon_block_root mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.requests_hash, reth_header.requests_hash,
+                "Test case {}: requests_hash mismatch",
+                i
+            );
+            assert_eq!(
+                decompressed.extra_data, reth_header.extra_data,
+                "Test case {}: extra_data mismatch",
+                i
+            );
+
+            // Verify Berachain-specific field is None (backwards compatibility)
+            assert_eq!(
+                decompressed.prev_proposer_pubkey, None,
+                "Test case {}: prev_proposer_pubkey should be None for backwards compatibility",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn test_berachain_header_extension_compatibility() {
+        use alloy_primitives::hex::FromHex;
+
+        // Test BerachainHeader with prev_proposer_pubkey field
+        let berachain_header = BerachainHeader {
+            parent_hash: B256::random(),
+            ommers_hash: B256::from_hex(
+                "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            )
+            .unwrap(),
+            beneficiary: Address::random(),
+            state_root: B256::random(),
+            transactions_root: B256::random(),
+            receipts_root: B256::random(),
+            withdrawals_root: Some(B256::random()),
+            logs_bloom: Bloom::random(),
+            difficulty: U256::ZERO,
+            number: 1947953,
+            gas_limit: 30000000,
+            gas_used: 4458825,
+            timestamp: 1721327232,
+            mix_hash: B256::random(),
+            nonce: B64::random(),
+            base_fee_per_gas: Some(1000000000),
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            parent_beacon_block_root: Some(B256::random()),
+            requests_hash: Some(B256::random()),
+            prev_proposer_pubkey: Some(BlsPublicKey::random()),
+            extra_data: Bytes::from_hex("0x626572616368696b6974").unwrap(),
         };
 
+        // Test compression and decompression with BerachainHeader extension
         let buf = &mut Vec::new();
-        reth_header.compress_to_buf(buf);
+        berachain_header.compress_to_buf(buf);
 
-        BerachainHeader::decompress(buf.as_slice()).unwrap();
+        let decompressed = BerachainHeader::decompress(buf.as_slice()).unwrap();
+
+        // Verify all fields match exactly, including the Berachain extension
+        assert_eq!(decompressed, berachain_header);
+
+        // Specifically verify the prev_proposer_pubkey field is preserved
+        assert_eq!(decompressed.prev_proposer_pubkey, berachain_header.prev_proposer_pubkey);
+
+        // Test with None prev_proposer_pubkey
+        let mut berachain_header_no_pubkey = berachain_header.clone();
+        berachain_header_no_pubkey.prev_proposer_pubkey = None;
+
+        let buf_no_pubkey = &mut Vec::new();
+        berachain_header_no_pubkey.compress_to_buf(buf_no_pubkey);
+
+        let decompressed_no_pubkey = BerachainHeader::decompress(buf_no_pubkey.as_slice()).unwrap();
+
+        assert_eq!(decompressed_no_pubkey, berachain_header_no_pubkey);
+        assert_eq!(decompressed_no_pubkey.prev_proposer_pubkey, None);
+
+        // Verify that headers with and without prev_proposer_pubkey produce different compressed
+        // sizes This confirms the extension pattern is working correctly
+        assert_ne!(
+            buf.len(),
+            buf_no_pubkey.len(),
+            "Compressed sizes should differ when prev_proposer_pubkey is present vs absent"
+        );
+        assert!(
+            buf.len() > buf_no_pubkey.len(),
+            "Header with prev_proposer_pubkey should be larger when compressed"
+        );
     }
 }
