@@ -60,8 +60,6 @@ where
             ..
         } = input;
 
-        let gas_used = *gas_used;
-
         info!(target: "block receipts", ?receipts, "block assembler");
 
         let timestamp = evm_env.block_env.timestamp.saturating_to();
@@ -82,7 +80,7 @@ where
                 base_fee,
             )?;
 
-            transactions.insert(0, pol_transaction.clone());
+            transactions.insert(0, pol_transaction);
             info!(target: "block assembler", "Injected POL transaction into block transaction list");
 
             // Validate that we have receipts after POL transaction execution
@@ -150,7 +148,7 @@ where
             number: evm_env.block_env.number.saturating_to(),
             gas_limit: evm_env.block_env.gas_limit,
             difficulty: evm_env.block_env.difficulty,
-            gas_used,
+            gas_used: *gas_used,
             extra_data: self.extra_data.clone(),
             parent_beacon_block_root: ctx.parent_beacon_block_root,
             blob_gas_used,

@@ -243,7 +243,7 @@ where
             };
 
             // Log POL transaction inputs for hash calculation debugging
-            let expected_tx = match &expected_pol_envelope {
+            match &expected_pol_envelope {
                 BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx.inner(),
                 _ => return Err(BerachainExecutionError::InvalidPolTransactionType.into()),
             };
@@ -253,22 +253,6 @@ where
             let expected_tx_hash = expected_pol_envelope.trie_hash();
 
             if received_tx_hash != expected_tx_hash {
-                // Log succinct comparison of hash inputs
-                let received_tx = tx.tx();
-                tracing::error!(target: "executor", "POL tx mismatch - RX: chain={} to={:?} nonce={} gas_price={:?} input_len={}",
-                    received_tx.chain_id().unwrap_or_default(), received_tx.kind(), received_tx.nonce(),
-                    received_tx.gas_price(), received_tx.input().len());
-                tracing::error!(target: "executor", "POL tx mismatch - EX: chain={} to={:?} nonce={} gas_price={} input_len={}",
-                    expected_tx.chain_id, expected_tx.to, expected_tx.nonce, expected_tx.gas_price, expected_tx.input.len());
-                tracing::error!(target: "executor", "POL tx creation params - block={} base_fee={} pubkey={:?}",
-                    self.evm.block().number, base_fee, prev_proposer_pubkey);
-
-                tracing::error!(
-                    target: "executor",
-                    received_hash = ?received_tx_hash,
-                    expected_hash = ?expected_tx_hash,
-                    "POL transaction hash mismatch - transaction shape is invalid"
-                );
                 return Err(BerachainExecutionError::PolTransactionHashMismatch {
                     received_hash: received_tx_hash,
                     expected_hash: expected_tx_hash,
@@ -283,17 +267,6 @@ where
 
             return Ok(Some(0));
         }
-
-        // TODO: This check is disabled as technically, the transaction index needs to be checked
-        // during block assembly, since that's when the PoL Tx is inserted.
-        // if is_prague1_active && self.transaction_index == 0 {
-        //     // In Prague1 blocks, the first transaction MUST be a POL transaction
-        //     tracing::error!(
-        //         target: "executor",
-        //         "First transaction in Prague1 block must be a POL transaction"
-        //     );
-        //     return Err(BerachainExecutionError::MissingPolTransactionAtIndex0.into());
-        // }
 
         // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
         // must be no greater than the block's gasLimit.
