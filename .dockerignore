@@ -15,5 +15,3 @@
 
 # include scripts
 !/scripts
-
-# Debug builds need source files (multistage build)
