@@ -32,7 +32,34 @@ use reth_primitives_traits::{
 };
 use reth_rpc_convert::{SignTxRequestError, SignableTxRequest};
 use serde::Deserialize;
-use std::{hash::Hash, mem::size_of};
+use std::{fmt, hash::Hash, mem::size_of};
+
+/// Error type for transaction conversion failures
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TxConversionError {
+    /// Cannot convert EIP-4844 consensus transaction to pooled format without sidecar
+    Eip4844MissingSidecar,
+    /// Cannot convert Berachain POL transaction to Ethereum format
+    UnsupportedBerachainTransaction,
+}
+
+impl fmt::Display for TxConversionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Eip4844MissingSidecar => {
+                write!(
+                    f,
+                    "Cannot convert EIP-4844 consensus transaction to pooled format without sidecar"
+                )
+            }
+            Self::UnsupportedBerachainTransaction => {
+                write!(f, "Cannot convert Berachain POL transaction to Ethereum format")
+            }
+        }
+    }
+}
+
+impl std::error::Error for TxConversionError {}
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
 pub struct PoLTx {
@@ -588,26 +615,28 @@ impl From<EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>
     }
 }
 
-impl From<BerachainTxEnvelope>
+impl TryFrom<BerachainTxEnvelope>
     for EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>
 {
-    fn from(berachain_tx: BerachainTxEnvelope) -> Self {
+    type Error = TxConversionError;
+
+    fn try_from(berachain_tx: BerachainTxEnvelope) -> Result<Self, Self::Error> {
         match berachain_tx {
             BerachainTxEnvelope::Ethereum(tx) => match tx {
-                TxEnvelope::Legacy(tx) => EthereumTxEnvelope::Legacy(tx),
-                TxEnvelope::Eip2930(tx) => EthereumTxEnvelope::Eip2930(tx),
-                TxEnvelope::Eip1559(tx) => EthereumTxEnvelope::Eip1559(tx),
+                TxEnvelope::Legacy(tx) => Ok(EthereumTxEnvelope::Legacy(tx)),
+                TxEnvelope::Eip2930(tx) => Ok(EthereumTxEnvelope::Eip2930(tx)),
+                TxEnvelope::Eip1559(tx) => Ok(EthereumTxEnvelope::Eip1559(tx)),
                 TxEnvelope::Eip4844(_tx) => {
                     // For consensus transactions without sidecars, we can't convert to pooled
                     // format This should only be called in contexts where we
                     // have the sidecar available
-                    panic!(
-                        "Cannot convert EIP-4844 consensus transaction to pooled format without sidecar"
-                    )
+                    Err(TxConversionError::Eip4844MissingSidecar)
                 }
-                TxEnvelope::Eip7702(tx) => EthereumTxEnvelope::Eip7702(tx),
+                TxEnvelope::Eip7702(tx) => Ok(EthereumTxEnvelope::Eip7702(tx)),
             },
-            BerachainTxEnvelope::Berachain(_) => todo!(),
+            BerachainTxEnvelope::Berachain(_) => {
+                Err(TxConversionError::UnsupportedBerachainTransaction)
+            }
         }
     }
 }
