@@ -107,58 +107,6 @@ impl BerachainEngineValidator {
 
         Ok(())
     }
-
-    /// Validate Berachain-specific fields including PoL transaction rules
-    fn validate_berachain_specific_fields(
-        &self,
-        sealed_block: &SealedBlock<BerachainBlock>,
-    ) -> Result<(), NewPayloadError> {
-        let transactions: Vec<&BerachainTxEnvelope> = sealed_block.body().transactions().collect();
-        let header = sealed_block.header();
-        let is_prague1_active = self.chain_spec().is_prague1_active_at_timestamp(header.timestamp);
-
-        if transactions.is_empty() {
-            // After Prague1, blocks must contain at least the PoL transaction
-            if is_prague1_active {
-                return Err(NewPayloadError::Other(
-                    "Block must contain at least one PoL transaction after Prague1 hardfork".into(),
-                ));
-            }
-            // Before Prague1, empty blocks are valid
-            return Ok(());
-        }
-
-        // PoL transaction rules only apply after Prague1 activation
-        if is_prague1_active {
-            // Rule 1: The first transaction must be a PoL transaction. Guaranteed at least 1 tx
-            // due to empty check beforehand.
-            let first_tx = transactions[0];
-            if !self.is_pol_transaction(first_tx) {
-                return Err(NewPayloadError::Other(
-                    "First transaction must be a PoL transaction".into(),
-                ));
-            }
-
-            // Rule 2: No other transaction should be a PoL transaction
-            for (index, tx) in transactions.iter().enumerate().skip(1) {
-                if self.is_pol_transaction(tx) {
-                    return Err(NewPayloadError::Other(
-                        format!(
-                            "PoL transaction found at index {index} but only allowed at index 0"
-                        )
-                        .into(),
-                    ));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Check if a transaction is a PoL transaction
-    fn is_pol_transaction(&self, tx: &BerachainTxEnvelope) -> bool {
-        matches!(tx, BerachainTxEnvelope::Berachain(_))
-    }
 }
 
 impl PayloadValidator for BerachainEngineValidator {
@@ -187,11 +135,8 @@ impl PayloadValidator for BerachainEngineValidator {
             ));
         }
 
-        // Apply standard hardfork validations
+        // Apply standard + Berachain hardfork validations
         self.validate_hardfork_fields(&sealed_block, &sidecar)?;
-
-        // Apply Berachain-specific validations
-        self.validate_berachain_specific_fields(&sealed_block)?;
 
         sealed_block.try_recover().map_err(|e| NewPayloadError::Other(e.into()))
     }
@@ -259,58 +204,6 @@ where
 
     async fn build(self, ctx: &AddOnsContext<'_, Node>) -> eyre::Result<Self::Validator> {
         Ok(BerachainEngineValidator::new(ctx.config.chain.clone()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use jsonrpsee_core::__reexports::serde_json;
-
-    fn create_test_chain_spec() -> Arc<BerachainChainSpec> {
-        let mut genesis = alloy_genesis::Genesis::default();
-        genesis.config.cancun_time = Some(0);
-        genesis.config.terminal_total_difficulty = Some(alloy_primitives::U256::ZERO);
-        let extra_fields_json = serde_json::json!({
-            "berachain": {
-                "prague1": {
-                    "time": 0,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1000000000,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
-                }
-            }
-        });
-        genesis.config.extra_fields =
-            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
-        Arc::new(BerachainChainSpec::from(genesis))
-    }
-
-    #[test]
-    fn test_is_pol_transaction() {
-        use crate::transaction::{BerachainTxEnvelope, PoLTx};
-        use alloy_primitives::{Address, Sealed};
-
-        let chain_spec = create_test_chain_spec();
-        let validator = BerachainEngineValidator::new(chain_spec);
-
-        // Test PoL transaction detection
-        let pol_tx_inner = PoLTx {
-            chain_id: 1,
-            from: Address::ZERO,
-            to: Address::ZERO,
-            nonce: 0,
-            gas_limit: 21000,
-            gas_price: 1000000000,
-            input: Default::default(),
-        };
-        let pol_tx =
-            BerachainTxEnvelope::Berachain(Sealed::new_unchecked(pol_tx_inner, Default::default()));
-
-        assert!(validator.is_pol_transaction(&pol_tx));
-
-        // For simplicity, skip testing non-PoL transaction due to complex type requirements
-        // The method logic is simple: matches!(tx, BerachainTxEnvelope::Berachain(_))
     }
 }
 

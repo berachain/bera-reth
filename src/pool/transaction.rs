@@ -123,13 +123,7 @@ impl Transaction for BerachainPooledTransaction {
 
 /// A type alias for `PooledTransaction` that's also generic over blob sidecar.
 pub type BerachainPooledTransactionVariant =
-    alloy_consensus::EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>;
-
-impl From<Recovered<BerachainPooledTransactionVariant>> for BerachainPooledTransaction {
-    fn from(_value: Recovered<BerachainPooledTransactionVariant>) -> Self {
-        todo!()
-    }
-}
+    EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>;
 
 impl BerachainPooledTransaction {
     /// Create new instance of [Self].
