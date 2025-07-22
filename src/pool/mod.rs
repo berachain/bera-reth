@@ -1,4 +1,4 @@
-mod transaction;
+pub mod transaction;
 
 use crate::{
     chainspec::BerachainChainSpec, pool::transaction::BerachainPooledTransaction,

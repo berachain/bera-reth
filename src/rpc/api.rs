@@ -1,15 +1,15 @@
 use crate::{
     primitives::BerachainHeader,
     rpc::receipt::BerachainReceiptEnvelope,
-    transaction::{BerachainTxEnvelope, BerachainTxType},
+    transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE},
 };
-use alloy_consensus::crypto::RecoveryError;
+use alloy_consensus::{Transaction, crypto::RecoveryError};
 use alloy_eips::eip2930::AccessList;
 use alloy_network::{
     BuildResult, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
 };
 use alloy_primitives::{Address, B256, Bytes, ChainId, TxKind, U256};
-use alloy_rpc_types_eth::{Transaction, TransactionRequest};
+use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
 use reth::{
@@ -59,150 +59,241 @@ impl fmt::Display for BerachainTxType {
 }
 
 impl From<BerachainTxEnvelope> for BerachainTxType {
-    fn from(_value: BerachainTxEnvelope) -> Self {
-        todo!()
+    fn from(value: BerachainTxEnvelope) -> Self {
+        match value {
+            BerachainTxEnvelope::Ethereum(tx) => Self::Ethereum(tx.tx_type()),
+            BerachainTxEnvelope::Berachain(_) => Self::Berachain,
+        }
     }
 }
 
-impl From<BerachainTxEnvelope> for alloy_rpc_types_eth::transaction::TransactionRequest {
-    fn from(_value: BerachainTxEnvelope) -> Self {
-        todo!()
+impl From<BerachainTxEnvelope> for TransactionRequest {
+    fn from(value: BerachainTxEnvelope) -> Self {
+        match value {
+            BerachainTxEnvelope::Ethereum(tx) => Self {
+                to: Some(tx.kind()),
+                gas: tx.gas_limit().into(),
+                gas_price: tx.gas_price(),
+                max_fee_per_gas: Some(tx.max_fee_per_gas()),
+                max_priority_fee_per_gas: tx.max_priority_fee_per_gas(),
+                value: Some(tx.value()),
+                input: Some(tx.input().clone()).into(),
+                nonce: Some(tx.nonce()),
+                chain_id: tx.chain_id(),
+                access_list: tx.access_list().cloned(),
+                transaction_type: Some(tx.tx_type() as u8),
+                ..Default::default()
+            },
+            BerachainTxEnvelope::Berachain(pol_tx) => Self {
+                to: Some(pol_tx.to.into()),
+                gas: Some(pol_tx.gas_limit),
+                gas_price: Some(pol_tx.gas_price),
+                value: Some(pol_tx.value()),
+                input: Some(pol_tx.input().clone()).into(),
+                nonce: Some(pol_tx.nonce()),
+                chain_id: pol_tx.chain_id(),
+                from: Some(pol_tx.from),
+                ..Default::default()
+            },
+        }
     }
 }
-impl From<BerachainTxType> for alloy_rpc_types_eth::transaction::TransactionRequest {
-    fn from(_value: BerachainTxType) -> Self {
-        todo!()
+impl From<BerachainTxType> for TransactionRequest {
+    fn from(value: BerachainTxType) -> Self {
+        Self {
+            transaction_type: Some(match value {
+                BerachainTxType::Ethereum(tx_type) => tx_type as u8,
+                BerachainTxType::Berachain => POL_TX_TYPE,
+            }),
+            ..Default::default()
+        }
     }
 }
 
-impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::TransactionRequest {
+impl TransactionBuilder<BerachainNetwork> for TransactionRequest {
     fn chain_id(&self) -> Option<ChainId> {
-        todo!()
+        self.chain_id
     }
 
-    fn set_chain_id(&mut self, _chain_id: ChainId) {
-        todo!()
+    fn set_chain_id(&mut self, chain_id: ChainId) {
+        self.chain_id = Some(chain_id);
     }
 
     fn nonce(&self) -> Option<u64> {
-        todo!()
+        self.nonce
     }
 
-    fn set_nonce(&mut self, _nonce: u64) {
-        todo!()
+    fn set_nonce(&mut self, nonce: u64) {
+        self.nonce = Some(nonce);
     }
 
     fn take_nonce(&mut self) -> Option<u64> {
-        todo!()
+        self.nonce.take()
     }
 
     fn input(&self) -> Option<&Bytes> {
-        todo!()
+        self.input.input.as_ref()
     }
 
-    fn set_input<T: Into<Bytes>>(&mut self, _input: T) {
-        todo!()
+    fn set_input<T: Into<Bytes>>(&mut self, input: T) {
+        self.input.input = Some(input.into());
     }
 
     fn from(&self) -> Option<Address> {
-        todo!()
+        self.from
     }
 
-    fn set_from(&mut self, _from: Address) {
-        todo!()
+    fn set_from(&mut self, from: Address) {
+        self.from = Some(from);
     }
 
     fn kind(&self) -> Option<TxKind> {
-        todo!()
+        self.to
     }
 
     fn clear_kind(&mut self) {
-        todo!()
+        self.to = None;
     }
 
-    fn set_kind(&mut self, _kind: TxKind) {
-        todo!()
+    fn set_kind(&mut self, kind: TxKind) {
+        self.to = Some(kind);
     }
 
     fn value(&self) -> Option<U256> {
-        todo!()
+        self.value
     }
 
-    fn set_value(&mut self, _value: U256) {
-        todo!()
+    fn set_value(&mut self, value: U256) {
+        self.value = Some(value);
     }
 
     fn gas_price(&self) -> Option<u128> {
-        todo!()
+        self.gas_price
     }
 
-    fn set_gas_price(&mut self, _gas_price: u128) {
-        todo!()
+    fn set_gas_price(&mut self, gas_price: u128) {
+        self.gas_price = Some(gas_price);
     }
 
     fn max_fee_per_gas(&self) -> Option<u128> {
-        todo!()
+        self.max_fee_per_gas
     }
 
-    fn set_max_fee_per_gas(&mut self, _max_fee_per_gas: u128) {
-        todo!()
+    fn set_max_fee_per_gas(&mut self, max_fee_per_gas: u128) {
+        self.max_fee_per_gas = Some(max_fee_per_gas);
     }
 
     fn max_priority_fee_per_gas(&self) -> Option<u128> {
-        todo!()
+        self.max_priority_fee_per_gas
     }
 
-    fn set_max_priority_fee_per_gas(&mut self, _max_priority_fee_per_gas: u128) {
-        todo!()
+    fn set_max_priority_fee_per_gas(&mut self, max_priority_fee_per_gas: u128) {
+        self.max_priority_fee_per_gas = Some(max_priority_fee_per_gas);
     }
 
     fn gas_limit(&self) -> Option<u64> {
-        todo!()
+        self.gas
     }
 
-    fn set_gas_limit(&mut self, _gas_limit: u64) {
-        todo!()
+    fn set_gas_limit(&mut self, gas_limit: u64) {
+        self.gas = Some(gas_limit);
     }
 
     fn access_list(&self) -> Option<&AccessList> {
-        todo!()
+        self.access_list.as_ref()
     }
 
-    fn set_access_list(&mut self, _access_list: AccessList) {
-        todo!()
+    fn set_access_list(&mut self, access_list: AccessList) {
+        self.access_list = Some(access_list);
     }
 
     fn complete_type(
         &self,
-        _ty: <BerachainNetwork as Network>::TxType,
+        ty: <BerachainNetwork as Network>::TxType,
     ) -> Result<(), Vec<&'static str>> {
-        todo!()
+        let mut missing = Vec::new();
+
+        if self.from.is_none() {
+            missing.push("from");
+        }
+        if self.to.is_none() {
+            missing.push("to");
+        }
+        if self.gas.is_none() {
+            missing.push("gas");
+        }
+
+        match ty {
+            BerachainTxType::Ethereum(_) => {
+                if self.gas_price.is_none() && self.max_fee_per_gas.is_none() {
+                    missing.push("gas_price or max_fee_per_gas");
+                }
+            }
+            BerachainTxType::Berachain => {
+                if self.gas_price.is_none() {
+                    missing.push("gas_price");
+                }
+            }
+        }
+
+        if missing.is_empty() { Ok(()) } else { Err(missing) }
     }
 
     fn can_submit(&self) -> bool {
-        todo!()
+        self.from.is_some() &&
+            self.to.is_some() &&
+            self.gas.is_some() &&
+            (self.gas_price.is_some() || self.max_fee_per_gas.is_some())
     }
 
     fn can_build(&self) -> bool {
-        todo!()
+        self.to.is_some() &&
+            self.gas.is_some() &&
+            (self.gas_price.is_some() || self.max_fee_per_gas.is_some())
     }
 
     fn output_tx_type(&self) -> <BerachainNetwork as Network>::TxType {
-        todo!()
+        match self.transaction_type {
+            Some(POL_TX_TYPE) => BerachainTxType::Berachain,
+            Some(ty) => BerachainTxType::Ethereum(
+                alloy_consensus::TxType::try_from(ty).unwrap_or(alloy_consensus::TxType::Legacy),
+            ),
+            None => {
+                if self.max_fee_per_gas.is_some() || self.max_priority_fee_per_gas.is_some() {
+                    BerachainTxType::Ethereum(alloy_consensus::TxType::Eip1559)
+                } else if self.access_list.is_some() {
+                    BerachainTxType::Ethereum(alloy_consensus::TxType::Eip2930)
+                } else {
+                    BerachainTxType::Ethereum(alloy_consensus::TxType::Legacy)
+                }
+            }
+        }
     }
 
     fn output_tx_type_checked(&self) -> Option<<BerachainNetwork as Network>::TxType> {
-        todo!()
+        if <Self as TransactionBuilder<BerachainNetwork>>::can_build(self) {
+            Some(<Self as TransactionBuilder<BerachainNetwork>>::output_tx_type(self))
+        } else {
+            None
+        }
     }
 
     fn prep_for_submission(&mut self) {
-        todo!()
+        if self.nonce.is_none() {
+            self.nonce = Some(0);
+        }
+        if self.value.is_none() {
+            self.value = Some(U256::ZERO);
+        }
+        if self.input.input.is_none() {
+            self.input.input = Some(Bytes::new());
+        }
     }
 
     fn build_unsigned(
         self,
     ) -> BuildResult<<BerachainNetwork as Network>::UnsignedTx, BerachainNetwork> {
-        todo!()
+        Ok(<Self as TransactionBuilder<BerachainNetwork>>::output_tx_type(&self))
     }
 
     async fn build<W: NetworkWallet<BerachainNetwork>>(
@@ -210,7 +301,10 @@ impl TransactionBuilder<BerachainNetwork> for alloy_rpc_types_eth::transaction::
         _wallet: &W,
     ) -> Result<<BerachainNetwork as Network>::TxEnvelope, TransactionBuilderError<BerachainNetwork>>
     {
-        todo!()
+        Err(TransactionBuilderError::InvalidTransactionRequest(
+            <Self as TransactionBuilder<BerachainNetwork>>::output_tx_type(&self),
+            vec!["unsupported"],
+        ))
     }
 }
 
@@ -232,7 +326,7 @@ impl Network for BerachainNetwork {
 
     type TransactionRequest = TransactionRequest;
 
-    type TransactionResponse = Transaction<BerachainTxEnvelope>;
+    type TransactionResponse = RpcTransaction<BerachainTxEnvelope>;
 
     type ReceiptResponse = alloy_rpc_types_eth::TransactionReceipt<BerachainReceiptEnvelope>;
 

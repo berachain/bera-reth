@@ -1,0 +1,53 @@
+# Fast debug build Dockerfile for bera-reth development
+# Uses same cargo-chef pattern as production but with debug profile
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get -y upgrade && apt-get install -y libclang-dev pkg-config
+
+# Builds a cargo-chef plan
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+
+# Use dev profile for faster builds (Cargo's debug profile)
+ARG BUILD_PROFILE=dev
+ENV BUILD_PROFILE=$BUILD_PROFILE
+
+# Builds dependencies with debug profile (faster linking, keeps symbols)
+RUN cargo chef cook --profile $BUILD_PROFILE --recipe-path recipe.json
+
+# Build application
+COPY . .
+RUN cargo build --profile $BUILD_PROFILE --locked --bin bera-reth
+
+# Copy binary from debug directory (dev profile builds to debug dir)
+RUN cp /app/target/debug/bera-reth /app/bera-reth
+
+# Use Ubuntu as the release image  
+FROM ubuntu:24.04 AS runtime
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y ca-certificates libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy bera-reth over from the build stage
+COPY --from=builder /app/bera-reth /usr/local/bin/
+RUN chmod +x /usr/local/bin/bera-reth
+
+# Copy licenses
+COPY LICENSE ./
+
+# Expose standard Ethereum execution client ports
+EXPOSE 30303 30303/udp 9001 8545 8546 8551
+
+# Set environment to show we're in debug mode
+ENV RUST_LOG=debug
+ENV BUILD_TYPE=debug
+
+ENTRYPOINT ["/usr/local/bin/bera-reth"]

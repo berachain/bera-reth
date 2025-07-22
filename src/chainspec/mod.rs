@@ -34,12 +34,12 @@ const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
 pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
-    inner: ChainSpec,
-    genesis_header: BerachainHeader,
+    pub inner: ChainSpec,
+    pub genesis_header: BerachainHeader,
     /// PoL contract address loaded from configuration
-    pol_contract_address: Address,
+    pub pol_contract_address: Address,
     /// The minimum base fee in wei
-    prague1_minimum_base_fee: u64,
+    pub prague1_minimum_base_fee: u64,
 }
 
 impl BerachainChainSpec {

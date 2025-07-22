@@ -44,6 +44,14 @@ docker-build-local: ## Build a Docker image for local use.
 		--build-arg BUILD_PROFILE=$(PROFILE) \
 		.
 
+.PHONY: docker-build-debug
+docker-build-debug: ## Fast debug build using Docker multistage (no cross-compilation needed).
+	@echo "Building debug Docker image with in-container compilation..."
+	docker build --file Dockerfile.debug --tag $(DOCKER_IMAGE_NAME):debug \
+		--build-arg COMMIT=$(GIT_SHA) \
+		--build-arg VERSION=$(GIT_TAG) \
+		.
+
 .PHONY: docker-build-push-nightly
 docker-build-push-nightly: ## Build and push cross-arch Docker image tagged with nightly.
 	$(call docker_build_push,nightly,nightly)

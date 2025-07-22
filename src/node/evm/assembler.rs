@@ -81,7 +81,6 @@ where
             )?;
 
             transactions.insert(0, pol_transaction);
-            info!(target: "block assembler", "Injected POL transaction into block transaction list");
 
             // Validate that we have receipts after POL transaction execution
             if receipts.is_empty() {

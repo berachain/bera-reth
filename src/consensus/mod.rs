@@ -43,6 +43,7 @@ impl BerachainBeaconConsensus {
         Self { inner: EthBeaconConsensus::new(chain_spec.clone()), chain_spec }
     }
 
+    /// Will ensure the PoL transaction is the first tx in the block and has the correct hash
     fn validate_pol_transaction(
         &self,
         block: &SealedBlock<BerachainBlock>,
@@ -90,7 +91,9 @@ impl BerachainBeaconConsensus {
             )
         })?;
 
-        let base_fee = header.base_fee_per_gas.unwrap_or(0);
+        let base_fee = header
+            .base_fee_per_gas
+            .ok_or_else(|| ConsensusError::Other("Base fee must be present in header".into()))?;
 
         validate_pol_transaction(
             pol_tx,
