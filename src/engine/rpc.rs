@@ -344,6 +344,63 @@ pub struct BerachainEngineApi<Provider, PayloadT: PayloadTypes, Pool, Validator,
     chain_spec: Arc<ChainSpec>,
 }
 
+impl<Provider, PayloadT: PayloadTypes, Pool, Validator, ChainSpec>
+    BerachainEngineApi<Provider, PayloadT, Pool, Validator, ChainSpec>
+where
+    ChainSpec: EthereumHardforks + BerachainHardforks,
+{
+    /// Validates requirements for newPayloadV4 - Prague1 must not be active
+    fn validate_payload_v4_requirements(chain_spec: &ChainSpec, timestamp: u64) -> RpcResult<()> {
+        if chain_spec.is_prague1_active_at_timestamp(timestamp) {
+            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
+                INVALID_PAYLOAD_ATTRIBUTES,
+                "newPayloadV4P11 required for Prague1 fork, use newPayloadV4P11 instead",
+                None::<()>,
+            ))
+            .into());
+        }
+
+        // Validate that no proposer pubkey is provided (should be None)
+        validate_proposer_pubkey_prague1(chain_spec, timestamp, None).map_err(|error| {
+            EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
+                INVALID_PAYLOAD_ATTRIBUTES,
+                error.to_string(),
+                None::<()>,
+            ))
+        })?;
+
+        Ok(())
+    }
+
+    /// Validates requirements for newPayloadV4P11 - Prague1 must be active
+    fn validate_payload_v4_p11_requirements(
+        chain_spec: &ChainSpec,
+        timestamp: u64,
+        parent_proposer_pub_key: BlsPublicKey,
+    ) -> RpcResult<()> {
+        if !chain_spec.is_prague1_active_at_timestamp(timestamp) {
+            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
+                INVALID_PAYLOAD_ATTRIBUTES,
+                "Prague1 fork not active, use newPayloadV4 instead",
+                None::<()>,
+            ))
+            .into());
+        }
+
+        // Validate that proposer pubkey is required for P11
+        validate_proposer_pubkey_prague1(chain_spec, timestamp, Some(parent_proposer_pub_key))
+            .map_err(|error| {
+                EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
+                    INVALID_PAYLOAD_ATTRIBUTES,
+                    error.to_string(),
+                    None::<()>,
+                ))
+            })?;
+
+        Ok(())
+    }
+}
+
 #[async_trait::async_trait]
 impl<Provider, EngineT, Pool, Validator, ChainSpec> BerachainEngineApiServer<EngineT>
     for BerachainEngineApi<Provider, EngineT, Pool, Validator, ChainSpec>
@@ -397,26 +454,7 @@ where
             return Err(EngineApiError::UnexpectedRequestsHash.into());
         }
 
-        if self.chain_spec.is_prague1_active_at_timestamp(payload.timestamp()) {
-            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                "newPayloadV4P11 required for Prague1 fork, use newPayloadV4P11 instead"
-                    .to_string(),
-                None::<()>,
-            ))
-            .into());
-        }
-
-        // Validate Electra1 requirements - parent_proposer_pub_key is None
-        validate_proposer_pubkey_prague1(&*self.chain_spec, payload.timestamp(), None).map_err(
-            |error| {
-                EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                    INVALID_PAYLOAD_ATTRIBUTES,
-                    error.to_string(),
-                    None::<()>,
-                ))
-            },
-        )?;
+        Self::validate_payload_v4_requirements(&*self.chain_spec, payload.timestamp())?;
 
         let berachain_payload = BerachainExecutionData::new(
             payload.into(),
@@ -441,28 +479,11 @@ where
         trace!(target: "rpc::engine", "Serving engine_newPayloadV4P11");
         trace!(target: "rpc::engine", "received parent_proposer_pub_key {:?}", parent_proposer_pub_key);
 
-        if !self.chain_spec.is_prague1_active_at_timestamp(payload.timestamp()) {
-            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                "Prague1 fork not active, use newPayloadV4 instead".to_string(),
-                None::<()>,
-            ))
-            .into());
-        }
-
-        // Validate Electra1 requirements - parent_proposer_pub_key is required for P11
-        validate_proposer_pubkey_prague1(
+        Self::validate_payload_v4_p11_requirements(
             &*self.chain_spec,
             payload.timestamp(),
-            Some(parent_proposer_pub_key),
-        )
-        .map_err(|error| {
-            EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                error.to_string(),
-                None::<()>,
-            ))
-        })?;
+            parent_proposer_pub_key,
+        )?;
 
         // Accept requests as a hash only if it is explicitly allowed
         if execution_requests.is_hash() && !self.inner.accept_execution_requests_hash() {

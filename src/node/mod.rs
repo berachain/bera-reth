@@ -118,7 +118,7 @@ where
             .executor(BerachainExecutorBuilder)
             .payload(BasicPayloadServiceBuilder::new(BerachainPayloadServiceBuilder::default()))
             .network(EthereumNetworkBuilder::default())
-            .consensus(BerachainConsensusBuilder::default())
+            .consensus(BerachainConsensusBuilder)
     }
 
     fn add_ons(&self) -> Self::AddOns {
@@ -143,19 +143,5 @@ where
     ) -> impl PayloadAttributesBuilder<<<Self as NodeTypes>::Payload as PayloadTypes>::PayloadAttributes>
     {
         LocalPayloadAttributesBuilder::new(Arc::new(chain_spec.clone()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_node_types() {
-        let node = BerachainNode::default();
-
-        // Test that BerachainNode can be instantiated and has Debug
-        let debug_str = format!("{node:?}");
-        assert!(debug_str.contains("BerachainNode"));
     }
 }

@@ -250,12 +250,70 @@ pub fn validate_proposer_pubkey_prague1<ChainSpec: BerachainHardforks>(
     timestamp: u64,
     proposer_pub_key: Option<BlsPublicKey>,
 ) -> Result<(), BerachainExecutionError> {
-    if chain_spec.is_prague1_active_at_timestamp(timestamp) {
-        if proposer_pub_key.is_none() {
-            return Err(BerachainExecutionError::MissingProposerPubkey);
-        }
-    } else if proposer_pub_key.is_some() {
-        return Err(BerachainExecutionError::ProposerPubkeyNotAllowed);
+    let is_prague1_active = chain_spec.is_prague1_active_at_timestamp(timestamp);
+
+    match (is_prague1_active, proposer_pub_key.is_some()) {
+        (true, false) => Err(BerachainExecutionError::MissingProposerPubkey),
+        (false, true) => Err(BerachainExecutionError::ProposerPubkeyNotAllowed),
+        _ => Ok(()),
     }
-    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chainspec::BerachainChainSpec;
+    use jsonrpsee_core::__reexports::serde_json;
+    use std::sync::Arc;
+
+    fn create_test_chainspec(prague1_time: u64) -> Arc<BerachainChainSpec> {
+        let mut genesis = alloy_genesis::Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(alloy_primitives::U256::ZERO);
+
+        let extra_fields_json = serde_json::json!({
+            "berachain": {
+                "prague1": {
+                    "time": prague1_time,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        Arc::new(BerachainChainSpec::from(genesis))
+    }
+
+    #[test]
+    fn test_proposer_pubkey_validation_prague1_active() {
+        let chainspec = create_test_chainspec(1000); // Prague1 at timestamp 1000
+
+        // Prague1 active: pubkey required
+        assert!(
+            validate_proposer_pubkey_prague1(&*chainspec, 1000, Some(BlsPublicKey::ZERO)).is_ok()
+        );
+
+        // Prague1 active: missing pubkey should fail
+        assert!(matches!(
+            validate_proposer_pubkey_prague1(&*chainspec, 1000, None),
+            Err(BerachainExecutionError::MissingProposerPubkey)
+        ));
+    }
+
+    #[test]
+    fn test_proposer_pubkey_validation_prague1_inactive() {
+        let chainspec = create_test_chainspec(1000); // Prague1 at timestamp 1000
+
+        // Prague1 inactive: no pubkey allowed
+        assert!(validate_proposer_pubkey_prague1(&*chainspec, 999, None).is_ok());
+
+        // Prague1 inactive: pubkey present should fail
+        assert!(matches!(
+            validate_proposer_pubkey_prague1(&*chainspec, 999, Some(BlsPublicKey::ZERO)),
+            Err(BerachainExecutionError::ProposerPubkeyNotAllowed)
+        ));
+    }
 }

@@ -14,7 +14,7 @@ use alloy_primitives::{Address, B256, Bytes, TxHash, TxKind, U256};
 use reth_ethereum_primitives::{PooledTransactionVariant, TransactionSigned};
 use reth_primitives_traits::{InMemorySize, SignedTransaction};
 use reth_transaction_pool::{EthBlobTransactionSidecar, EthPoolTransaction, PoolTransaction};
-use std::{convert::Infallible, sync::Arc};
+use std::sync::Arc;
 
 /// The default `PoolTransaction` for the Pool for Ethereum.
 ///
@@ -123,13 +123,7 @@ impl Transaction for BerachainPooledTransaction {
 
 /// A type alias for `PooledTransaction` that's also generic over blob sidecar.
 pub type BerachainPooledTransactionVariant =
-    alloy_consensus::EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>;
-
-impl From<Recovered<BerachainPooledTransactionVariant>> for BerachainPooledTransaction {
-    fn from(_value: Recovered<BerachainPooledTransactionVariant>) -> Self {
-        todo!()
-    }
-}
+    EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>;
 
 impl BerachainPooledTransaction {
     /// Create new instance of [Self].
@@ -176,7 +170,7 @@ impl InMemorySize for BerachainPooledTransaction {
 }
 
 impl PoolTransaction for BerachainPooledTransaction {
-    type TryFromConsensusError = Infallible;
+    type TryFromConsensusError = crate::transaction::TxConversionError;
 
     type Consensus = BerachainTxEnvelope;
 

@@ -1,27 +1,25 @@
 use crate::{
-    chainspec::BerachainChainSpec, primitives::header::BlsPublicKey,
-    transaction::BerachainTxEnvelope,
+    chainspec::BerachainChainSpec,
+    primitives::header::BlsPublicKey,
+    transaction::{BerachainTxEnvelope, PoLTx},
 };
-use alloy_primitives::U256;
-use reth::revm::{handler::SYSTEM_ADDRESS, primitives::eip7825};
+use alloy_primitives::{Bytes, Sealed, U256};
+use alloy_sol_macro::sol;
+use alloy_sol_types::SolCall;
+use reth::{
+    consensus::ConsensusError,
+    revm::{handler::SYSTEM_ADDRESS, primitives::eip7825},
+};
 use reth_chainspec::EthChainSpec;
 use reth_evm::block::{BlockExecutionError, InternalBlockExecutionError};
 use std::sync::Arc;
 
-/// Create a POL transaction with the given validator pubkey
-/// This is the canonical POL transaction creation logic used by both executor and assembler
 pub fn create_pol_transaction(
     chain_spec: Arc<BerachainChainSpec>,
     prev_proposer_pubkey: BlsPublicKey,
     block_number: U256,
     base_fee: u64,
 ) -> Result<BerachainTxEnvelope, BlockExecutionError> {
-    use crate::transaction::PoLTx;
-    use alloy_primitives::{Bytes, Sealed};
-    use alloy_sol_macro::sol;
-    use alloy_sol_types::SolCall;
-
-    // Construct ABI-encoded calldata
     sol! {
         interface PoLDistributor {
             function distributeFor(bytes calldata pubkey) external;
@@ -41,7 +39,6 @@ pub fn create_pol_transaction(
         ))
     })?;
 
-    // Create POL transaction
     let pol_tx = PoLTx {
         chain_id: chain_spec.chain_id(),
         from: SYSTEM_ADDRESS,
@@ -53,6 +50,33 @@ pub fn create_pol_transaction(
                                                * compatability reasons */
     };
 
-    // Wrap in transaction envelope and calculate proper hash
     Ok(BerachainTxEnvelope::Berachain(Sealed::new(pol_tx)))
+}
+
+pub fn validate_pol_transaction(
+    pol_tx: &Sealed<PoLTx>,
+    chain_spec: Arc<BerachainChainSpec>,
+    expected_pubkey: BlsPublicKey,
+    block_number: U256,
+    base_fee: u64,
+) -> Result<(), ConsensusError> {
+    let expected_tx = create_pol_transaction(chain_spec, expected_pubkey, block_number, base_fee)
+        .map_err(|e| {
+        ConsensusError::Other(format!("Failed to create expected PoL transaction: {e}"))
+    })?;
+
+    let expected_sealed_pol_tx = match expected_tx {
+        BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
+        _ => return Err(ConsensusError::Other("Expected PoL transaction envelope".into())),
+    };
+
+    if pol_tx.hash() != expected_sealed_pol_tx.hash() {
+        return Err(ConsensusError::Other(format!(
+            "PoL transaction hash mismatch: expected {}, got {}",
+            expected_sealed_pol_tx.hash(),
+            pol_tx.hash()
+        )));
+    }
+
+    Ok(())
 }
