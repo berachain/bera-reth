@@ -1,5 +1,5 @@
 pub mod pol;
-mod txtype;
+pub mod txtype;
 
 /// Transaction type identifier for Berachain POL transactions
 pub const POL_TX_TYPE: u8 = 126; // 0x7E
