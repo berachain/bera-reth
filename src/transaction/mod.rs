@@ -277,7 +277,7 @@ pub enum BerachainTxEnvelope {
     /// Existing Ethereum transactions
     #[envelope(flatten)]
     Ethereum(TxEnvelope),
-    // Berachain PoL Transaction introduced in BRIP-0004
+    /// Berachain PoL Transaction introduced in BRIP-0004
     #[envelope(ty = 126)] // POL_TX_TYPE - derive macro requires literal
     Berachain(Sealed<PoLTx>),
 }
