@@ -388,6 +388,10 @@ impl BerachainTxEnvelope {
     }
 }
 
+// STORAGE COMPATIBILITY: These CompactEnvelope implementations follow Reth's exact patterns
+// to ensure database compatibility. Ethereum transactions use identical serialization to Reth.
+// Only PoL transactions (type 126) use bera-reth specific encoding.
+// See: reth/crates/storage/codecs/src/alloy/transaction/ethereum.rs for reference patterns
 impl ToTxCompact for BerachainTxEnvelope {
     fn to_tx_compact(&self, buf: &mut (impl BufMut + AsMut<[u8]>)) {
         match self {
@@ -404,14 +408,18 @@ impl ToTxCompact for BerachainTxEnvelope {
                         signed_tx.tx().to_compact(buf);
                     }
                     TxEnvelope::Eip4844(signed_tx) => {
+                        // Follow Reth's exact approach for EIP-4844 storage compatibility
+                        // Reth doesn't use variant flags - it delegates to Alloy's compact
+                        // implementation which handles TxEip4844Variant
+                        // internally through the type system.
+                        // See: reth/crates/storage/codecs/src/alloy/transaction/eip4844.rs:48-87
                         let tx_variant = signed_tx.tx();
                         match tx_variant {
                             alloy_consensus::TxEip4844Variant::TxEip4844(tx) => {
-                                buf.put_u8(0); // variant flag
                                 tx.to_compact(buf);
                             }
                             alloy_consensus::TxEip4844Variant::TxEip4844WithSidecar(tx) => {
-                                buf.put_u8(1); // variant flag
+                                // Store only the base transaction - sidecars handled separately
                                 tx.tx().to_compact(buf);
                             }
                         }
@@ -453,8 +461,10 @@ impl FromTxCompact for BerachainTxEnvelope {
                         (Self::Ethereum(TxEnvelope::Eip1559(signed)), buf)
                     }
                     TxType::Eip4844 => {
-                        let _variant_flag = buf[0]; // variant flag for future use
-                        let buf = &buf[1..];
+                        // Follow Reth's exact EIP-4844 deserialization for storage compatibility
+                        // Reth stores only the base TxEip4844 in compact form - no variant flags
+                        // Sidecars are handled separately in pooled transactions
+                        // See: reth/crates/storage/codecs/src/alloy/transaction/eip4844.rs:89-105
                         let (tx, remaining_buf) =
                             alloy_consensus::TxEip4844::from_compact(buf, buf.len());
                         let tx_variant = alloy_consensus::TxEip4844Variant::TxEip4844(tx);
