@@ -13,9 +13,7 @@ use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
 use reth::{
-    providers::{
-        BlockReader, NodePrimitivesProvider, ProviderHeader, ProviderTx, TransactionsProvider,
-    },
+    providers::{ProviderHeader, ProviderTx},
     rpc::compat::{RpcConvert, RpcTypes},
     tasks::{
         TaskSpawner,
@@ -23,9 +21,7 @@ use reth::{
     },
     transaction_pool::{PoolTransaction, TransactionPool},
 };
-use reth_chainspec::EthChainSpec;
-use reth_evm::{ConfigureEvm, TxEnvFor};
-use reth_primitives_traits::NodePrimitives;
+use reth_evm::TxEnvFor;
 use reth_rpc::eth::DevSigner;
 use reth_rpc_convert::SignableTxRequest;
 use reth_rpc_eth_api::{
@@ -455,7 +451,7 @@ where
 {
     #[inline]
     fn signers(&self) -> &SignersForRpc<Self::Provider, Self::NetworkTypes> {
-        self.inner.signers()
+        EthTransactions::signers(&self.inner)
     }
 
     /// Decodes and recovers the transaction and submits it to the pool.
