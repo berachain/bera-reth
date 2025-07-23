@@ -29,7 +29,6 @@ use reth_codecs::{
     alloy::transaction::{CompactEnvelope, Envelope, FromTxCompact, ToTxCompact},
 };
 use reth_db::table::{Compress, Decompress};
-// use reth_zstd_compressors::{TRANSACTION_COMPRESSOR, TRANSACTION_DECOMPRESSOR};
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
 use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
