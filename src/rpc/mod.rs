@@ -50,18 +50,11 @@ where
         >,
     EthApiError: FromEvmError<N::Evm>,
 {
-    type EthApi = BerachainApi<
-        <N as FullNodeTypes>::Provider,
-        <N as FullNodeComponents>::Pool,
-        <N as FullNodeComponents>::Network,
-        <N as FullNodeComponents>::Evm,
-        BerachainEthRpcConverterFor<N>,
-    >;
+    type EthApi = BerachainApi<N, BerachainEthRpcConverterFor<N>>;
 
     async fn build_eth_api(self, ctx: EthApiCtx<'_, N>) -> eyre::Result<Self::EthApi> {
         let tx_resp_builder = BerachainEthRpcConverterFor::<N>::new(
             BerachainEthReceiptConverter::new(ctx.components.provider().clone().chain_spec()),
-            (),
         );
 
         let api = reth_rpc::EthApiBuilder::new(
