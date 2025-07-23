@@ -294,7 +294,7 @@ impl BerachainTxEnvelope {
     }
     pub fn tx_type(&self) -> BerachainTxType {
         match self {
-            // TODO: Rez, is there a better way?
+            // Unwrap is safe here as berachain supports all eth tx types.
             Self::Ethereum(tx) => BerachainTxType::try_from(tx.tx_type() as u8).unwrap(),
             Self::Berachain(_) => BerachainTxType::Berachain,
         }
