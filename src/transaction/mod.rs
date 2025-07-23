@@ -49,22 +49,6 @@ pub enum TxConversionError {
     UnsupportedBerachainTransaction,
 }
 
-/// Helper struct for efficient CompactEnvelope-based serialization of PoL transactions.
-/// This follows the Reth pattern of creating helper structs for transaction compaction.
-#[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Default, Compact, serde::Serialize, serde::Deserialize,
-)]
-#[reth_codecs(crate = "reth_codecs")]
-pub(crate) struct TxPoL {
-    chain_id: ChainId,
-    from: Address,
-    to: Address,
-    nonce: u64,
-    gas_limit: u64,
-    gas_price: u128,
-    input: Bytes,
-}
-
 #[derive(Debug, Default, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
 pub struct PoLTx {
     #[serde(with = "alloy_serde::quantity")]
@@ -201,34 +185,6 @@ impl PoLTx {
             gas_price: u128::decode(buf)?,
             input: Bytes::decode(buf)?,
         })
-    }
-}
-
-impl From<&PoLTx> for TxPoL {
-    fn from(tx: &PoLTx) -> Self {
-        Self {
-            chain_id: tx.chain_id,
-            from: tx.from,
-            to: tx.to,
-            nonce: tx.nonce,
-            gas_limit: tx.gas_limit,
-            gas_price: tx.gas_price,
-            input: tx.input.clone(),
-        }
-    }
-}
-
-impl From<TxPoL> for PoLTx {
-    fn from(tx: TxPoL) -> Self {
-        Self {
-            chain_id: tx.chain_id,
-            from: tx.from,
-            to: tx.to,
-            nonce: tx.nonce,
-            gas_limit: tx.gas_limit,
-            gas_price: tx.gas_price,
-            input: tx.input,
-        }
     }
 }
 
@@ -432,9 +388,8 @@ impl ToTxCompact for BerachainTxEnvelope {
                 }
             }
             Self::Berachain(signed_tx) => {
-                // Use the helper TxPoL struct for efficient compaction
-                let tx_pol = TxPoL::from(signed_tx.as_ref());
-                tx_pol.to_compact(buf);
+                // Serialize the PoL transaction directly
+                signed_tx.as_ref().to_compact(buf);
             }
         }
     }
@@ -482,8 +437,7 @@ impl FromTxCompact for BerachainTxEnvelope {
             }
             BerachainTxType::Berachain => {
                 // PoL transactions don't use real signatures - they use Sealed instead
-                let (tx_pol, buf) = TxPoL::from_compact(buf, buf.len());
-                let pol_tx = PoLTx::from(tx_pol);
+                let (pol_tx, buf) = PoLTx::from_compact(buf, buf.len());
                 let sealed = Sealed::new(pol_tx);
                 (Self::Berachain(sealed), buf)
             }
