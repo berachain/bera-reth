@@ -274,7 +274,7 @@ impl SignerRecoverable for PoLTx {
 #[envelope(tx_type_name = BerachainTxType)]
 #[allow(clippy::large_enum_variant)]
 pub enum BerachainTxEnvelope {
-    /// Existing Ethereum transactions (purely additive)
+    /// Existing Ethereum transactions
     #[envelope(flatten)]
     Ethereum(TxEnvelope),
     // Berachain PoL Transaction introduced in BRIP-0004
