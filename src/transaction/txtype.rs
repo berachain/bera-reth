@@ -2,6 +2,7 @@
 
 use crate::transaction::{BerachainTxType, POL_TX_TYPE};
 use alloy_consensus::TxType;
+use alloy_eips::eip2718::{EIP4844_TX_TYPE_ID, EIP7702_TX_TYPE_ID};
 use bytes::{Buf, BufMut};
 use reth::providers::errors::db::DatabaseError;
 use reth_codecs::{Compact, txtype::COMPACT_EXTENDED_IDENTIFIER_FLAG};
@@ -22,9 +23,6 @@ impl Compact for BerachainTxType {
         }
     }
 
-    // For backwards compatibility purposes only 2 bits of the type are encoded in the identifier
-    // parameter. In the case of a [`COMPACT_EXTENDED_IDENTIFIER_FLAG`], the full transaction type
-    // is read from the buffer as a single byte.
     fn from_compact(mut buf: &[u8], identifier: usize) -> (Self, &[u8]) {
         use reth_codecs::txtype::*;
 
@@ -33,12 +31,14 @@ impl Compact for BerachainTxType {
             COMPACT_IDENTIFIER_EIP2930 => Self::Ethereum(TxType::Eip2930),
             COMPACT_IDENTIFIER_EIP1559 => Self::Ethereum(TxType::Eip1559),
             COMPACT_EXTENDED_IDENTIFIER_FLAG => {
-                let tx_type_byte = buf.get_u8();
-                match tx_type_byte {
+                let extended_identifier = buf.get_u8();
+                match extended_identifier {
                     POL_TX_TYPE => Self::Berachain,
-                    3 => Self::Ethereum(TxType::Eip4844), // EIP-4844 blob transactions
-                    4 => Self::Ethereum(TxType::Eip7702), // EIP-7702 set code transactions
-                    _ => panic!("Unsupported BerachainTxType extended identifier: {tx_type_byte}"),
+                    EIP4844_TX_TYPE_ID => Self::Ethereum(TxType::Eip4844),
+                    EIP7702_TX_TYPE_ID => Self::Ethereum(TxType::Eip7702),
+                    _ => panic!(
+                        "Unsupported BerachainTxType extended identifier: {extended_identifier}"
+                    ),
                 }
             }
             _ => panic!("Unknown identifier for BerachainTxType: {identifier}"),
