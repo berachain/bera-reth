@@ -741,7 +741,7 @@ impl From<BerachainTxEnvelope> for EthereumTxEnvelope<alloy_consensus::TxEip4844
 mod compact_envelope_tests {
     use super::*;
     use alloy_consensus::{TxEip1559, TxEip2930, TxEip4844, TxEip7702, TxLegacy};
-    use alloy_eips::eip2930::AccessList;
+    use alloy_eips::{eip2930::AccessList, eip4844::Bytes48};
     use alloy_primitives::{Address, B256, Bytes, ChainId, TxKind, U256};
     use reth_codecs::alloy::transaction::CompactEnvelope;
 
@@ -893,6 +893,47 @@ mod compact_envelope_tests {
                         assert_eq!(decoded_signed.signature(), &signature);
                     }
                     _ => panic!("Expected base EIP-4844 variant"),
+                }
+            }
+            _ => panic!("Expected Ethereum EIP-4844 transaction"),
+        }
+    }
+
+    #[test]
+    fn test_eip4844_with_sidecar_transaction_compact_roundtrip() {
+        let berachain_envelope = create_eip4844_with_sidecar_berachain_envelope();
+
+        // Encode using Berachain CompactEnvelope
+        let mut buf = Vec::new();
+        let len = CompactEnvelope::to_compact(&berachain_envelope, &mut buf);
+
+        // Decode using Berachain CompactEnvelope
+        let (decoded_envelope, _) =
+            <BerachainTxEnvelope as CompactEnvelope>::from_compact(&buf, len);
+
+        match decoded_envelope {
+            BerachainTxEnvelope::Ethereum(TxEnvelope::Eip4844(decoded_signed)) => {
+                // CompactEnvelope strips sidecars during serialization (they're not stored in DB)
+                // so we expect to get back the base TxEip4844 variant, not the sidecar variant
+                match decoded_signed.tx() {
+                    alloy_consensus::TxEip4844Variant::TxEip4844(decoded_tx) => {
+                        // Verify the base transaction fields are preserved
+                        assert_eq!(decoded_tx.chain_id, ChainId::from(1u64));
+                        assert_eq!(decoded_tx.nonce, 6);
+                        assert_eq!(decoded_tx.gas_limit, 45_000);
+                        assert_eq!(decoded_tx.to, Address::from([6u8; 20]));
+                        assert_eq!(decoded_tx.value, U256::from(600));
+                        assert_eq!(decoded_tx.input, Bytes::from("eip4844 with sidecar"));
+                        assert_eq!(decoded_tx.blob_versioned_hashes, vec![B256::from([7u8; 32])]);
+                        assert_eq!(decoded_tx.max_fee_per_blob_gas, 12_000_000_000u128);
+
+                        // Verify signature is preserved
+                        assert_eq!(decoded_signed.signature(), &create_test_signature());
+                    }
+                    variant => panic!(
+                        "Expected base EIP-4844 variant (sidecar stripped during compact), got: {:?}",
+                        variant
+                    ),
                 }
             }
             _ => panic!("Expected Ethereum EIP-4844 transaction"),
@@ -1057,6 +1098,39 @@ mod compact_envelope_tests {
         };
         let signed = Signed::new_unhashed(tx, create_test_signature());
         EthereumTxEnvelope::Eip4844(signed)
+    }
+
+    fn create_eip4844_with_sidecar_berachain_envelope() -> BerachainTxEnvelope {
+        use alloy_consensus::{TxEip4844Variant, TxEip4844WithSidecar};
+        use alloy_eips::eip4844::{Blob, BlobTransactionSidecar};
+
+        let base_tx = TxEip4844 {
+            chain_id: ChainId::from(1u64),
+            nonce: 6,
+            gas_limit: 45_000,
+            max_fee_per_gas: 65_000_000_000u128,
+            max_priority_fee_per_gas: 3_500_000_000u128,
+            to: Address::from([6u8; 20]),
+            value: U256::from(600),
+            access_list: AccessList::default(),
+            blob_versioned_hashes: vec![B256::from([7u8; 32])],
+            max_fee_per_blob_gas: 12_000_000_000u128,
+            input: Bytes::from("eip4844 with sidecar"),
+        };
+
+        // Create a minimal sidecar for testing
+        let blob = Blob::try_from([8u8; 131072].as_slice()).expect("Valid blob size");
+        let sidecar = BlobTransactionSidecar {
+            blobs: vec![blob],
+            commitments: vec![Bytes48::from([9u8; 48])],
+            proofs: vec![Bytes48::from([10u8; 48])],
+        };
+
+        let tx_with_sidecar = TxEip4844WithSidecar { tx: base_tx, sidecar };
+        let variant = TxEip4844Variant::TxEip4844WithSidecar(tx_with_sidecar);
+
+        let signed = Signed::new_unhashed(variant, create_test_signature());
+        BerachainTxEnvelope::Ethereum(TxEnvelope::Eip4844(signed))
     }
 
     fn create_eip7702_envelope() -> EthereumTxEnvelope<TxEip4844> {
