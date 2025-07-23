@@ -512,11 +512,123 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
     where
         B: BufMut + AsMut<[u8]>,
     {
-        CompactEnvelope::to_compact(self, buf)
+        match self {
+            Self::Ethereum(tx) => {
+                // Manually implement the compact encoding following the reth pattern
+                buf.put_u8(tx.tx_type() as u8);
+                match tx {
+                    TxEnvelope::Legacy(signed_tx) => {
+                        signed_tx.signature().to_compact(buf);
+                        signed_tx.tx().to_compact(buf)
+                    }
+                    TxEnvelope::Eip2930(signed_tx) => {
+                        signed_tx.signature().to_compact(buf);
+                        signed_tx.tx().to_compact(buf)
+                    }
+                    TxEnvelope::Eip1559(signed_tx) => {
+                        signed_tx.signature().to_compact(buf);
+                        signed_tx.tx().to_compact(buf)
+                    }
+                    TxEnvelope::Eip4844(signed_tx) => {
+                        signed_tx.signature().to_compact(buf);
+                        // Handle TxEip4844Variant manually
+                        let tx_variant = signed_tx.tx();
+                        match tx_variant {
+                            alloy_consensus::TxEip4844Variant::TxEip4844(tx) => {
+                                buf.put_u8(0); // variant flag
+                                tx.to_compact(buf)
+                            }
+                            alloy_consensus::TxEip4844Variant::TxEip4844WithSidecar(
+                                tx_with_sidecar,
+                            ) => {
+                                buf.put_u8(1); // variant flag
+                                let (base_tx, _sidecar) = tx_with_sidecar.clone().into_parts();
+                                // For sidecars, we just store the base transaction
+                                // The sidecar is handled separately in pooled transactions
+                                base_tx.to_compact(buf)
+                            }
+                        }
+                    }
+                    TxEnvelope::Eip7702(signed_tx) => {
+                        signed_tx.signature().to_compact(buf);
+                        signed_tx.tx().to_compact(buf)
+                    }
+                }
+            }
+            Self::Berachain(tx) => {
+                // For Berachain PoL transactions, encode the transaction type and the transaction
+                buf.put_u8(u8::from(BerachainTxType::Berachain));
+                tx.to_compact(buf)
+            }
+        }
     }
 
-    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
-        CompactEnvelope::from_compact(buf, len)
+    fn from_compact(mut buf: &[u8], len: usize) -> (Self, &[u8]) {
+        use alloy_consensus::{Signed, TxType};
+        use alloy_primitives::bytes::Buf;
+
+        let tx_type_byte = buf.get_u8();
+        let tx_type = match tx_type_byte {
+            0 => TxType::Legacy,
+            1 => TxType::Eip2930,
+            2 => TxType::Eip1559,
+            3 => TxType::Eip4844,
+            4 => TxType::Eip7702,
+            POL_TX_TYPE => {
+                // Handle Berachain PoL transaction
+                let (pol_tx, remaining_buf) = PoLTx::from_compact(buf, len);
+                return (Self::Berachain(Sealed::new(pol_tx)), remaining_buf);
+            }
+            _ => panic!("Unsupported BerachainTxEnvelope transaction type: {tx_type_byte}"),
+        };
+
+        let (signature, mut buf) = alloy_primitives::Signature::from_compact(buf, len);
+
+        let (tx, remaining_buf) = match tx_type {
+            TxType::Legacy => {
+                let (tx, buf) = alloy_consensus::TxLegacy::from_compact(buf, len);
+                let signed = Signed::new_unhashed(tx, signature);
+                (TxEnvelope::Legacy(signed), buf)
+            }
+            TxType::Eip2930 => {
+                let (tx, buf) = alloy_consensus::TxEip2930::from_compact(buf, len);
+                let signed = Signed::new_unhashed(tx, signature);
+                (TxEnvelope::Eip2930(signed), buf)
+            }
+            TxType::Eip1559 => {
+                let (tx, buf) = alloy_consensus::TxEip1559::from_compact(buf, len);
+                let signed = Signed::new_unhashed(tx, signature);
+                (TxEnvelope::Eip1559(signed), buf)
+            }
+            TxType::Eip4844 => {
+                // Handle TxEip4844Variant manually
+                let variant_flag = buf.get_u8();
+                let (tx_variant, buf) = match variant_flag {
+                    0 => {
+                        let (tx, buf) = alloy_consensus::TxEip4844::from_compact(buf, len);
+                        (alloy_consensus::TxEip4844Variant::TxEip4844(tx), buf)
+                    }
+                    1 => {
+                        // For sidecars, we just decode the base transaction
+                        // The sidecar would be handled separately in pooled transactions
+                        let (base_tx, buf) = alloy_consensus::TxEip4844::from_compact(buf, len);
+                        (alloy_consensus::TxEip4844Variant::TxEip4844(base_tx), buf)
+                    }
+                    _ => panic!(
+                        "Unsupported TxEip4844Variant flag in BerachainTxEnvelope: {variant_flag}"
+                    ),
+                };
+                let signed = Signed::new_unhashed(tx_variant, signature);
+                (TxEnvelope::Eip4844(signed), buf)
+            }
+            TxType::Eip7702 => {
+                let (tx, buf) = alloy_consensus::TxEip7702::from_compact(buf, len);
+                let signed = Signed::new_unhashed(tx, signature);
+                (TxEnvelope::Eip7702(signed), buf)
+            }
+        };
+
+        (Self::Ethereum(tx), remaining_buf)
     }
 }
 
@@ -890,6 +1002,125 @@ mod compact_envelope_tests {
                 }
             }
             _ => panic!("Expected Ethereum EIP-4844 transaction"),
+        }
+    }
+
+    #[test]
+    fn test_compact_roundtrip_ethereum_to_berachain() {
+        use reth_codecs::Compact;
+
+        // Test that Ethereum transactions compacted by Ethereum Compact
+        // can be decompacted by Berachain Compact for database compatibility
+        let test_cases = vec![
+            ("Legacy", create_legacy_envelope()),
+            ("EIP-2930", create_eip2930_envelope()),
+            ("EIP-1559", create_eip1559_envelope()),
+            ("EIP-4844", create_eip4844_envelope()),
+            ("EIP-7702", create_eip7702_envelope()),
+        ];
+
+        for (tx_name, eth_envelope) in test_cases {
+            // Compact using Ethereum envelope (simulates Reth storage)
+            let mut eth_buf = Vec::new();
+            let eth_len = Compact::to_compact(&eth_envelope, &mut eth_buf);
+
+            // Convert to BerachainTxEnvelope and compact using our implementation
+            let berachain_envelope = match &eth_envelope {
+                EthereumTxEnvelope::Legacy(signed) => {
+                    BerachainTxEnvelope::Ethereum(TxEnvelope::Legacy(signed.clone()))
+                }
+                EthereumTxEnvelope::Eip2930(signed) => {
+                    BerachainTxEnvelope::Ethereum(TxEnvelope::Eip2930(signed.clone()))
+                }
+                EthereumTxEnvelope::Eip1559(signed) => {
+                    BerachainTxEnvelope::Ethereum(TxEnvelope::Eip1559(signed.clone()))
+                }
+                EthereumTxEnvelope::Eip4844(signed) => {
+                    // Convert TxEip4844 to TxEip4844Variant for compatibility
+                    let variant_signed = match signed.clone().into_parts() {
+                        (tx, sig, hash) => {
+                            let variant = alloy_consensus::TxEip4844Variant::TxEip4844(tx);
+                            alloy_consensus::Signed::new_unchecked(variant, sig, hash)
+                        }
+                    };
+                    BerachainTxEnvelope::Ethereum(TxEnvelope::Eip4844(variant_signed))
+                }
+                EthereumTxEnvelope::Eip7702(signed) => {
+                    BerachainTxEnvelope::Ethereum(TxEnvelope::Eip7702(signed.clone()))
+                }
+            };
+
+            let mut bera_buf = Vec::new();
+            let bera_len = Compact::to_compact(&berachain_envelope, &mut bera_buf);
+
+            // Verify the compacted content is identical
+            assert_eq!(
+                eth_buf, bera_buf,
+                "{tx_name}: Compacted content must be identical for database compatibility"
+            );
+            assert_eq!(eth_len, bera_len, "{tx_name}: Compacted length must be identical");
+
+            // Decompact using BerachainTxEnvelope (our implementation)
+            let (decoded_envelope, _) =
+                <BerachainTxEnvelope as CompactEnvelope>::from_compact(&eth_buf, eth_len);
+
+            // Verify it decodes correctly as Ethereum transaction
+            match decoded_envelope {
+                BerachainTxEnvelope::Ethereum(decoded_tx) => {
+                    // Verify transaction type matches
+                    let original_type = match &eth_envelope {
+                        EthereumTxEnvelope::Legacy(_) => 0u8,
+                        EthereumTxEnvelope::Eip2930(_) => 1u8,
+                        EthereumTxEnvelope::Eip1559(_) => 2u8,
+                        EthereumTxEnvelope::Eip4844(_) => 3u8,
+                        EthereumTxEnvelope::Eip7702(_) => 4u8,
+                    };
+
+                    let decoded_type = match &decoded_tx {
+                        TxEnvelope::Legacy(_) => 0u8,
+                        TxEnvelope::Eip2930(_) => 1u8,
+                        TxEnvelope::Eip1559(_) => 2u8,
+                        TxEnvelope::Eip4844(_) => 3u8,
+                        TxEnvelope::Eip7702(_) => 4u8,
+                    };
+
+                    assert_eq!(
+                        original_type, decoded_type,
+                        "{tx_name}: Transaction type should be preserved"
+                    );
+                }
+                BerachainTxEnvelope::Berachain(_) => {
+                    panic!("{tx_name}: Should not decode as Berachain PoL transaction");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_compact_roundtrip_berachain_pol_transaction() {
+        use reth_codecs::Compact;
+
+        let pol_tx = create_test_pol_tx();
+        let berachain_envelope = BerachainTxEnvelope::Berachain(Sealed::new(pol_tx.clone()));
+
+        // Compact using BerachainTxEnvelope
+        let mut buf = Vec::new();
+        let len = Compact::to_compact(&berachain_envelope, &mut buf);
+
+        // Decompact using BerachainTxEnvelope
+        let (decoded_envelope, _) =
+            <BerachainTxEnvelope as CompactEnvelope>::from_compact(&buf, len);
+
+        // Verify the PoL transaction is preserved
+        match decoded_envelope {
+            BerachainTxEnvelope::Berachain(decoded_sealed) => {
+                assert_eq!(
+                    decoded_sealed.as_ref(),
+                    &pol_tx,
+                    "PoL transaction data should be preserved"
+                );
+            }
+            _ => panic!("Should preserve Berachain PoL transaction format"),
         }
     }
 
