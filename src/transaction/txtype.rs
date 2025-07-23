@@ -36,6 +36,8 @@ impl Compact for BerachainTxType {
                 let tx_type_byte = buf.get_u8();
                 match tx_type_byte {
                     POL_TX_TYPE => Self::Berachain,
+                    3 => Self::Ethereum(TxType::Eip4844), // EIP-4844 blob transactions
+                    4 => Self::Ethereum(TxType::Eip7702), // EIP-7702 set code transactions
                     _ => panic!("Unsupported BerachainTxType extended identifier: {tx_type_byte}"),
                 }
             }
@@ -63,5 +65,44 @@ impl Decompress for BerachainTxType {
     fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
         let (tx, _) = reth_codecs::Compact::from_compact(value, value.len());
         Ok(tx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy_consensus::TxType;
+
+    #[test]
+    fn test_eip4844_compact_roundtrip() {
+        let tx_type = BerachainTxType::Ethereum(TxType::Eip4844);
+
+        let mut buf = Vec::new();
+        let identifier = tx_type.to_compact(&mut buf);
+
+        let (decoded, _) = BerachainTxType::from_compact(&buf, identifier);
+        assert_eq!(tx_type, decoded);
+    }
+
+    #[test]
+    fn test_eip7702_compact_roundtrip() {
+        let tx_type = BerachainTxType::Ethereum(TxType::Eip7702);
+
+        let mut buf = Vec::new();
+        let identifier = tx_type.to_compact(&mut buf);
+
+        let (decoded, _) = BerachainTxType::from_compact(&buf, identifier);
+        assert_eq!(tx_type, decoded);
+    }
+
+    #[test]
+    fn test_berachain_pol_compact_roundtrip() {
+        let tx_type = BerachainTxType::Berachain;
+
+        let mut buf = Vec::new();
+        let identifier = tx_type.to_compact(&mut buf);
+
+        let (decoded, _) = BerachainTxType::from_compact(&buf, identifier);
+        assert_eq!(tx_type, decoded);
     }
 }
