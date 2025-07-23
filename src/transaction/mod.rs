@@ -715,7 +715,7 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_pol_transaction_compact_roundtrip() {
+    fn test_compact_envelope_roundtrip_pol_to_pol() {
         let pol_tx = create_test_pol_tx();
         let envelope = BerachainTxEnvelope::Berachain(Sealed::new(pol_tx.clone()));
 
@@ -736,7 +736,7 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_legacy_transaction_compact_roundtrip_ethereum_to_berachain() {
+    fn test_compact_envelope_roundtrip_ethereum_to_berachain_legacy() {
         let legacy_tx = TxLegacy {
             chain_id: Some(ChainId::from(1u64)),
             nonce: 10,
@@ -771,7 +771,7 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_eip1559_transaction_compact_roundtrip_ethereum_to_berachain() {
+    fn test_compact_envelope_roundtrip_ethereum_to_berachain_eip1559() {
         let eip1559_tx = TxEip1559 {
             chain_id: ChainId::from(1u64),
             nonce: 5,
@@ -808,7 +808,7 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_eip4844_transaction_compact_roundtrip_ethereum_to_berachain() {
+    fn test_compact_envelope_roundtrip_ethereum_to_berachain_eip4844() {
         let eip4844_tx = TxEip4844 {
             chain_id: ChainId::from(1u64),
             nonce: 7,
@@ -853,7 +853,7 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_eip4844_with_sidecar_transaction_compact_roundtrip() {
+    fn test_compact_envelope_roundtrip_eip4844_with_sidecar() {
         let berachain_envelope = create_eip4844_with_sidecar_berachain_envelope();
 
         // Encode using Berachain CompactEnvelope
@@ -985,7 +985,7 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_compact_roundtrip_berachain_pol_transaction() {
+    fn test_compact_roundtrip_pol_to_pol() {
         use reth_codecs::Compact;
 
         let pol_tx = create_test_pol_tx();
@@ -1013,32 +1013,32 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_all_ethereum_types_backwards_compatibility() {
+    fn test_compact_envelope_roundtrip_all_ethereum_types() {
         // Test that all Ethereum transaction types can be encoded by Ethereum
         // and decoded by Berachain for full backwards compatibility
 
         // Legacy
         let legacy = create_legacy_envelope();
-        test_ethereum_to_berachain_roundtrip(legacy, "Legacy");
+        test_compact_envelope_ethereum_to_berachain_roundtrip(legacy, "Legacy");
 
         // EIP-2930
         let eip2930 = create_eip2930_envelope();
-        test_ethereum_to_berachain_roundtrip(eip2930, "EIP-2930");
+        test_compact_envelope_ethereum_to_berachain_roundtrip(eip2930, "EIP-2930");
 
         // EIP-1559
         let eip1559 = create_eip1559_envelope();
-        test_ethereum_to_berachain_roundtrip(eip1559, "EIP-1559");
+        test_compact_envelope_ethereum_to_berachain_roundtrip(eip1559, "EIP-1559");
 
         // EIP-4844
         let eip4844 = create_eip4844_envelope();
-        test_ethereum_to_berachain_roundtrip(eip4844, "EIP-4844");
+        test_compact_envelope_ethereum_to_berachain_roundtrip(eip4844, "EIP-4844");
 
         // EIP-7702
         let eip7702 = create_eip7702_envelope();
-        test_ethereum_to_berachain_roundtrip(eip7702, "EIP-7702");
+        test_compact_envelope_ethereum_to_berachain_roundtrip(eip7702, "EIP-7702");
     }
 
-    fn test_ethereum_to_berachain_roundtrip(
+    fn test_compact_envelope_ethereum_to_berachain_roundtrip(
         eth_envelope: EthereumTxEnvelope<TxEip4844>,
         tx_name: &str,
     ) {
@@ -1062,7 +1062,7 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_berachain_to_berachain_roundtrip() {
+    fn test_compact_envelope_roundtrip_pol_to_pol_comprehensive() {
         // Test that Berachain transactions can be encoded and decoded by Berachain
         let pol_tx = create_test_pol_tx();
         let berachain_envelope = BerachainTxEnvelope::Berachain(Sealed::new(pol_tx.clone()));
@@ -1084,7 +1084,7 @@ mod compact_envelope_tests {
     }
 
     #[test]
-    fn test_storage_format_compatibility() {
+    fn test_compact_envelope_storage_format_compatibility() {
         // Test that our CompactEnvelope format matches what Reth would produce
         // for Ethereum transactions (ensuring database compatibility)
 
