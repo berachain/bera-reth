@@ -514,7 +514,7 @@ impl reth_codecs::Compact for BerachainTxEnvelope {
         CompactEnvelope::to_compact(self, buf)
     }
 
-    fn from_compact(mut buf: &[u8], len: usize) -> (Self, &[u8]) {
+    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
         CompactEnvelope::from_compact(buf, len)
     }
 }
@@ -883,8 +883,7 @@ mod compact_envelope_tests {
                         assert_eq!(decoded_signed.signature(), &create_test_signature());
                     }
                     variant => panic!(
-                        "Expected base EIP-4844 variant (sidecar stripped during compact), got: {:?}",
-                        variant
+                        "Expected base EIP-4844 variant (sidecar stripped during compact), got: {variant:?}"
                     ),
                 }
             }
@@ -924,11 +923,10 @@ mod compact_envelope_tests {
                 }
                 EthereumTxEnvelope::Eip4844(signed) => {
                     // Convert TxEip4844 to TxEip4844Variant for compatibility
-                    let variant_signed = match signed.clone().into_parts() {
-                        (tx, sig, hash) => {
-                            let variant = alloy_consensus::TxEip4844Variant::TxEip4844(tx);
-                            alloy_consensus::Signed::new_unchecked(variant, sig, hash)
-                        }
+                    let (tx, sig, hash) = signed.clone().into_parts();
+                    let variant_signed = {
+                        let variant = alloy_consensus::TxEip4844Variant::TxEip4844(tx);
+                        alloy_consensus::Signed::new_unchecked(variant, sig, hash)
                     };
                     BerachainTxEnvelope::Ethereum(TxEnvelope::Eip4844(variant_signed))
                 }
