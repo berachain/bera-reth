@@ -277,7 +277,7 @@ pub enum BerachainTxEnvelope {
     /// Existing Ethereum transactions (purely additive)
     #[envelope(flatten)]
     Ethereum(TxEnvelope),
-    // /// Your 0-gas system transaction
+    // Berachain PoL Transaction introduced in BRIP-0004
     #[envelope(ty = 126)] // POL_TX_TYPE - derive macro requires literal
     Berachain(Sealed<PoLTx>),
 }
@@ -312,7 +312,6 @@ impl BerachainTxEnvelope {
         self,
         sidecar: T,
     ) -> Result<EthereumTxEnvelope<TxEip4844WithSidecar<T>>, ValueError<Self>> {
-        // TODO: Rez sus
         match self {
             Self::Ethereum(tx) => match tx {
                 TxEnvelope::Eip4844(tx) => {
