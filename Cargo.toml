@@ -92,6 +92,29 @@ strip = "none"
 [package.metadata.cargo-udeps.ignore]
 normal = ["test-fuzz"]
 
+[patch.crates-io]
+# Use local alloy-evm with system call inspection support
+# Based on alloy-evm v0.15.0 + custom patches for revm system call inspection
+alloy-evm = { path = "../alloy-evm/crates/evm" }
+
+# Use local revm with system call inspection support  
+# Based on revm branch: rakita/bump_v83 (commit 5f66d67a)
+# + cherry-picked: rezbera/add-system-tx-inspection (InspectSystemCallEvm trait implementation)
+# Enables inspection/tracing of system calls for debug_traceTransaction and debug_traceBlock APIs
+revm = { path = "../revm/crates/revm" }
+revm-primitives = { path = "../revm/crates/primitives" }
+revm-interpreter = { path = "../revm/crates/interpreter" }
+revm-inspector = { path = "../revm/crates/inspector" }
+revm-handler = { path = "../revm/crates/handler" }
+revm-context = { path = "../revm/crates/context" }
+revm-context-interface = { path = "../revm/crates/context/interface" }
+revm-database = { path = "../revm/crates/database" }
+revm-database-interface = { path = "../revm/crates/database/interface" }
+revm-state = { path = "../revm/crates/state" }
+revm-bytecode = { path = "../revm/crates/bytecode" }
+revm-precompile = { path = "../revm/crates/precompile" }
+op-revm = { path = "../revm/crates/op-revm" }
+
 # [patch."https://github.com/paradigmxyz/reth"]
 # reth = { path = "../reth/bin/reth" }
 # reth-rpc = { path = "../reth/crates/rpc/rpc" }
