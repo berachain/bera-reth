@@ -16,12 +16,11 @@ use reth_ethereum_payload_builder::EthereumExecutionPayloadValidator;
 use reth_node_api::{AddOnsContext, FullNodeComponents, NodeTypes, PayloadTypes};
 use reth_node_builder::rpc::EngineValidatorBuilder;
 use reth_payload_primitives::{
-    BuiltPayload, EngineApiMessageVersion, EngineObjectValidationError, NewPayloadError,
-    PayloadOrAttributes, validate_execution_requests, validate_version_specific_fields,
+    EngineApiMessageVersion, EngineObjectValidationError, NewPayloadError, PayloadOrAttributes,
+    validate_execution_requests, validate_version_specific_fields,
 };
 // Hardfork validation functions removed - implemented directly for Berachain compatibility
-use reth::consensus::ConsensusError;
-use reth_engine_tree::tree::{EngineValidator, payload_validator::TreeCtx};
+use reth_engine_tree::tree::EngineValidator;
 use reth_payload_validator::{cancun, prague, shanghai};
 use reth_primitives_traits::{Block, RecoveredBlock, SealedBlock};
 use std::{marker::PhantomData, sync::Arc};
