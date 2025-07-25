@@ -13,7 +13,8 @@ use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
 use reth::{
-    providers::{ProviderHeader, ProviderTx},
+    providers::{ProviderError, ProviderHeader, ProviderTx},
+    revm::context::{Transaction as TxEnvTransaction, result::ResultAndState},
     rpc::compat::{RpcConvert, RpcTypes},
     tasks::{
         TaskSpawner,
@@ -21,7 +22,7 @@ use reth::{
     },
     transaction_pool::{PoolTransaction, TransactionPool},
 };
-use reth_evm::TxEnvFor;
+use reth_evm::{ConfigureEvm, Database, Evm, EvmEnvFor, HaltReasonFor, InspectorFor, TxEnvFor};
 use reth_rpc::eth::DevSigner;
 use reth_rpc_convert::SignableTxRequest;
 use reth_rpc_eth_api::{
@@ -579,6 +580,44 @@ where
     EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives>,
 {
+    #[expect(clippy::type_complexity)]
+    fn inspect<DB, I>(
+        &self,
+        db: DB,
+        evm_env: EvmEnvFor<Self::Evm>,
+        tx_env: TxEnvFor<Self::Evm>,
+        inspector: I,
+    ) -> Result<
+        (ResultAndState<HaltReasonFor<Self::Evm>>, (EvmEnvFor<Self::Evm>, TxEnvFor<Self::Evm>)),
+        Self::Error,
+    >
+    where
+        DB: Database<Error = ProviderError>,
+        I: InspectorFor<Self::Evm, DB>,
+    {
+        let mut evm = self.evm_config().evm_with_env_and_inspector(db, evm_env.clone(), inspector);
+        let res = if TxEnvTransaction::tx_type(&tx_env) == POL_TX_TYPE {
+            // Handle PoL transactions as system calls
+            use alloy_eips::eip7002::SYSTEM_ADDRESS;
+            use alloy_primitives::TxKind;
+
+            let to_address = match tx_env.kind() {
+                TxKind::Call(addr) => addr,
+                TxKind::Create => {
+                    return Err(EthApiError::InvalidParams(
+                        "PoL transactions cannot be CREATE transactions".to_string(),
+                    )
+                    .into())
+                }
+            };
+
+            evm.transact_system_call(SYSTEM_ADDRESS, to_address, tx_env.input().clone())
+                .map_err(Self::Error::from_evm_err)?
+        } else {
+            evm.transact(tx_env.clone()).map_err(Self::Error::from_evm_err)?
+        };
+        Ok((res, (evm_env, tx_env)))
+    }
 }
 
 impl<N, Rpc> LoadState for BerachainApi<N, Rpc>

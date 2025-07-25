@@ -97,7 +97,7 @@ normal = ["test-fuzz"]
 # Based on alloy-evm v0.15.0 + custom patches for revm system call inspection
 alloy-evm = { path = "../alloy-evm/crates/evm" }
 
-# Use local revm with system call inspection support  
+# Use local revm with system call inspection support
 # Based on revm branch: rakita/bump_v83 (commit 5f66d67a)
 # + cherry-picked: rezbera/add-system-tx-inspection (InspectSystemCallEvm trait implementation)
 # Enables inspection/tracing of system calls for debug_traceTransaction and debug_traceBlock APIs
