@@ -5,8 +5,8 @@
 //! - Automatic PoL transaction inclusion in blocks
 //! - PoL transaction validation and consensus
 
-use alloy_consensus::Sealed;
-use alloy_eips::eip2718::Encodable2718;
+use alloy_consensus::{BlockHeader, Sealed};
+use alloy_eips::{eip2718::Encodable2718, eip7002::SYSTEM_ADDRESS};
 use alloy_primitives::{Address, B256, Bytes, ChainId};
 use bera_reth::{
     chainspec::BerachainChainSpec,
@@ -22,7 +22,7 @@ use reth_node_builder::{NodeBuilder, NodeHandle};
 use reth_node_core::{args::RpcServerArgs, node_config::NodeConfig};
 use reth_node_ethereum::engine::EthPayloadAttributes;
 use reth_payload_primitives::{BuiltPayload, PayloadBuilderAttributes};
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 /// Create a test PoL transaction that would normally be system-generated
 fn create_test_pol_transaction() -> PoLTx {
@@ -104,29 +104,79 @@ async fn test_block_production_with_transactions() -> eyre::Result<()> {
 
     // Examine the block structure from the payload
     let block = payload.block();
-    println!("Block contains {} transactions", block.body().transactions.len());
-    //
-    // // Check if first transaction is PoL (if PoL auto-inclusion is implemented)
-    // if !block.body() {
-    // let first_tx = &block.body()[0];
-    // // Check transaction type from the transaction envelope
-    // if let Ok(envelope) = BerachainTxEnvelope::decode_2718(&mut first_tx.encode().as_slice()) {
-    //     match envelope {
-    //         BerachainTxEnvelope::Berachain(_) => {
-    //             println!("✅ First transaction is PoL type (126) - auto-inclusion working");
-    //         }
-    //         _ => {
-    //             println!("ℹ️  First transaction is not PoL type");
-    //             println!("   This indicates PoL auto-inclusion may not be implemented yet");
-    //         }
-    //     }
-    // }
+    let transactions = &block.body().transactions;
+    println!("Block contains {} transactions", transactions.len());
 
-    //     println!("✅ Block produced successfully with transactions");
-    // }
+    // Check if first transaction is PoL (if PoL auto-inclusion is implemented)
+    assert!(
+        !transactions.is_empty(),
+        "Expected block to contain at least one PoL transaction, but block is empty"
+    );
 
-    // Keep tasks alive until the end of the test
-    // drop(tasks);
+    let first_tx = &transactions[0];
+
+    // Check if this is a PoL transaction by examining the transaction type
+    if let BerachainTxEnvelope::Berachain(pol_tx_sealed) = first_tx {
+        println!("✅ First transaction is PoL type (126) - auto-inclusion working");
+
+        // Validate PoL transaction contents
+        let pol_tx = pol_tx_sealed.as_ref();
+        println!("📋 PoL Transaction Details:");
+        println!("   Chain ID: {}", pol_tx.chain_id);
+        println!("   From: {:?}", pol_tx.from);
+        println!("   To: {:?}", pol_tx.to);
+        println!("   Nonce: {}", pol_tx.nonce);
+        println!("   Gas Limit: {}", pol_tx.gas_limit);
+        println!("   Gas Price: {}", pol_tx.gas_price);
+        println!("   Input Length: {} bytes", pol_tx.input.len());
+
+        // Validate expected PoL transaction attributes
+        assert_eq!(
+            pol_tx.chain_id,
+            ChainId::from(80087u64),
+            "PoL transaction should use chain ID 80087"
+        );
+        assert_eq!(
+            pol_tx.from, SYSTEM_ADDRESS,
+            "PoL transaction should be from system address (zero)"
+        );
+        assert_eq!(
+            pol_tx.gas_limit, 30_000_000,
+            "PoL transactions should have 30million gas limit"
+        );
+        // Get the block's base fee to validate against
+        let block_base_fee = block.header().base_fee_per_gas().unwrap();
+        assert_eq!(
+            pol_tx.gas_price, block_base_fee as u128,
+            "PoL transaction gas price should match the block's base fee"
+        );
+        println!("   Block base fee: {} wei", block_base_fee);
+
+        // Validate the 'to' address is the PoL contract from genesis
+        let expected_pol_contract = Address::from_str("0x4200000000000000000000000000000000000042")
+            .expect("Valid PoL contract address");
+        assert_eq!(
+            pol_tx.to, expected_pol_contract,
+            "PoL transaction should be sent to PoL contract address"
+        );
+
+        // Validate input data is present (should contain distributeFor call)
+        assert!(
+            !pol_tx.input.is_empty(),
+            "PoL transaction should contain input data for distributeFor call"
+        );
+
+        println!("✅ PoL transaction validation passed");
+        println!("✅ Block produced successfully with {} transactions", transactions.len());
+    } else {
+        println!("ℹ️  First transaction is not PoL type");
+        println!("   This indicates PoL auto-inclusion may not be implemented yet");
+        assert!(
+            matches!(first_tx, BerachainTxEnvelope::Berachain(_)),
+            "Expected first transaction to be PoL type, but found different transaction type"
+        );
+    }
+
     Ok(())
 }
 
