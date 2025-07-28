@@ -1,5 +1,5 @@
-mod api;
-mod receipt;
+pub mod api;
+pub mod receipt;
 
 use crate::{
     engine::{BerachainExecutionData, rpc::BerachainEngineApiBuilder},
