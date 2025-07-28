@@ -41,6 +41,7 @@ use reth_rpc_eth_types::{
     utils::recover_raw_transaction,
 };
 use reth_transaction_pool::{AddedTransactionOutcome, TransactionOrigin};
+use tracing::info;
 
 impl fmt::Display for BerachainTxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -459,6 +460,7 @@ where
     ///
     /// Returns the hash of the transaction.
     async fn send_raw_transaction(&self, tx: Bytes) -> Result<B256, Self::Error> {
+        info!("bytes {}", tx.to_string());
         let recovered = recover_raw_transaction(&tx)?;
 
         // broadcast raw transaction to subscribers if there is any.
