@@ -6,10 +6,7 @@ use crate::{
 use alloy_primitives::{Bytes, Sealed, U256};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
-use reth::{
-    consensus::ConsensusError,
-    revm::{handler::SYSTEM_ADDRESS, primitives::eip7825},
-};
+use reth::{consensus::ConsensusError, revm::handler::SYSTEM_ADDRESS};
 use reth_chainspec::EthChainSpec;
 use reth_evm::block::{BlockExecutionError, InternalBlockExecutionError};
 use std::sync::Arc;
