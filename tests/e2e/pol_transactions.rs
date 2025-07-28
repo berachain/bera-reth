@@ -12,9 +12,11 @@ use bera_reth::{
     chainspec::BerachainChainSpec,
     engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes},
     node::BerachainNode,
+    primitives::header::BlsPublicKey,
     transaction::{BerachainTxEnvelope, PoLTx},
 };
 use reth::{providers::BlockNumReader, tasks::TaskManager};
+use reth_cli::chainspec::parse_genesis;
 use reth_e2e_test_utils::node::NodeTestContext;
 use reth_node_builder::{NodeBuilder, NodeHandle};
 use reth_node_core::{args::RpcServerArgs, node_config::NodeConfig};
@@ -46,13 +48,15 @@ fn encode_pol_transaction_bytes(pol_tx: PoLTx) -> Bytes {
 fn berachain_payload_attributes(timestamp: u64) -> BerachainPayloadBuilderAttributes {
     let eth_attributes = EthPayloadAttributes {
         timestamp,
-        prev_randao: B256::ZERO,
-        suggested_fee_recipient: Address::ZERO,
+        prev_randao: B256::random(),
+        suggested_fee_recipient: Address::random(),
         withdrawals: Some(vec![]),
-        parent_beacon_block_root: Some(B256::ZERO),
+        parent_beacon_block_root: Some(B256::random()),
     };
-    let berachain_attributes =
-        BerachainPayloadAttributes { inner: eth_attributes, prev_proposer_pubkey: None };
+    let berachain_attributes = BerachainPayloadAttributes {
+        inner: eth_attributes,
+        prev_proposer_pubkey: Some(BlsPublicKey::random()),
+    };
     BerachainPayloadBuilderAttributes::try_new(B256::ZERO, berachain_attributes, 1).unwrap()
 }
 
@@ -60,18 +64,26 @@ fn berachain_payload_attributes(timestamp: u64) -> BerachainPayloadBuilderAttrib
 async fn test_block_production_with_transactions() -> eyre::Result<()> {
     // Test that blocks are produced and examine their structure
 
-    // Setup Berachain chain spec
-    let chain_spec = Arc::new(BerachainChainSpec::default());
+    // Create TaskManager and keep it alive for the entire test
+    let tasks = TaskManager::current();
+    let executor = tasks.executor();
+
+    // Load genesis from the actual BeaconKit genesis file
+    let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/eth-genesis.json");
+    let genesis_json = std::fs::read_to_string(genesis_path).expect("Failed to read genesis file");
+    let genesis = parse_genesis(&genesis_json).expect("Failed to parse genesis");
+
+    // Create BerachainChainSpec from the genesis using the From trait
+    let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
 
     // Create node configuration with Berachain chain spec
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
         .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
 
-    let tasks = TaskManager::current();
-    // Launch the Berachain node
+    // Launch the Berachain node with proper executor
     let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
-        .testing_node(tasks.executor())
+        .testing_node(executor.clone())
         .node(BerachainNode::default())
         .launch()
         .await?;
@@ -113,6 +125,8 @@ async fn test_block_production_with_transactions() -> eyre::Result<()> {
     //     println!("✅ Block produced successfully with transactions");
     // }
 
+    // Keep tasks alive until the end of the test
+    drop(tasks);
     Ok(())
 }
 
