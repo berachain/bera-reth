@@ -102,9 +102,9 @@ async fn test_block_production_with_transactions() -> eyre::Result<()> {
     println!("Transaction mined in block: {block_number}");
     assert!(block_number > initial_block, "Block should have advanced");
 
-    // // Examine the block structure from the payload
-    // let block = payload.block();
-    // println!("Block contains {} transactions", block.body().ommers.len()); // TODO: fix
+    // Examine the block structure from the payload
+    let block = payload.block();
+    println!("Block contains {} transactions", block.body().transactions.len());
     //
     // // Check if first transaction is PoL (if PoL auto-inclusion is implemented)
     // if !block.body() {
@@ -126,7 +126,7 @@ async fn test_block_production_with_transactions() -> eyre::Result<()> {
     // }
 
     // Keep tasks alive until the end of the test
-    drop(tasks);
+    // drop(tasks);
     Ok(())
 }
 
