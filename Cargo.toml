@@ -134,3 +134,14 @@ normal = ["test-fuzz"]
 # reth-rpc-convert = { path = "../reth/crates/rpc/rpc-convert" }
 # reth-transaction-pool = { path = "../reth/crates/transaction-pool" }
 # reth-zstd-compressors = { path = "../reth/crates/storage/zstd-compressors" }
+# reth-trie-common = { path = "../reth/crates/trie/common" }
+# reth-trie-db = { path = "../reth/crates/trie/db" }
+# reth-trie = { path = "../reth/crates/trie/trie" }
+# reth-stages-types = { path = "../reth/crates/stages/types" }
+# reth-execution-types = { path = "../reth/crates/evm/execution-types" }
+# reth-execution-errors = { path = "../reth/crates/evm/execution-errors" }
+# reth-storage-api = { path = "../reth/crates/storage/storage-api" }
+# reth-provider = { path = "../reth/crates/storage/provider" }
+# reth-storage-errors = { path = "../reth/crates/storage/errors" }
+# reth-e2e-test-utils = { path = "../reth/crates/e2e-test-utils" }
+# reth-rpc-builder = { path = "../reth/crates/rpc/rpc-builder" }
