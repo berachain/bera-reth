@@ -1,7 +1,7 @@
 //! RPC transaction integration tests
 
 use crate::e2e::{berachain_payload_attributes, setup_test_boilerplate, test_signer};
-use bera_reth::node::BerachainNode;
+use bera_reth::{node::BerachainNode, transaction::PoLTx};
 use reth::transaction_pool::TransactionPool;
 use reth_chainspec::EthChainSpec;
 use reth_e2e_test_utils::{node::NodeTestContext, transaction::TransactionTestContext};
@@ -36,13 +36,23 @@ async fn test_eip1559_transaction_via_rpc_is_accepted() -> eyre::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_pol_transaction_via_rpc_is_rejected() -> eyre::Result<()> {
-    use alloy_eips::eip2718::Encodable2718;
+/// Creates a fake PoL transaction for testing rejection behavior
+fn create_fake_pol_tx(chain_id: u64) -> PoLTx {
     use alloy_primitives::{Address, Bytes};
-    use bera_reth::transaction::PoLTx;
-    use reth_rpc_eth_types::EthApiError;
 
+    PoLTx {
+        chain_id,
+        from: Default::default(),
+        to: Address::random(),
+        nonce: 0,
+        gas_limit: 30_000_000,
+        gas_price: 1_000_000_000u128, // 1 gwei
+        input: Bytes::from(b"fake_pol_data"),
+    }
+}
+
+/// Sets up a test node context for PoL transaction testing
+async fn setup_pol_test_node() -> eyre::Result<(NodeTestContext<BerachainNode>, u64)> {
     let (tasks, chain_spec) = setup_test_boilerplate().await?;
     let executor = tasks.executor();
 
@@ -59,57 +69,57 @@ async fn test_pol_transaction_via_rpc_is_rejected() -> eyre::Result<()> {
     let ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
     let chain_id = chain_spec.chain_id();
 
-    // Create a manually crafted PoL transaction (type 0x7E/126)
-    // Expected behavior: PoL transactions should ONLY be generated automatically by the
-    // consensus layer during block building, never submitted manually via RPC
-    let fake_pol_tx = PoLTx {
-        chain_id,
-        from: Default::default(),
-        to: Address::random(),
-        nonce: 0,
-        gas_limit: 30_000_000,
-        gas_price: 1_000_000_000u128, // 1 gwei
-        input: Bytes::from(b"fake_pol_data"),
-    };
+    Ok((ctx, chain_id))
+}
 
+#[tokio::test]
+async fn test_pol_transaction_rpc_injection_fails() -> eyre::Result<()> {
+    use alloy_eips::eip2718::Encodable2718;
+    use reth_rpc_eth_types::EthApiError;
+
+    let (ctx, chain_id) = setup_pol_test_node().await?;
+    let fake_pol_tx = create_fake_pol_tx(chain_id);
+
+    // Encode PoL transaction for RPC submission
     let mut buf = Vec::with_capacity(fake_pol_tx.encode_2718_len());
     fake_pol_tx.encode_2718(&mut buf);
-
-    // Attempt to inject the PoL transaction via RPC - this should be rejected
-    let res = ctx.rpc.inject_tx(buf.into()).await;
 
     // Expected behavior: RPC should reject manually submitted PoL transactions
     // 1. Type inference causes recover_raw_transaction to be called with EthereumTxEnvelope
     // 2. EthereumTxEnvelope doesn't recognize PoL transaction type (0x7E/126)
     // 3. decode_2718 fails with RlpError(Custom("unexpected tx type"))
     // 4. This gets mapped to FailedToDecodeSignedTransaction for RPC response
-    assert!(res.is_err(), "PoL transaction should be rejected via RPC");
+    let rpc_result = ctx.rpc.inject_tx(buf.into()).await;
+    let rpc_error = rpc_result.expect_err("PoL transaction should be rejected via RPC");
 
-    let error = res.unwrap_err();
     assert!(
-        matches!(error, EthApiError::FailedToDecodeSignedTransaction),
+        matches!(rpc_error, EthApiError::FailedToDecodeSignedTransaction),
         "Expected FailedToDecodeSignedTransaction, got: {:?}",
-        error
+        rpc_error
     );
 
-    // Test 2: Attempt to add PoL transaction directly to mempool as consensus transaction
-    // This tests whether the mempool accepts properly formed PoL transactions from consensus layer
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_pol_transaction_mempool_insertion_fails() -> eyre::Result<()> {
     use alloy_primitives::Sealed;
     use bera_reth::transaction::BerachainTxEnvelope;
     use reth_primitives_traits::SignedTransaction;
     use reth_transaction_pool::TransactionOrigin;
 
-    // Create a properly sealed PoL transaction envelope
+    let (ctx, chain_id) = setup_pol_test_node().await?;
+    let fake_pol_tx = create_fake_pol_tx(chain_id);
+
+    // Create a properly sealed PoL transaction envelope for consensus layer
     let pol_tx_sealed = Sealed::new(fake_pol_tx);
     let pol_tx_envelope = BerachainTxEnvelope::Berachain(pol_tx_sealed);
-
-    // Convert to recovered transaction (consensus transactions are pre-validated)
     let recovered_pol_tx = pol_tx_envelope
         .try_into_recovered()
         .expect("PoL transaction should be recoverable as consensus transaction");
 
-    // Test: Add as consensus transaction - this reveals mempool validation behavior
-    // Expected: Even consensus transactions must be convertible to mempool format
+    // Expected behavior: PoolTransaction::try_from_consensus() calls try_into() which
+    // triggers TxConversionError::UnsupportedBerachainTransaction for PoL transactions
     let pool_result = ctx
         .rpc
         .inner
@@ -117,20 +127,15 @@ async fn test_pol_transaction_via_rpc_is_rejected() -> eyre::Result<()> {
         .add_consensus_transaction(recovered_pol_tx, TransactionOrigin::External)
         .await;
 
-    // Expected behavior: PoL transactions cannot be converted to Ethereum mempool format
-    // The mempool requires all transactions to be in a format compatible with Ethereum
-    // transaction pool, but PoL transactions are Berachain-specific and not convertible
-    assert!(pool_result.is_err(), "PoL transaction should be rejected by mempool");
+    let pool_error = pool_result.expect_err("PoL transaction should be rejected by mempool");
+    let error_msg = pool_error.to_string();
 
-    let pool_error = pool_result.unwrap_err();
-    let error_msg = format!("{:?}", pool_error);
+    // Verify the error contains the expected UnsupportedBerachainTransaction message
     assert!(
         error_msg.contains("Cannot convert Berachain POL transaction to Ethereum format"),
-        "Expected conversion error, got: {}",
+        "Expected UnsupportedBerachainTransaction error, got: {}",
         error_msg
     );
-
-    println!("✅ Mempool correctly rejects PoL transactions: {}", error_msg);
 
     Ok(())
 }
