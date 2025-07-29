@@ -17,8 +17,7 @@ use reth_ethereum_engine_primitives::EthPayloadAttributes;
 use reth_payload_primitives::PayloadBuilderAttributes;
 use std::{str::FromStr, sync::Arc};
 
-pub mod pol_transactions;
-pub mod rpc_transactions;
+pub mod transaction_tests;
 
 const TEST_PRIVATE_KEY: &str = "0xfffdbb37105441e14b0ee6330d855d8504ff39e705c3afa8f859ac9865f99306";
 
