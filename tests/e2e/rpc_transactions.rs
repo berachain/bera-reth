@@ -2,7 +2,7 @@
 
 use crate::e2e::{berachain_payload_attributes, setup_test_boilerplate, test_signer};
 use bera_reth::{node::BerachainNode, transaction::PoLTx};
-use reth::transaction_pool::TransactionPool;
+use reth::{providers::BlockNumReader, transaction_pool::TransactionPool};
 use reth_chainspec::EthChainSpec;
 use reth_e2e_test_utils::{node::NodeTestContext, transaction::TransactionTestContext};
 use reth_node_builder::{NodeBuilder, NodeHandle};
@@ -23,7 +23,7 @@ async fn test_eip1559_transaction_via_rpc_is_accepted() -> eyre::Result<()> {
         .launch()
         .await?;
 
-    let ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
+    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
     let signer = test_signer()?;
     let chain_id = chain_spec.chain_id();
 
@@ -31,7 +31,42 @@ async fn test_eip1559_transaction_via_rpc_is_accepted() -> eyre::Result<()> {
     let res = ctx.rpc.inject_tx(tx_bytes).await;
 
     assert!(res.is_ok(), "EIP1559 transaction should be accepted via RPC");
-    println!("EIP1559 transaction accepted with hash: {:?}", res.unwrap());
+    let tx_hash = res.unwrap();
+    println!("EIP1559 transaction accepted with hash: {tx_hash:?}");
+
+    // Get initial block number before mining
+    let initial_block = ctx.rpc.inner.eth_api().provider().best_block_number()?;
+
+    // Mine a block to include the transaction
+    let payload = ctx.advance_block().await?;
+    let block = payload.block;
+    let transactions = &block.body().transactions;
+
+    // Verify the block was mined
+    assert!(block.number > initial_block, "Block number should advance");
+
+    // Verify the block contains exactly two transactions: PoL tx (first) + EIP1559 tx (second)
+    assert_eq!(
+        transactions.len(),
+        2,
+        "Block should contain exactly 2 transactions: PoL tx + EIP1559 tx, found: {}",
+        transactions.len()
+    );
+
+    // Check transaction order: PoL transaction first, EIP1559 transaction second
+    let tx_hashes: Vec<_> = transactions.iter().map(|tx| *tx.hash()).collect();
+
+    // The second transaction should be our EIP1559 transaction
+    assert_eq!(
+        tx_hashes[1], tx_hash,
+        "Second transaction should be our EIP1559 transaction. Expected: {tx_hash:?}, Found: {:?}",
+        tx_hashes[1]
+    );
+
+    println!(
+        "✅ Block {} contains PoL tx + EIP1559 tx in correct order: {:?}",
+        block.number, tx_hashes
+    );
 
     Ok(())
 }
