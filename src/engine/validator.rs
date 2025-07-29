@@ -12,6 +12,7 @@ use crate::{
 };
 use reth::chainspec::EthereumHardforks;
 use reth_engine_primitives::PayloadValidator;
+use reth_engine_tree::tree::EngineValidator;
 use reth_ethereum_payload_builder::EthereumExecutionPayloadValidator;
 use reth_node_api::{AddOnsContext, FullNodeComponents, NodeTypes, PayloadTypes};
 use reth_node_builder::rpc::EngineValidatorBuilder;
@@ -19,8 +20,6 @@ use reth_payload_primitives::{
     EngineApiMessageVersion, EngineObjectValidationError, NewPayloadError, PayloadOrAttributes,
     validate_execution_requests, validate_version_specific_fields,
 };
-// Hardfork validation functions removed - implemented directly for Berachain compatibility
-use reth_engine_tree::tree::EngineValidator;
 use reth_payload_validator::{cancun, prague, shanghai};
 use reth_primitives_traits::{Block, RecoveredBlock, SealedBlock};
 use std::{marker::PhantomData, sync::Arc};
