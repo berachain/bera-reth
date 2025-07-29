@@ -4,24 +4,28 @@
 //! for comprehensive integration testing with real RPC servers and full
 //! blockchain state.
 
+use alloy_primitives::{Address, B256};
+use bera_reth::{
+    engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes},
+    primitives::header::BlsPublicKey,
+};
+use reth_ethereum_engine_primitives::EthPayloadAttributes;
+use reth_payload_primitives::PayloadBuilderAttributes;
+
 pub mod pol_transactions;
-// pub mod rpc_integration;
 
-use bera_reth::engine::BerachainEngineTypes;
-use reth_chainspec::ChainSpec;
-use reth_e2e_test_utils::testsuite::setup::{NetworkSetup, Setup};
-use std::{sync::Arc, time::Duration};
-
-/// Standard Berachain test setup for e2e tests
-pub fn berachain_test_setup() -> Setup<BerachainEngineTypes> {
-    Setup::default()
-        .with_chain_spec(berachain_test_chain_spec())
-        .with_network(NetworkSetup::single_node())
-}
-
-/// Berachain test chain specification with Prague1 active at genesis
-pub fn berachain_test_chain_spec() -> Arc<ChainSpec> {
-    // TODO: Use proper Berachain chain spec - for now use dev/test spec
-    // This should be replaced with actual BerachainChainSpec when available
-    reth_chainspec::DEV.clone()
+/// Create Berachain payload attributes for testing
+pub fn berachain_payload_attributes(timestamp: u64) -> BerachainPayloadBuilderAttributes {
+    let eth_attributes = EthPayloadAttributes {
+        timestamp,
+        prev_randao: B256::random(),
+        suggested_fee_recipient: Address::random(),
+        withdrawals: Some(vec![]),
+        parent_beacon_block_root: Some(B256::random()),
+    };
+    let berachain_attributes = BerachainPayloadAttributes {
+        inner: eth_attributes,
+        prev_proposer_pubkey: Some(BlsPublicKey::random()),
+    };
+    BerachainPayloadBuilderAttributes::try_new(B256::ZERO, berachain_attributes, 1).unwrap()
 }

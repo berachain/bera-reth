@@ -1,46 +1,22 @@
 //! PoL (Proof of Liquidity) transaction integration tests
-//!
-//! Tests the complete lifecycle of PoL transactions, including:
-//! - RPC behavior when PoL transactions are submitted
-//! - Automatic PoL transaction inclusion in blocks
-//! - PoL transaction validation and consensus
 
-use alloy_consensus::{BlockHeader, Sealed};
-use alloy_eips::{eip2718::Encodable2718, eip7002::SYSTEM_ADDRESS};
-use alloy_primitives::{Address, B256, Bytes, ChainId};
+use crate::e2e::berachain_payload_attributes;
+use alloy_consensus::BlockHeader;
+use alloy_eips::eip7002::SYSTEM_ADDRESS;
+use alloy_primitives::{Address, ChainId};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
 use bera_reth::{
-    chainspec::BerachainChainSpec,
-    engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes},
-    node::BerachainNode,
-    primitives::header::BlsPublicKey,
-    transaction::{BerachainTxEnvelope, PoLTx},
+    chainspec::BerachainChainSpec, node::BerachainNode, primitives::header::BlsPublicKey,
+    transaction::BerachainTxEnvelope,
 };
 use reth::{providers::BlockNumReader, tasks::TaskManager};
 use reth_cli::chainspec::parse_genesis;
 use reth_e2e_test_utils::node::NodeTestContext;
 use reth_node_builder::{NodeBuilder, NodeHandle};
 use reth_node_core::{args::RpcServerArgs, node_config::NodeConfig};
-use reth_node_ethereum::engine::EthPayloadAttributes;
-use reth_payload_primitives::{BuiltPayload, PayloadBuilderAttributes};
+use reth_payload_primitives::BuiltPayload;
 use std::{str::FromStr, sync::Arc};
-
-/// Create Berachain payload attributes for testing
-fn berachain_payload_attributes(timestamp: u64) -> BerachainPayloadBuilderAttributes {
-    let eth_attributes = EthPayloadAttributes {
-        timestamp,
-        prev_randao: B256::random(),
-        suggested_fee_recipient: Address::random(),
-        withdrawals: Some(vec![]),
-        parent_beacon_block_root: Some(B256::random()),
-    };
-    let berachain_attributes = BerachainPayloadAttributes {
-        inner: eth_attributes,
-        prev_proposer_pubkey: Some(BlsPublicKey::random()),
-    };
-    BerachainPayloadBuilderAttributes::try_new(B256::ZERO, berachain_attributes, 1).unwrap()
-}
 
 #[tokio::test]
 async fn test_pol_transaction_auto_inclusion() -> eyre::Result<()> {
