@@ -1,32 +1,25 @@
 //! PoL (Proof of Liquidity) transaction integration tests
 
-use crate::e2e::berachain_payload_attributes;
+use crate::e2e::{berachain_payload_attributes, setup_test_boilerplate};
 use alloy_consensus::BlockHeader;
 use alloy_eips::eip7002::SYSTEM_ADDRESS;
 use alloy_primitives::{Address, ChainId};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
 use bera_reth::{
-    chainspec::BerachainChainSpec, node::BerachainNode, primitives::header::BlsPublicKey,
-    transaction::BerachainTxEnvelope,
+    node::BerachainNode, primitives::header::BlsPublicKey, transaction::BerachainTxEnvelope,
 };
-use reth::{providers::BlockNumReader, tasks::TaskManager};
-use reth_cli::chainspec::parse_genesis;
+use reth::providers::BlockNumReader;
 use reth_e2e_test_utils::node::NodeTestContext;
 use reth_node_builder::{NodeBuilder, NodeHandle};
 use reth_node_core::{args::RpcServerArgs, node_config::NodeConfig};
 use reth_payload_primitives::BuiltPayload;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
 #[tokio::test]
 async fn test_pol_transaction_auto_inclusion() -> eyre::Result<()> {
-    let tasks = TaskManager::current();
+    let (tasks, chain_spec) = setup_test_boilerplate().await?;
     let executor = tasks.executor();
-
-    let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/eth-genesis.json");
-    let genesis_json = std::fs::read_to_string(genesis_path).expect("Failed to read genesis file");
-    let genesis = parse_genesis(&genesis_json).expect("Failed to parse genesis");
-    let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
 
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
