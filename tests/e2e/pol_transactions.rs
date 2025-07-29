@@ -8,6 +8,8 @@
 use alloy_consensus::{BlockHeader, Sealed};
 use alloy_eips::{eip2718::Encodable2718, eip7002::SYSTEM_ADDRESS};
 use alloy_primitives::{Address, B256, Bytes, ChainId};
+use alloy_sol_macro::sol;
+use alloy_sol_types::SolCall;
 use bera_reth::{
     chainspec::BerachainChainSpec,
     engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes},
@@ -23,26 +25,6 @@ use reth_node_core::{args::RpcServerArgs, node_config::NodeConfig};
 use reth_node_ethereum::engine::EthPayloadAttributes;
 use reth_payload_primitives::{BuiltPayload, PayloadBuilderAttributes};
 use std::{str::FromStr, sync::Arc};
-
-/// Create a test PoL transaction that would normally be system-generated
-fn create_test_pol_transaction() -> PoLTx {
-    PoLTx {
-        chain_id: ChainId::from(80084u64), // Berachain testnet
-        from: Address::ZERO,               // System address
-        to: Address::from([0x42u8; 20]),   // Mock PoL distributor
-        nonce: 42,
-        gas_limit: 0,             // PoL transactions have zero gas limit
-        gas_price: 1_000_000_000, // 1 gwei base fee
-        input: Bytes::from(vec![0x01, 0x02, 0x03]), // Mock distributeFor() call
-    }
-}
-
-/// Encode PoL transaction as raw bytes for RPC submission
-fn encode_pol_transaction_bytes(pol_tx: PoLTx) -> Bytes {
-    let sealed = Sealed::new(pol_tx);
-    let envelope = BerachainTxEnvelope::Berachain(sealed);
-    envelope.encoded_2718().into()
-}
 
 /// Create Berachain payload attributes for testing
 fn berachain_payload_attributes(timestamp: u64) -> BerachainPayloadBuilderAttributes {
@@ -61,273 +43,76 @@ fn berachain_payload_attributes(timestamp: u64) -> BerachainPayloadBuilderAttrib
 }
 
 #[tokio::test]
-async fn test_block_production_with_transactions() -> eyre::Result<()> {
-    // Test that blocks are produced and examine their structure
-
-    // Create TaskManager and keep it alive for the entire test
+async fn test_pol_transaction_auto_inclusion() -> eyre::Result<()> {
     let tasks = TaskManager::current();
     let executor = tasks.executor();
 
-    // Load genesis from the actual BeaconKit genesis file
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path).expect("Failed to read genesis file");
     let genesis = parse_genesis(&genesis_json).expect("Failed to parse genesis");
-
-    // Create BerachainChainSpec from the genesis using the From trait
     let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
 
-    // Create node configuration with Berachain chain spec
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
         .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
 
-    // Launch the Berachain node with proper executor
     let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
         .testing_node(executor.clone())
         .node(BerachainNode::default())
         .launch()
         .await?;
 
-    // Create test context
     let mut ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
-
-    // Get initial block number from the context
     let initial_block = ctx.rpc.inner.eth_api().provider().best_block_number()?;
-    println!("Initial block number: {initial_block}");
 
-    // Advance the block to test block production
     let payload = ctx.advance_block().await?;
-    let block_number = payload.block().number;
-
-    println!("Transaction mined in block: {block_number}");
-    assert!(block_number > initial_block, "Block should have advanced");
-
-    // Examine the block structure from the payload
     let block = payload.block();
     let transactions = &block.body().transactions;
-    println!("Block contains {} transactions", transactions.len());
 
-    // Check if first transaction is PoL (if PoL auto-inclusion is implemented)
+    assert!(!transactions.is_empty(), "Block should contain at least one PoL transaction");
+    assert!(block.number > initial_block, "Block number should advance");
+
     assert!(
-        !transactions.is_empty(),
-        "Expected block to contain at least one PoL transaction, but block is empty"
+        matches!(&transactions[0], BerachainTxEnvelope::Berachain(_)),
+        "First transaction should be PoL type"
     );
+    let BerachainTxEnvelope::Berachain(pol_tx_sealed) = &transactions[0] else { unreachable!() };
 
-    let first_tx = &transactions[0];
+    let pol_tx = pol_tx_sealed.as_ref();
+    let block_base_fee = block.header().base_fee_per_gas().expect("Block should have base fee");
+    let expected_pol_contract = Address::from_str("0x4200000000000000000000000000000000000042")
+        .expect("Valid PoL contract address");
 
-    // Check if this is a PoL transaction by examining the transaction type
-    if let BerachainTxEnvelope::Berachain(pol_tx_sealed) = first_tx {
-        println!("✅ First transaction is PoL type (126) - auto-inclusion working");
+    // Validate all PoL transaction fields
+    assert_eq!(pol_tx.chain_id, ChainId::from(80087u64));
+    assert_eq!(pol_tx.from, SYSTEM_ADDRESS);
+    assert_eq!(pol_tx.to, expected_pol_contract);
+    assert_eq!(pol_tx.nonce, 0);
+    assert_eq!(pol_tx.gas_limit, 30_000_000);
+    assert_eq!(pol_tx.gas_price, block_base_fee as u128);
+    assert!(!pol_tx.input.is_empty());
 
-        // Validate PoL transaction contents
-        let pol_tx = pol_tx_sealed.as_ref();
-        println!("📋 PoL Transaction Details:");
-        println!("   Chain ID: {}", pol_tx.chain_id);
-        println!("   From: {:?}", pol_tx.from);
-        println!("   To: {:?}", pol_tx.to);
-        println!("   Nonce: {}", pol_tx.nonce);
-        println!("   Gas Limit: {}", pol_tx.gas_limit);
-        println!("   Gas Price: {}", pol_tx.gas_price);
-        println!("   Input Length: {} bytes", pol_tx.input.len());
-
-        // Validate expected PoL transaction attributes
-        assert_eq!(
-            pol_tx.chain_id,
-            ChainId::from(80087u64),
-            "PoL transaction should use chain ID 80087"
-        );
-        assert_eq!(
-            pol_tx.from, SYSTEM_ADDRESS,
-            "PoL transaction should be from system address (zero)"
-        );
-        assert_eq!(
-            pol_tx.gas_limit, 30_000_000,
-            "PoL transactions should have 30million gas limit"
-        );
-        // Get the block's base fee to validate against
-        let block_base_fee = block.header().base_fee_per_gas().unwrap();
-        assert_eq!(
-            pol_tx.gas_price, block_base_fee as u128,
-            "PoL transaction gas price should match the block's base fee"
-        );
-        println!("   Block base fee: {} wei", block_base_fee);
-
-        // Validate the 'to' address is the PoL contract from genesis
-        let expected_pol_contract = Address::from_str("0x4200000000000000000000000000000000000042")
-            .expect("Valid PoL contract address");
-        assert_eq!(
-            pol_tx.to, expected_pol_contract,
-            "PoL transaction should be sent to PoL contract address"
-        );
-
-        // Validate input data is present (should contain distributeFor call)
-        assert!(
-            !pol_tx.input.is_empty(),
-            "PoL transaction should contain input data for distributeFor call"
-        );
-
-        println!("✅ PoL transaction validation passed");
-        println!("✅ Block produced successfully with {} transactions", transactions.len());
-    } else {
-        println!("ℹ️  First transaction is not PoL type");
-        println!("   This indicates PoL auto-inclusion may not be implemented yet");
-        assert!(
-            matches!(first_tx, BerachainTxEnvelope::Berachain(_)),
-            "Expected first transaction to be PoL type, but found different transaction type"
-        );
+    // Validate input is valid distributeFor call
+    sol! {
+        interface PoLDistributor {
+            function distributeFor(bytes calldata pubkey) external;
+        }
     }
+
+    let decoded_call = PoLDistributor::distributeForCall::abi_decode(&pol_tx.input)
+        .expect("Should decode as distributeFor call");
+    assert_eq!(decoded_call.pubkey.len(), 48, "BLS public key should be 48 bytes");
+
+    // Validate that the pubkey in the PoL transaction matches the header's prev_proposer_pubkey
+    let header_pubkey = block
+        .header()
+        .prev_proposer_pubkey
+        .expect("Block header should contain prev_proposer_pubkey");
+    let pol_pubkey = BlsPublicKey::from_slice(&decoded_call.pubkey);
+    assert_eq!(
+        pol_pubkey, header_pubkey,
+        "PoL transaction pubkey should match header's prev_proposer_pubkey"
+    );
 
     Ok(())
 }
-
-// #[tokio::test]
-// async fn test_pol_transaction_current_behavior() -> eyre::Result<()> {
-//     // Test current behavior - establishes baseline for PoL transaction handling
-
-//     let ctx =
-//         NodeTestContext::<BerachainNode, BerachainAddOns>::new(berachain_test_setup()).await?;
-//     let provider = ctx.provider();
-
-//     // Create PoL transaction bytes
-//     let pol_tx = create_test_pol_transaction();
-//     let pol_bytes = encode_pol_transaction_bytes(pol_tx);
-
-//     // Verify it's encoded as type 126 (PoL)
-//     assert_eq!(pol_bytes[0], POL_TX_TYPE, "PoL transaction should have type 126");
-//     println!("✅ PoL transaction encoded correctly as type {}", pol_bytes[0]);
-
-//     // Test current RPC behavior when submitting PoL transaction
-//     let result = provider.send_raw_transaction(&pol_bytes).await;
-
-//     // Document current behavior
-//     match result {
-//         Ok(tx_hash) => {
-//             println!("✅ PoL transaction was accepted with hash: {tx_hash}");
-//             println!("   This indicates PoL rejection is not currently implemented");
-
-//             // If accepted, wait to see if it gets mined
-//             if let Ok(receipt) = tokio::time::timeout(
-//                 Duration::from_secs(10),
-//                 provider.get_transaction_receipt(tx_hash),
-//             )
-//             .await
-//             {
-//                 match receipt {
-//                     Ok(Some(receipt)) => {
-//                         println!(
-//                             "   PoL transaction was mined in block {}",
-//                             receipt.block_number.unwrap()
-//                         );
-//                     }
-//                     Ok(None) => {
-//                         println!("   PoL transaction is pending");
-//                     }
-//                     Err(e) => {
-//                         println!("   Error getting receipt: {e}");
-//                     }
-//                 }
-//             }
-//         }
-//         Err(e) => {
-//             println!("❌ PoL transaction was rejected with error: {e}");
-
-//             // Check if it's the expected PoL rejection error
-//             let error_msg = e.to_string();
-//             if error_msg.contains("PoL transactions cannot be submitted via RPC") {
-//                 println!("   ✅ This is the expected PoL rejection behavior");
-//             } else if error_msg.contains("failed to decode") || error_msg.contains("invalid") {
-//                 println!("   ⚠️  This appears to be a decode/validation error");
-//             } else {
-//                 println!("   ⚠️  This is an unexpected error type");
-//             }
-//         }
-//     }
-
-//     Ok(())
-// }
-
-// #[tokio::test]
-// async fn test_ethereum_transaction_acceptance() -> eyre::Result<()> {
-//     // Verify that regular Ethereum transactions work properly
-//     let ctx = NodeTestContext::<BerachainNode>::new(berachain_test_setup()).await?;
-//     let provider = ctx.provider();
-
-//     // Create a simple Ethereum transaction
-//     let tx_request = alloy_rpc_types_eth::TransactionRequest::default()
-//         .to(Address::from([0x11u8; 20]))
-//         .value(1000u64.into())
-//         .gas_limit(21000)
-//         .max_fee_per_gas(2_000_000_000u128) // 2 gwei
-//         .max_priority_fee_per_gas(1_000_000_000u128) // 1 gwei tip
-//         .with_chain_id(80084);
-
-//     // This should work regardless of PoL implementation
-//     let pending_tx = provider.send_transaction(tx_request).await?;
-//     let tx_hash = *pending_tx.tx_hash();
-
-//     println!("✅ Ethereum transaction submitted successfully: {tx_hash}");
-
-//     // Wait for inclusion (with timeout)
-//     let receipt = tokio::time::timeout(Duration::from_secs(10),
-// pending_tx.get_receipt()).await??;
-
-//     assert!(receipt.status(), "Transaction should be successful");
-//     println!(
-//         "✅ Ethereum transaction mined successfully in block {}",
-//         receipt.block_number.unwrap()
-//     );
-
-//     Ok(())
-// }
-
-// #[tokio::test]
-// #[ignore = "requires multi-node setup - enable when network testing is needed"]
-// async fn test_pol_consensus_across_nodes() -> eyre::Result<()> {
-//     // Test PoL transaction consensus across multiple nodes
-//     let network = TestNetwork::<BerachainNode>::new(berachain_multi_node_setup(3)).await?;
-
-//     // Send transaction to first node
-//     let provider_0 = network.node(0).provider();
-//     let tx_request = alloy_rpc_types_eth::TransactionRequest::default()
-//         .to(Address::from([0x33u8; 20]))
-//         .value(3000u64.into())
-//         .gas_limit(21000)
-//         .max_fee_per_gas(2_000_000_000u128);
-
-//     let pending_tx = provider_0.send_transaction(tx_request).await?;
-//     let receipt = pending_tx.get_receipt().await?;
-//     let block_number = receipt.block_number.unwrap();
-
-//     // Verify all nodes see the same block
-//     for i in 0..3 {
-//         let provider = network.node(i).provider();
-//         let block = provider
-//             .get_block_by_number(block_number.into(), true)
-//             .await?
-//             .expect("All nodes should have the block");
-
-//         println!("Node {i}: Block {block_number} has {} transactions", block.transactions.len());
-
-//         // Verify transaction hash is consistent across nodes
-//         let tx_in_block = block
-//             .transactions
-//             .iter()
-//             .find(|tx| tx.hash == receipt.transaction_hash)
-//             .expect("Transaction should be in block on all nodes");
-
-//         assert_eq!(tx_in_block.hash, receipt.transaction_hash);
-
-//         // Check for PoL transaction consistency across nodes
-//         if !block.transactions.is_empty() {
-//             let first_tx = &block.transactions[0];
-//             if let Some(input) = &first_tx.input {
-//                 if !input.is_empty() && input[0] == POL_TX_TYPE {
-//                     println!("Node {i}: First transaction is PoL type - consensus maintained");
-//                 }
-//             }
-//         }
-//     }
-
-//     println!("✅ Transaction consensus verified across all nodes");
-//     Ok(())
-// }
