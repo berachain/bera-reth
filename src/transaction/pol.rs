@@ -6,13 +6,12 @@ use crate::{
 use alloy_primitives::{Bytes, Sealed, U256};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
-use reth::{
-    consensus::ConsensusError,
-    revm::{handler::SYSTEM_ADDRESS, primitives::eip7825},
-};
+use reth::{consensus::ConsensusError, revm::handler::SYSTEM_ADDRESS};
 use reth_chainspec::EthChainSpec;
 use reth_evm::block::{BlockExecutionError, InternalBlockExecutionError};
 use std::sync::Arc;
+
+pub const POL_TX_GAS_LIMIT: u64 = 30_000_000;
 
 pub fn create_pol_transaction(
     chain_spec: Arc<BerachainChainSpec>,
@@ -45,9 +44,9 @@ pub fn create_pol_transaction(
         to: chain_spec.pol_contract(),
         input: Bytes::from(calldata),
         nonce,
-        gas_limit: eip7825::TX_GAS_LIMIT_CAP, // this is the env value used in revm for system calls
-        gas_price: base_fee.into(),           /* gas price is set to the base fee for RPC
-                                               * compatability reasons */
+        gas_limit: POL_TX_GAS_LIMIT, // this is the env value used in revm for system calls
+        gas_price: base_fee.into(),  /* gas price is set to the base fee for RPC
+                                      * compatability reasons */
     };
 
     Ok(BerachainTxEnvelope::Berachain(Sealed::new(pol_tx)))
