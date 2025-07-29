@@ -113,7 +113,7 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             calldata.clone(),
         ) {
             Ok(result_and_state) => {
-                tracing::info!(target: "executor", ?result_and_state, "POL transaction executed successfully");
+                tracing::debug!(target: "executor", ?result_and_state, "POL transaction executed successfully");
 
                 // Use the already-created POL envelope for receipt generation
 

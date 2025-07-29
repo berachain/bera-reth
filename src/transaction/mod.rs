@@ -97,7 +97,7 @@ impl Transaction for PoLTx {
     }
 
     fn effective_gas_price(&self, _base_fee: Option<u64>) -> u128 {
-        0
+        self.gas_price
     }
 
     fn is_dynamic_fee(&self) -> bool {
