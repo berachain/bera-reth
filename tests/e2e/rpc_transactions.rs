@@ -51,8 +51,11 @@ fn create_fake_pol_tx(chain_id: u64) -> PoLTx {
     }
 }
 
-/// Sets up a test node context for PoL transaction testing
-async fn setup_pol_test_node() -> eyre::Result<(NodeTestContext<BerachainNode>, u64)> {
+#[tokio::test]
+async fn test_pol_transaction_rpc_injection_fails() -> eyre::Result<()> {
+    use alloy_eips::eip2718::Encodable2718;
+    use reth_rpc_eth_types::EthApiError;
+
     let (tasks, chain_spec) = setup_test_boilerplate().await?;
     let executor = tasks.executor();
 
@@ -68,16 +71,6 @@ async fn setup_pol_test_node() -> eyre::Result<(NodeTestContext<BerachainNode>, 
 
     let ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
     let chain_id = chain_spec.chain_id();
-
-    Ok((ctx, chain_id))
-}
-
-#[tokio::test]
-async fn test_pol_transaction_rpc_injection_fails() -> eyre::Result<()> {
-    use alloy_eips::eip2718::Encodable2718;
-    use reth_rpc_eth_types::EthApiError;
-
-    let (ctx, chain_id) = setup_pol_test_node().await?;
     let fake_pol_tx = create_fake_pol_tx(chain_id);
 
     // Encode PoL transaction for RPC submission
@@ -94,8 +87,7 @@ async fn test_pol_transaction_rpc_injection_fails() -> eyre::Result<()> {
 
     assert!(
         matches!(rpc_error, EthApiError::FailedToDecodeSignedTransaction),
-        "Expected FailedToDecodeSignedTransaction, got: {:?}",
-        rpc_error
+        "Expected FailedToDecodeSignedTransaction, got: {rpc_error}"
     );
 
     Ok(())
@@ -108,7 +100,21 @@ async fn test_pol_transaction_mempool_insertion_fails() -> eyre::Result<()> {
     use reth_primitives_traits::SignedTransaction;
     use reth_transaction_pool::TransactionOrigin;
 
-    let (ctx, chain_id) = setup_pol_test_node().await?;
+    let (tasks, chain_spec) = setup_test_boilerplate().await?;
+    let executor = tasks.executor();
+
+    let node_config = NodeConfig::new(chain_spec.clone())
+        .with_unused_ports()
+        .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
+
+    let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
+        .testing_node(executor.clone())
+        .node(BerachainNode::default())
+        .launch()
+        .await?;
+
+    let ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
+    let chain_id = chain_spec.chain_id();
     let fake_pol_tx = create_fake_pol_tx(chain_id);
 
     // Create a properly sealed PoL transaction envelope for consensus layer
@@ -133,8 +139,7 @@ async fn test_pol_transaction_mempool_insertion_fails() -> eyre::Result<()> {
     // Verify the error contains the expected UnsupportedBerachainTransaction message
     assert!(
         error_msg.contains("Cannot convert Berachain POL transaction to Ethereum format"),
-        "Expected UnsupportedBerachainTransaction error, got: {}",
-        error_msg
+        "Expected UnsupportedBerachainTransaction error, got: {error_msg}"
     );
 
     Ok(())
