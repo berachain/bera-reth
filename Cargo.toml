@@ -99,7 +99,6 @@ strip = "none"
 [package.metadata.cargo-udeps.ignore]
 normal = ["test-fuzz"]
 
-
 [patch.crates-io]
 # Use local alloy-evm with system call inspection support
 # Based on alloy-evm v0.15.0 + custom patches for revm system call inspection
