@@ -1,5 +1,5 @@
-mod api;
-mod receipt;
+pub mod api;
+pub mod receipt;
 
 use crate::{
     engine::{BerachainExecutionData, rpc::BerachainEngineApiBuilder},
@@ -50,36 +50,24 @@ where
         >,
     EthApiError: FromEvmError<N::Evm>,
 {
-    type EthApi = BerachainApi<
-        <N as FullNodeTypes>::Provider,
-        <N as FullNodeComponents>::Pool,
-        <N as FullNodeComponents>::Network,
-        <N as FullNodeComponents>::Evm,
-        BerachainEthRpcConverterFor<N>,
-    >;
+    type EthApi = BerachainApi<N, BerachainEthRpcConverterFor<N>>;
 
     async fn build_eth_api(self, ctx: EthApiCtx<'_, N>) -> eyre::Result<Self::EthApi> {
         let tx_resp_builder = BerachainEthRpcConverterFor::<N>::new(
             BerachainEthReceiptConverter::new(ctx.components.provider().clone().chain_spec()),
-            (),
         );
 
-        let api = reth_rpc::EthApiBuilder::new(
-            ctx.components.provider().clone(),
-            ctx.components.pool().clone(),
-            ctx.components.network().clone(),
-            ctx.components.evm_config().clone(),
-        )
-        .with_rpc_converter(tx_resp_builder.clone())
-        .eth_cache(ctx.cache)
-        .task_spawner(ctx.components.task_executor().clone())
-        .gas_cap(ctx.config.rpc_gas_cap.into())
-        .max_simulate_blocks(ctx.config.rpc_max_simulate_blocks)
-        .eth_proof_window(ctx.config.eth_proof_window)
-        .fee_history_cache_config(ctx.config.fee_history_cache)
-        .proof_permits(ctx.config.proof_permits)
-        .gas_oracle_config(ctx.config.gas_oracle)
-        .build();
+        let api = reth_rpc::EthApiBuilder::new_with_components(ctx.components.clone())
+            .with_rpc_converter(tx_resp_builder.clone())
+            .eth_cache(ctx.cache)
+            .task_spawner(ctx.components.task_executor().clone())
+            .gas_cap(ctx.config.rpc_gas_cap.into())
+            .max_simulate_blocks(ctx.config.rpc_max_simulate_blocks)
+            .eth_proof_window(ctx.config.eth_proof_window)
+            .fee_history_cache_config(ctx.config.fee_history_cache)
+            .proof_permits(ctx.config.proof_permits)
+            .gas_oracle_config(ctx.config.gas_oracle)
+            .build();
 
         Ok(BerachainApi { inner: api })
     }

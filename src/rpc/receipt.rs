@@ -179,7 +179,7 @@ impl<ChainSpec> BerachainEthReceiptConverter<ChainSpec> {
 
 impl<ChainSpec> ReceiptConverter<BerachainPrimitives> for BerachainEthReceiptConverter<ChainSpec>
 where
-    ChainSpec: EthChainSpec,
+    ChainSpec: EthChainSpec + 'static,
 {
     type RpcReceipt = TransactionReceipt<BerachainReceiptEnvelope>;
     type Error = EthApiError;

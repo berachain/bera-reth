@@ -3,7 +3,7 @@ use crate::{
     rpc::receipt::BerachainReceiptEnvelope,
     transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE},
 };
-use alloy_consensus::{Transaction, crypto::RecoveryError};
+use alloy_consensus::Transaction;
 use alloy_eips::eip2930::AccessList;
 use alloy_network::{
     BuildResult, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
@@ -13,13 +13,7 @@ use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
 use reth::{
-    chainspec::EthereumHardforks,
-    network::NetworkInfo,
-    providers::{
-        BlockNumReader, BlockReader, BlockReaderIdExt, NodePrimitivesProvider, ProviderBlock,
-        ProviderError, ProviderHeader, ProviderReceipt, ProviderTx, StageCheckpointReader,
-        StateProviderFactory, TransactionsProvider,
-    },
+    providers::{ProviderHeader, ProviderTx},
     rpc::compat::{RpcConvert, RpcTypes},
     tasks::{
         TaskSpawner,
@@ -27,13 +21,11 @@ use reth::{
     },
     transaction_pool::{PoolTransaction, TransactionPool},
 };
-use reth_chainspec::{ChainSpecProvider, EthChainSpec};
-use reth_evm::{ConfigureEvm, TxEnvFor};
-use reth_primitives_traits::NodePrimitives;
+use reth_evm::TxEnvFor;
 use reth_rpc::eth::DevSigner;
 use reth_rpc_convert::SignableTxRequest;
 use reth_rpc_eth_api::{
-    EthApiTypes, FromEthApiError, FullEthApiTypes, RpcNodeCore, RpcNodeCoreExt,
+    EthApiTypes, RpcNodeCore, RpcNodeCoreExt,
     helpers::{
         AddDevSigners, Call, EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions,
         LoadBlock, LoadFee, LoadPendingBlock, LoadReceipt, LoadState, LoadTransaction,
@@ -47,7 +39,7 @@ use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock, error::FromEvmError,
     utils::recover_raw_transaction,
 };
-use reth_transaction_pool::TransactionOrigin;
+use reth_transaction_pool::{AddedTransactionOutcome, TransactionOrigin};
 
 impl fmt::Display for BerachainTxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -337,23 +329,15 @@ impl Network for BerachainNetwork {
 }
 
 #[derive(Deref)]
-pub struct BerachainApi<
-    Provider: BlockReader,
-    Pool,
-    Network,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
-> {
+pub struct BerachainApi<N: RpcNodeCore, Rpc: RpcConvert> {
     /// All nested fields bundled together.
     #[deref]
-    pub(super) inner: reth_rpc::EthApi<Provider, Pool, Network, EvmConfig, Rpc>,
+    pub(super) inner: reth_rpc::EthApi<N, Rpc>,
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> Clone
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> Clone for BerachainApi<N, Rpc>
 where
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
+    N: RpcNodeCore,
     Rpc: RpcConvert,
 {
     fn clone(&self) -> Self {
@@ -361,17 +345,14 @@ where
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> EthApiTypes
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> EthApiTypes for BerachainApi<N, Rpc>
 where
-    Self: Send + Sync,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
+    N: RpcNodeCore,
     Rpc: RpcConvert,
 {
     type Error = EthApiError;
 
-    type NetworkTypes = BerachainNetwork;
+    type NetworkTypes = Rpc::Network;
     type RpcConvert = Rpc;
 
     fn tx_resp_builder(&self) -> &Self::RpcConvert {
@@ -379,21 +360,16 @@ where
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> RpcNodeCore
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> RpcNodeCore for BerachainApi<N, Rpc>
 where
-    Provider: BlockReader + NodePrimitivesProvider + Clone + Unpin,
-    Pool: Send + Sync + Clone + Unpin,
-    Network: Send + Sync + Clone,
-    EvmConfig: ConfigureEvm,
+    N: RpcNodeCore,
     Rpc: RpcConvert,
 {
-    type Primitives = Provider::Primitives;
-    type Provider = Provider;
-    type Pool = Pool;
-    type Evm = EvmConfig;
-    type Network = Network;
-    type PayloadBuilder = ();
+    type Primitives = N::Primitives;
+    type Provider = N::Provider;
+    type Pool = N::Pool;
+    type Evm = N::Evm;
+    type Network = N::Network;
 
     fn pool(&self) -> &Self::Pool {
         self.inner.pool()
@@ -407,35 +383,25 @@ where
         self.inner.network()
     }
 
-    fn payload_builder(&self) -> &Self::PayloadBuilder {
-        &()
-    }
-
     fn provider(&self) -> &Self::Provider {
         self.inner.provider()
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> RpcNodeCoreExt
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> RpcNodeCoreExt for BerachainApi<N, Rpc>
 where
-    Provider: BlockReader + NodePrimitivesProvider + Clone + Unpin,
-    Pool: Send + Sync + Clone + Unpin,
-    Network: Send + Sync + Clone,
-    EvmConfig: ConfigureEvm,
+    N: RpcNodeCore,
     Rpc: RpcConvert,
 {
     #[inline]
-    fn cache(&self) -> &EthStateCache<ProviderBlock<Provider>, ProviderReceipt<Provider>> {
+    fn cache(&self) -> &EthStateCache<N::Primitives> {
         self.inner.cache()
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> std::fmt::Debug
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> std::fmt::Debug for BerachainApi<N, Rpc>
 where
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
+    N: RpcNodeCore,
     Rpc: RpcConvert,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -443,12 +409,9 @@ where
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> SpawnBlocking
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> SpawnBlocking for BerachainApi<N, Rpc>
 where
-    Self: EthApiTypes<NetworkTypes = Rpc::Network> + Clone + Send + Sync + 'static,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
+    N: RpcNodeCore,
     Rpc: RpcConvert,
 {
     #[inline]
@@ -467,31 +430,28 @@ where
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> AddDevSigners
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> AddDevSigners for BerachainApi<N, Rpc>
 where
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert<Network: RpcTypes<TransactionRequest: SignableTxRequest<ProviderTx<Provider>>>>,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<
+        Network: RpcTypes<TransactionRequest: SignableTxRequest<ProviderTx<N::Provider>>>,
+    >,
 {
     fn with_dev_accounts(&self) {
         *self.inner.signers().write() = DevSigner::random_signers(20)
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> EthTransactions
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> EthTransactions for BerachainApi<N, Rpc>
 where
-    Self: LoadTransaction<Provider: BlockReaderIdExt> + EthApiTypes<NetworkTypes = Rpc::Network>,
-    Provider: BlockReader<Transaction = ProviderTx<Self::Provider>>,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
     #[inline]
     fn signers(&self) -> &SignersForRpc<Self::Provider, Self::NetworkTypes> {
-        // SAFETY: This is safe because BerachainNetwork and Rpc have the same TransactionRequest
-        // type and both implement RpcTypes. The signatures are compatible.
-        self.inner.signers()
+        EthTransactions::signers(&self.inner)
     }
 
     /// Decodes and recovers the transaction and submits it to the pool.
@@ -506,66 +466,35 @@ where
         let pool_transaction = <Self::Pool as TransactionPool>::Transaction::from_pooled(recovered);
 
         // submit the transaction to the pool with a `Local` origin
-        let hash = self
-            .pool()
-            .add_transaction(TransactionOrigin::Local, pool_transaction)
-            .await
-            .map_err(Self::Error::from_eth_err)?;
+        let AddedTransactionOutcome { hash, .. } =
+            self.pool().add_transaction(TransactionOrigin::Local, pool_transaction).await?;
 
         Ok(hash)
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> LoadTransaction
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> LoadTransaction for BerachainApi<N, Rpc>
 where
-    Self: SpawnBlocking
-        + FullEthApiTypes
-        + RpcNodeCoreExt<Provider: TransactionsProvider, Pool: TransactionPool>
-        + EthApiTypes<NetworkTypes = Rpc::Network>,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> LoadReceipt
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> LoadReceipt for BerachainApi<N, Rpc>
 where
-    Self: RpcNodeCoreExt<
-            Primitives: NodePrimitives<
-                SignedTx = ProviderTx<Self::Provider>,
-                Receipt = ProviderReceipt<Self::Provider>,
-            >,
-        > + EthApiTypes<
-            NetworkTypes = Rpc::Network,
-            RpcConvert: RpcConvert<
-                Network = Rpc::Network,
-                Primitives = Self::Primitives,
-                Error = Self::Error,
-            >,
-            Error: From<RecoveryError>,
-        >,
-    Provider: BlockReader + ChainSpecProvider,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> EthApiSpec
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> EthApiSpec for BerachainApi<N, Rpc>
 where
-    Self: RpcNodeCore<
-            Provider: ChainSpecProvider<ChainSpec: EthereumHardforks>
-                          + BlockNumReader
-                          + StageCheckpointReader,
-            Network: NetworkInfo,
-        >,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    Rpc: RpcConvert<Primitives = N::Primitives>,
 {
-    type Transaction = ProviderTx<Provider>;
+    type Transaction = ProviderTx<N::Provider>;
     type Rpc = Rpc::Network;
 
     fn starting_block(&self) -> U256 {
@@ -577,90 +506,35 @@ where
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> EthBlocks
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> EthBlocks for BerachainApi<N, Rpc>
 where
-    Self: LoadBlock<
-            Error = EthApiError,
-            NetworkTypes = Rpc::Network,
-            RpcConvert: RpcConvert<
-                Primitives = Self::Primitives,
-                Error = Self::Error,
-                Network = Rpc::Network,
-            >,
-        >,
-    Provider: BlockReader + ChainSpecProvider,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> LoadBlock
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> LoadBlock for BerachainApi<N, Rpc>
 where
-    Self: LoadPendingBlock
-        + SpawnBlocking
-        + RpcNodeCoreExt<
-            Pool: TransactionPool<
-                Transaction: PoolTransaction<Consensus = ProviderTx<Self::Provider>>,
-            >,
-            Primitives: NodePrimitives<SignedTx = ProviderTx<Self::Provider>>,
-            Evm = EvmConfig,
-        >,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    Self: LoadPendingBlock,
+    N: RpcNodeCore,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> EthCall
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> EthCall for BerachainApi<N, Rpc>
 where
-    Self: EstimateCall<NetworkTypes = Rpc::Network>
-        + LoadPendingBlock<NetworkTypes = Rpc::Network>
-        + FullEthApiTypes<NetworkTypes = Rpc::Network>
-        + RpcNodeCoreExt<
-            Pool: TransactionPool<
-                Transaction: PoolTransaction<Consensus = ProviderTx<Self::Provider>>,
-            >,
-            Primitives: NodePrimitives<SignedTx = ProviderTx<Self::Provider>>,
-            Evm = EvmConfig,
-        >,
-    EvmConfig: ConfigureEvm<Primitives = <Self as RpcNodeCore>::Primitives>,
-    Provider: BlockReader,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, TxEnv = TxEnvFor<N::Evm>>,
 {
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> EstimateCall
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> Call for BerachainApi<N, Rpc>
 where
-    Self: Call<NetworkTypes = Rpc::Network>,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
-{
-}
-
-impl<Provider, Pool, Network, EvmConfig, Rpc> Call
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
-where
-    Self: LoadState<
-            Evm: ConfigureEvm<
-                Primitives: NodePrimitives<
-                    BlockHeader = ProviderHeader<Self::Provider>,
-                    SignedTx = ProviderTx<Self::Provider>,
-                >,
-            >,
-            RpcConvert: RpcConvert<TxEnv = TxEnvFor<Self::Evm>, Network = Rpc::Network>,
-            NetworkTypes = Rpc::Network,
-            Error: FromEvmError<Self::Evm>
-                       + From<<Self::RpcConvert as RpcConvert>::Error>
-                       + From<ProviderError>,
-        > + SpawnBlocking,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, TxEnv = TxEnvFor<N::Evm>>,
 {
     #[inline]
     fn call_gas_limit(&self) -> u64 {
@@ -673,76 +547,52 @@ where
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> EthFees
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> EstimateCall for BerachainApi<N, Rpc>
 where
-    Self: LoadFee<
-        Provider: ChainSpecProvider<
-            ChainSpec: EthChainSpec<Header = ProviderHeader<Self::Provider>>,
-        >,
-    >,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, TxEnv = TxEnvFor<N::Evm>>,
 {
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> EthState
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> EthFees for BerachainApi<N, Rpc>
 where
-    Self: LoadState + SpawnBlocking,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
+{
+}
+
+impl<N, Rpc> EthState for BerachainApi<N, Rpc>
+where
+    N: RpcNodeCore,
+    Rpc: RpcConvert<Primitives = N::Primitives>,
 {
     fn max_proof_window(&self) -> u64 {
         self.inner.eth_proof_window()
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> Trace
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> Trace for BerachainApi<N, Rpc>
 where
-    Self: LoadState<
-            Provider: BlockReader,
-            Evm: ConfigureEvm<
-                Primitives: NodePrimitives<
-                    BlockHeader = ProviderHeader<Self::Provider>,
-                    SignedTx = ProviderTx<Self::Provider>,
-                >,
-            >,
-            Error: FromEvmError<Self::Evm>,
-        >,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives>,
 {
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> LoadState
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> LoadState for BerachainApi<N, Rpc>
 where
-    Self: RpcNodeCoreExt<
-            Provider: BlockReader
-                          + StateProviderFactory
-                          + ChainSpecProvider<ChainSpec: EthereumHardforks>,
-            Pool: TransactionPool,
-        > + EthApiTypes<NetworkTypes = Rpc::Network>,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    Rpc: RpcConvert<Primitives = N::Primitives>,
 {
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> LoadFee
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> LoadFee for BerachainApi<N, Rpc>
 where
-    Self: LoadBlock<Provider = Provider>,
-    Provider: BlockReaderIdExt
-        + ChainSpecProvider<ChainSpec: EthChainSpec + EthereumHardforks>
-        + StateProviderFactory,
-    EvmConfig: ConfigureEvm,
-    Rpc: RpcConvert,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
     #[inline]
     fn gas_oracle(&self) -> &GasPriceOracle<Self::Provider> {
@@ -750,45 +600,19 @@ where
     }
 
     #[inline]
-    fn fee_history_cache(&self) -> &FeeHistoryCache<ProviderHeader<Provider>> {
+    fn fee_history_cache(&self) -> &FeeHistoryCache<ProviderHeader<N::Provider>> {
         self.inner.fee_history_cache()
     }
 }
 
-impl<Provider, Pool, Network, EvmConfig, Rpc> LoadPendingBlock
-    for BerachainApi<Provider, Pool, Network, EvmConfig, Rpc>
+impl<N, Rpc> LoadPendingBlock for BerachainApi<N, Rpc>
 where
-    Self: SpawnBlocking<
-            NetworkTypes = Rpc::Network,
-            Error: FromEvmError<Self::Evm>,
-            RpcConvert: RpcConvert<Network = Rpc::Network>,
-        > + RpcNodeCore<
-            Provider: BlockReaderIdExt<Receipt = Provider::Receipt, Block = Provider::Block>
-                          + ChainSpecProvider<ChainSpec: EthChainSpec + EthereumHardforks>
-                          + StateProviderFactory,
-            Pool: TransactionPool<
-                Transaction: PoolTransaction<Consensus = ProviderTx<Self::Provider>>,
-            >,
-            Evm = EvmConfig,
-            Primitives: NodePrimitives<
-                BlockHeader = ProviderHeader<Self::Provider>,
-                SignedTx = ProviderTx<Self::Provider>,
-                Receipt = ProviderReceipt<Self::Provider>,
-                Block = ProviderBlock<Self::Provider>,
-            >,
-        >,
-    Provider: BlockReader,
-    EvmConfig: ConfigureEvm<Primitives = Self::Primitives>,
-    Rpc: RpcConvert<
-        Network: RpcTypes<Header = alloy_rpc_types_eth::Header<ProviderHeader<Self::Provider>>>,
-    >,
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives>,
 {
     #[inline]
-    fn pending_block(
-        &self,
-    ) -> &tokio::sync::Mutex<
-        Option<PendingBlock<ProviderBlock<Self::Provider>, ProviderReceipt<Self::Provider>>>,
-    > {
+    fn pending_block(&self) -> &tokio::sync::Mutex<Option<PendingBlock<Self::Primitives>>> {
         self.inner.pending_block()
     }
 

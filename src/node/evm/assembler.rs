@@ -19,7 +19,6 @@ use reth_evm::{
     execute::{BlockAssembler, BlockAssemblerInput},
 };
 use std::sync::Arc;
-use tracing::info;
 
 #[derive(Clone, Debug)]
 pub struct BerachainBlockAssembler {
@@ -59,8 +58,6 @@ where
             state_root,
             ..
         } = input;
-
-        info!(target: "block receipts", ?receipts, "block assembler");
 
         let timestamp = evm_env.block_env.timestamp.saturating_to();
 
