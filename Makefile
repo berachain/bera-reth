@@ -87,6 +87,15 @@ build-release: ## Build bera-reth with release profile
 build-maxperf: ## Build bera-reth with maxperf profile
 	$(MAKE) build PROFILE=maxperf
 
+# Cross-compilation targets for CI/CD
+.PHONY: build-x86_64-unknown-linux-gnu
+build-x86_64-unknown-linux-gnu: ## Build bera-reth for x86_64-unknown-linux-gnu
+	cargo build --target x86_64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)"
+
+.PHONY: build-aarch64-unknown-linux-gnu
+build-aarch64-unknown-linux-gnu: ## Build bera-reth for aarch64-unknown-linux-gnu
+	cargo build --target aarch64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)"
+
 ###############################################################################
 ###                               Development                               ###
 ###############################################################################
