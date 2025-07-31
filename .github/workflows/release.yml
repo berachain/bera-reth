@@ -214,9 +214,33 @@ jobs:
           ENDBODY
           )
           assets=()
+          # Debug: show what files are actually present
+          echo "Files in current directory:"
+          ls -la . | grep bera-reth || echo "No bera-reth files found"
+          
+          # Find files more broadly
+          echo "Searching for files with find:"
+          find . -name "*bera-reth*.tar.gz*" -type f
+          
+          # Try both approaches
           for asset in ./*bera-reth-*.tar.gz*; do
-              assets+=("$asset")
+              if [[ -f "$asset" ]]; then
+                  assets+=("$asset")
+                  echo "Added asset: $asset"
+              fi
           done
+          
+          # If no files found with glob, try find
+          if [[ ${#assets[@]} -eq 0 ]]; then
+              echo "No files found with glob pattern, trying find..."
+              while IFS= read -r -d '' asset; do
+                  assets+=("$asset")
+                  echo "Added asset via find: $asset"
+              done < <(find . -name "*bera-reth*.tar.gz*" -type f -print0)
+          fi
+          
+          echo "Total assets found: ${#assets[@]}"
+          printf '%s\n' "${assets[@]}"
           tag_name="${{ env.VERSION }}"
           echo "$body" | gh release create --draft $prerelease_flag -t "Bera-Reth $tag_name" -F "-" "$tag_name" "${assets[@]}"
 
