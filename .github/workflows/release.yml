@@ -143,6 +143,9 @@ jobs:
           fetch-depth: 0
       - name: Download artifacts
         uses: actions/download-artifact@v4
+        with:
+          pattern: bera-reth-*
+          merge-multiple: true
       - name: Generate full changelog
         id: changelog
         run: |
