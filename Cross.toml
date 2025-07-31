@@ -30,5 +30,10 @@ pre-build = [
   "apt install --yes gcc gcc-aarch64-linux-gnu libclang-dev make",
 ]
 
+[target.aarch64-unknown-linux-gnu.env]
+passthrough = [
+  "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc",
+]
+
 [build.env]
 passthrough = ["JEMALLOC_SYS_WITH_LG_PAGE"]
