@@ -212,7 +212,7 @@ jobs:
           )
           assets=()
           for asset in ./*bera-reth-*.tar.gz*; do
-              assets+=("$asset/$asset")
+              assets+=("$asset")
           done
           tag_name="${{ env.VERSION }}"
           echo "$body" | gh release create --draft $prerelease_flag -t "Bera-Reth $tag_name" -F "-" "$tag_name" "${assets[@]}"
