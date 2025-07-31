@@ -214,35 +214,82 @@ jobs:
           ENDBODY
           )
           assets=()
-          # Debug: show what files are actually present
-          echo "Files in current directory:"
-          ls -la . | grep bera-reth || echo "No bera-reth files found"
-          
-          # Find files more broadly
-          echo "Searching for files with find:"
-          find . -name "*bera-reth*.tar.gz*" -type f
-          
-          # Try both approaches
           for asset in ./*bera-reth-*.tar.gz*; do
               if [[ -f "$asset" ]]; then
                   assets+=("$asset")
-                  echo "Added asset: $asset"
               fi
           done
           
-          # If no files found with glob, try find
+          # Ensure we have assets before proceeding
           if [[ ${#assets[@]} -eq 0 ]]; then
-              echo "No files found with glob pattern, trying find..."
-              while IFS= read -r -d '' asset; do
-                  assets+=("$asset")
-                  echo "Added asset via find: $asset"
-              done < <(find . -name "*bera-reth*.tar.gz*" -type f -print0)
+              echo "ERROR: No assets found!"
+              exit 1
           fi
           
-          echo "Total assets found: ${#assets[@]}"
-          printf '%s\n' "${assets[@]}"
+          echo "Found ${#assets[@]} assets to upload"
           tag_name="${{ env.VERSION }}"
+          
+          # Extensive debugging
+          echo "=== DEBUG INFO ==="
+          echo "GITHUB_REF: '$GITHUB_REF'"
+          echo "GITHUB_REF_NAME: '$GITHUB_REF_NAME'"
+          echo "VERSION env var: '$VERSION'"
+          echo "tag_name variable: '$tag_name'"
+          echo "prerelease_flag: '$prerelease_flag'"
+          echo "Current directory: $(pwd)"
+          echo "Git status:"
+          git status --porcelain || echo "Git status failed"
+          echo "Git log (last commit):"
+          git log --oneline -1 || echo "Git log failed"
+          echo "Available tags:"
+          git tag -l | tail -5 || echo "No tags found"
+          echo "Current HEAD:"
+          git rev-parse HEAD || echo "Git rev-parse failed"
+          echo "Tag $tag_name exists?"
+          if git rev-parse "$tag_name" >/dev/null 2>&1; then
+              echo "YES - Tag $tag_name exists at: $(git rev-parse $tag_name)"
+          else
+              echo "NO - Tag $tag_name does not exist"
+              echo "Creating tag $tag_name..."
+              git tag "$tag_name"
+              git push origin "$tag_name"
+              echo "Tag created and pushed"
+          fi
+          
+          echo "Assets found: ${#assets[@]}"
+          for i in "${!assets[@]}"; do
+              echo "Asset $i: '${assets[i]}' (size: $(stat -c%s "${assets[i]}" 2>/dev/null || echo "unknown"))"
+          done
+          
+          echo "Environment variables:"
+          env | grep -E "(GITHUB_|GH_)" | sort
+          
+          echo "GitHub CLI version:"
+          gh --version
+          
+          echo "Testing gh auth:"
+          gh auth status || echo "Auth check failed"
+          
+          echo "=== RUNNING RELEASE COMMAND ==="
+          echo "Command: gh release create --draft $prerelease_flag -t \"Bera-Reth $tag_name\" -F \"-\" \"$tag_name\" ${assets[*]}"
+          
+          # Create release with verbose output
+          set -x  # Enable bash debug mode
           echo "$body" | gh release create --draft $prerelease_flag -t "Bera-Reth $tag_name" -F "-" "$tag_name" "${assets[@]}"
+          release_exit_code=$?
+          set +x  # Disable bash debug mode
+          
+          echo "=== POST-RELEASE DEBUG ==="
+          echo "Release command exit code: $release_exit_code"
+          
+          if [[ $release_exit_code -eq 0 ]]; then
+              echo "Release created successfully"
+              echo "Checking if release exists:"
+              gh release view "$tag_name" || echo "Release view failed"
+          else
+              echo "Release creation failed with exit code: $release_exit_code"
+              exit $release_exit_code
+          fi
 
   dry-run-summary:
     name: dry run summary
