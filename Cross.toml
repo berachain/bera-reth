@@ -15,12 +15,19 @@ pre-build = [
   "apt-get update && apt-get install --assume-yes --no-install-recommends llvm-dev libclang-dev clang",
 ]
 
-# Use Ubuntu 24.04 for x86_64 to get newer GLIBC that matches current Rust toolchain
+# Use Ubuntu 24.04 for both targets to get newer GLIBC that matches current Rust toolchain
 [target.x86_64-unknown-linux-gnu]
 image = "ubuntu:24.04"
 pre-build = [
-  "apt update",
-  "apt install --yes gcc libclang-dev make",
+    "apt update",
+    "apt install --yes gcc libclang-dev make",
+]
+
+[target.aarch64-unknown-linux-gnu]
+image = "ubuntu:24.04"
+pre-build = [
+    "apt update",
+    "apt install --yes gcc gcc-aarch64-linux-gnu libclang-dev make",
 ]
 
 [build.env]
