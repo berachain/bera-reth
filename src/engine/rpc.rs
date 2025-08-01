@@ -617,9 +617,7 @@ where
 
     async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
         let mut capabilities = self.inner.capabilities().clone();
-        for cap in BERACHAIN_ADDITIONAL_CAPABILITIES {
-            capabilities.add_capability(*cap);
-        }
+        BERACHAIN_ADDITIONAL_CAPABILITIES.iter().for_each(|&cap| capabilities.add_capability(cap));
         Ok(capabilities.list())
     }
 
