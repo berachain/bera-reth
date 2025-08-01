@@ -363,13 +363,6 @@ where
         .into());
     }
 
-    // Validate that no proposer pubkey is provided (should be None)
-    validate_proposer_pubkey_prague1(chain_spec, timestamp, None).map_err(|error| {
-        EngineApiError::EngineObjectValidationError(EngineObjectValidationError::invalid_params(
-            error,
-        ))
-    })?;
-
     Ok(())
 }
 
