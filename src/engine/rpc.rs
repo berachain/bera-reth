@@ -546,7 +546,7 @@ where
     ) -> RpcResult<ForkchoiceUpdated> {
         trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV3P11");
 
-        if let Some(ref attrs) = payload_attributes {
+        if let Some(attrs) = &payload_attributes {
             Self::validate_prague1_requirements(
                 &*self.chain_spec,
                 attrs.timestamp(),
