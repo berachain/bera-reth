@@ -57,7 +57,10 @@ where
     N: FullNodeComponents<
         Types: NodeTypes<
             ChainSpec: EthereumHardforks + BerachainHardforks,
-            Payload: PayloadTypes<ExecutionData = BerachainExecutionData> + EngineTypes,
+            Payload: PayloadTypes<
+                ExecutionData = BerachainExecutionData,
+                PayloadAttributes = BerachainPayloadAttributes,
+            > + EngineTypes,
         >,
     >,
     EV: EngineValidatorBuilder<N>,
