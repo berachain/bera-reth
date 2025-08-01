@@ -49,6 +49,9 @@ pub struct BerachainEngineApiBuilder<EV> {
     engine_validator_builder: EV,
 }
 
+pub const BERACHAIN_ADDITIONAL_CAPABILITIES: &[&str] =
+    &["engine_newPayloadV4P11", "engine_forkchoiceUpdatedV3P11", "engine_getPayloadV4P11"];
+
 impl<N, EV> EngineApiBuilder<N> for BerachainEngineApiBuilder<EV>
 where
     N: FullNodeComponents<
@@ -613,7 +616,9 @@ where
     }
 
     async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
-        Ok(self.inner.capabilities().list())
+        let mut capabilities = self.inner.capabilities().clone();
+        BERACHAIN_ADDITIONAL_CAPABILITIES.iter().for_each(|&cap| capabilities.add_capability(cap));
+        Ok(capabilities.list())
     }
 
     async fn get_blobs_v1(
