@@ -31,10 +31,8 @@ use reth_engine_tree::tree::EngineValidator;
 use reth_node_api::{AddOnsContext, FullNodeComponents};
 use reth_node_builder::rpc::{EngineApiBuilder, EngineValidatorBuilder};
 use reth_node_core::version::{CARGO_PKG_VERSION, CLIENT_CODE, NAME_CLIENT, VERGEN_GIT_SHA};
-use reth_payload_primitives::{PayloadAttributes, PayloadTypes};
-use reth_rpc_engine_api::{
-    EngineApi, EngineApiError, EngineCapabilities, INVALID_PAYLOAD_ATTRIBUTES,
-};
+use reth_payload_primitives::{EngineObjectValidationError, PayloadAttributes, PayloadTypes};
+use reth_rpc_engine_api::{EngineApi, EngineApiError, EngineCapabilities};
 use reth_transaction_pool::TransactionPool;
 use std::sync::Arc;
 use tracing::{debug, trace};
@@ -386,21 +384,17 @@ where
         proposer_pubkey: Option<BlsPublicKey>,
     ) -> RpcResult<()> {
         if !chain_spec.is_prague1_active_at_timestamp(timestamp) {
-            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                "Prague1 fork not active",
-                None::<()>,
-            ))
+            return Err(EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::UnsupportedFork,
+            )
             .into());
         }
 
         validate_proposer_pubkey_prague1(chain_spec, timestamp, proposer_pubkey).map_err(
             |error| {
-                EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                    INVALID_PAYLOAD_ATTRIBUTES,
-                    error.to_string(),
-                    None::<()>,
-                ))
+                EngineApiError::EngineObjectValidationError(
+                    EngineObjectValidationError::invalid_params(error),
+                )
             },
         )?;
 
