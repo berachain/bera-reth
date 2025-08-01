@@ -348,53 +348,54 @@ pub struct BerachainEngineApi<Provider, PayloadT: PayloadTypes, Pool, Validator,
     chain_spec: Arc<ChainSpec>,
 }
 
-impl<Provider, PayloadT: PayloadTypes, Pool, Validator, ChainSpec>
-    BerachainEngineApi<Provider, PayloadT, Pool, Validator, ChainSpec>
+/// Validates requirements for newPayloadV4 - Prague1 must not be active
+fn validate_payload_v4_requirements<ChainSpec>(
+    chain_spec: &ChainSpec,
+    timestamp: u64,
+) -> RpcResult<()>
 where
     ChainSpec: EthereumHardforks + BerachainHardforks,
 {
-    /// Validates requirements for newPayloadV4 - Prague1 must not be active
-    fn validate_payload_v4_requirements(chain_spec: &ChainSpec, timestamp: u64) -> RpcResult<()> {
-        if chain_spec.is_prague1_active_at_timestamp(timestamp) {
-            return Err(EngineApiError::EngineObjectValidationError(
-                EngineObjectValidationError::UnsupportedFork,
-            )
-            .into());
-        }
-
-        // Validate that no proposer pubkey is provided (should be None)
-        validate_proposer_pubkey_prague1(chain_spec, timestamp, None).map_err(|error| {
-            EngineApiError::EngineObjectValidationError(
-                EngineObjectValidationError::invalid_params(error),
-            )
-        })?;
-
-        Ok(())
+    if chain_spec.is_prague1_active_at_timestamp(timestamp) {
+        return Err(EngineApiError::EngineObjectValidationError(
+            EngineObjectValidationError::UnsupportedFork,
+        )
+        .into());
     }
 
-    /// Validates Prague1 requirements for P11 methods
-    fn validate_prague1_requirements(
-        chain_spec: &ChainSpec,
-        timestamp: u64,
-        proposer_pubkey: Option<BlsPublicKey>,
-    ) -> RpcResult<()> {
-        if !chain_spec.is_prague1_active_at_timestamp(timestamp) {
-            return Err(EngineApiError::EngineObjectValidationError(
-                EngineObjectValidationError::UnsupportedFork,
-            )
-            .into());
-        }
+    // Validate that no proposer pubkey is provided (should be None)
+    validate_proposer_pubkey_prague1(chain_spec, timestamp, None).map_err(|error| {
+        EngineApiError::EngineObjectValidationError(EngineObjectValidationError::invalid_params(
+            error,
+        ))
+    })?;
 
-        validate_proposer_pubkey_prague1(chain_spec, timestamp, proposer_pubkey).map_err(
-            |error| {
-                EngineApiError::EngineObjectValidationError(
-                    EngineObjectValidationError::invalid_params(error),
-                )
-            },
-        )?;
+    Ok(())
+}
 
-        Ok(())
+/// Validates Prague1 requirements for P11 methods
+fn validate_prague1_requirements<ChainSpec>(
+    chain_spec: &ChainSpec,
+    timestamp: u64,
+    proposer_pubkey: Option<BlsPublicKey>,
+) -> RpcResult<()>
+where
+    ChainSpec: EthereumHardforks + BerachainHardforks,
+{
+    if !chain_spec.is_prague1_active_at_timestamp(timestamp) {
+        return Err(EngineApiError::EngineObjectValidationError(
+            EngineObjectValidationError::UnsupportedFork,
+        )
+        .into());
     }
+
+    validate_proposer_pubkey_prague1(chain_spec, timestamp, proposer_pubkey).map_err(|error| {
+        EngineApiError::EngineObjectValidationError(EngineObjectValidationError::invalid_params(
+            error,
+        ))
+    })?;
+
+    Ok(())
 }
 
 #[async_trait::async_trait]
@@ -453,7 +454,7 @@ where
             return Err(EngineApiError::UnexpectedRequestsHash.into());
         }
 
-        Self::validate_payload_v4_requirements(&*self.chain_spec, payload.timestamp())?;
+        validate_payload_v4_requirements(&*self.chain_spec, payload.timestamp())?;
 
         let berachain_payload = BerachainExecutionData::new(
             payload.into(),
@@ -478,7 +479,7 @@ where
         trace!(target: "rpc::engine", "Serving engine_newPayloadV4P11");
         trace!(target: "rpc::engine", "received parent_proposer_pub_key {:?}", parent_proposer_pub_key);
 
-        Self::validate_prague1_requirements(
+        validate_prague1_requirements(
             &*self.chain_spec,
             payload.timestamp(),
             Some(parent_proposer_pub_key),
@@ -536,7 +537,7 @@ where
         trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV3P11");
 
         if let Some(attrs) = &payload_attributes {
-            Self::validate_prague1_requirements(
+            validate_prague1_requirements(
                 &*self.chain_spec,
                 attrs.timestamp(),
                 attrs.prev_proposer_pubkey(),
@@ -650,5 +651,83 @@ where
 {
     fn into_rpc_module(self) -> RpcModule<()> {
         self.into_rpc().remove_context()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::primitives::header::BlsPublicKey;
+
+    // Mock chain spec for testing
+    struct MockChainSpec {
+        prague1_time: u64,
+    }
+
+    impl EthereumHardforks for MockChainSpec {
+        fn ethereum_fork_activation(
+            &self,
+            _fork: reth_chainspec::EthereumHardfork,
+        ) -> reth_chainspec::ForkCondition {
+            reth_chainspec::ForkCondition::Never
+        }
+    }
+
+    impl BerachainHardforks for MockChainSpec {
+        fn berachain_fork_activation(
+            &self,
+            fork: crate::hardforks::BerachainHardfork,
+        ) -> reth_chainspec::ForkCondition {
+            match fork {
+                crate::hardforks::BerachainHardfork::Prague1 => {
+                    reth_chainspec::ForkCondition::Timestamp(self.prague1_time)
+                }
+            }
+        }
+
+        fn is_prague1_active_at_timestamp(&self, timestamp: u64) -> bool {
+            timestamp >= self.prague1_time
+        }
+    }
+
+    #[test]
+    fn test_validate_prague1_requirements_pre_activation() {
+        let chain_spec = MockChainSpec { prague1_time: 1000 };
+        let timestamp = 999; // Before Prague1
+        let pubkey = Some(BlsPublicKey::random());
+
+        let result = validate_prague1_requirements(&chain_spec, timestamp, pubkey);
+
+        // The result returns a jsonrpsee ErrorObject, so let's just check it's an error
+        assert!(result.is_err(), "Should return UnsupportedFork error");
+    }
+
+    #[test]
+    fn test_validate_payload_v4_requirements_post_prague1() {
+        let chain_spec = MockChainSpec { prague1_time: 1000 };
+        let timestamp = 1000; // At Prague1 activation
+
+        let result = validate_payload_v4_requirements(&chain_spec, timestamp);
+
+        // The result returns a jsonrpsee ErrorObject, so let's just check it's an error
+        assert!(result.is_err(), "Should return UnsupportedFork error");
+    }
+
+    #[test]
+    fn test_fork_boundary_conditions() {
+        let prague1_time = 1000;
+        let chain_spec = MockChainSpec { prague1_time };
+
+        // Test timestamp boundary cases
+        for (timestamp, should_be_prague1_active) in
+            [(prague1_time - 1, false), (prague1_time, true), (prague1_time + 1, true)]
+        {
+            assert_eq!(
+                chain_spec.is_prague1_active_at_timestamp(timestamp),
+                should_be_prague1_active,
+                "Prague1 activation check failed for timestamp {}",
+                timestamp
+            );
+        }
     }
 }
