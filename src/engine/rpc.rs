@@ -18,7 +18,6 @@ use alloy_rpc_types::engine::{
 };
 use jsonrpsee_core::{RpcResult, server::RpcModule};
 use jsonrpsee_proc_macros::rpc;
-use jsonrpsee_types;
 use reth::{
     api::NodeTypes,
     chainspec::EthereumHardforks,
@@ -357,21 +356,17 @@ where
     /// Validates requirements for newPayloadV4 - Prague1 must not be active
     fn validate_payload_v4_requirements(chain_spec: &ChainSpec, timestamp: u64) -> RpcResult<()> {
         if chain_spec.is_prague1_active_at_timestamp(timestamp) {
-            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                "newPayloadV4P11 required for Prague1 fork, use newPayloadV4P11 instead",
-                None::<()>,
-            ))
+            return Err(EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::UnsupportedFork,
+            )
             .into());
         }
 
         // Validate that no proposer pubkey is provided (should be None)
         validate_proposer_pubkey_prague1(chain_spec, timestamp, None).map_err(|error| {
-            EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                error.to_string(),
-                None::<()>,
-            ))
+            EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::invalid_params(error),
+            )
         })?;
 
         Ok(())
