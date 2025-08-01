@@ -1,6 +1,7 @@
 use crate::{
     engine::{
-        BerachainExecutionData, BerachainExecutionPayloadSidecar, validate_proposer_pubkey_prague1,
+        BerachainExecutionData, BerachainExecutionPayloadSidecar,
+        payload::BerachainPayloadAttributes, validate_proposer_pubkey_prague1,
     },
     hardforks::BerachainHardforks,
     primitives::header::BlsPublicKey,
@@ -15,7 +16,6 @@ use alloy_rpc_types::engine::{
     ExecutionPayloadV1, ExecutionPayloadV3, ForkchoiceState, ForkchoiceUpdated, PayloadId,
     PayloadStatus,
 };
-// Constructor removed since we're using custom construction
 use jsonrpsee_core::{RpcResult, server::RpcModule};
 use jsonrpsee_proc_macros::rpc;
 use jsonrpsee_types;
@@ -31,7 +31,7 @@ use reth_engine_tree::tree::EngineValidator;
 use reth_node_api::{AddOnsContext, FullNodeComponents};
 use reth_node_builder::rpc::{EngineApiBuilder, EngineValidatorBuilder};
 use reth_node_core::version::{CARGO_PKG_VERSION, CLIENT_CODE, NAME_CLIENT, VERGEN_GIT_SHA};
-use reth_payload_primitives::PayloadTypes;
+use reth_payload_primitives::{PayloadAttributes, PayloadTypes};
 use reth_rpc_engine_api::{
     EngineApi, EngineApiError, EngineCapabilities, INVALID_PAYLOAD_ATTRIBUTES,
 };
@@ -373,30 +373,30 @@ where
         Ok(())
     }
 
-    /// Validates requirements for newPayloadV4P11 - Prague1 must be active
-    fn validate_payload_v4_p11_requirements(
+    /// Validates Prague1 requirements for P11 methods
+    fn validate_prague1_requirements(
         chain_spec: &ChainSpec,
         timestamp: u64,
-        parent_proposer_pub_key: BlsPublicKey,
+        proposer_pubkey: Option<BlsPublicKey>,
     ) -> RpcResult<()> {
         if !chain_spec.is_prague1_active_at_timestamp(timestamp) {
             return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
                 INVALID_PAYLOAD_ATTRIBUTES,
-                "Prague1 fork not active, use newPayloadV4 instead",
+                "Prague1 fork not active",
                 None::<()>,
             ))
             .into());
         }
 
-        // Validate that proposer pubkey is required for P11
-        validate_proposer_pubkey_prague1(chain_spec, timestamp, Some(parent_proposer_pub_key))
-            .map_err(|error| {
+        validate_proposer_pubkey_prague1(chain_spec, timestamp, proposer_pubkey).map_err(
+            |error| {
                 EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
                     INVALID_PAYLOAD_ATTRIBUTES,
                     error.to_string(),
                     None::<()>,
                 ))
-            })?;
+            },
+        )?;
 
         Ok(())
     }
@@ -407,7 +407,10 @@ impl<Provider, EngineT, Pool, Validator, ChainSpec> BerachainEngineApiServer<Eng
     for BerachainEngineApi<Provider, EngineT, Pool, Validator, ChainSpec>
 where
     Provider: HeaderProvider + BlockReader + StateProviderFactory + 'static,
-    EngineT: EngineTypes<ExecutionData = BerachainExecutionData>,
+    EngineT: EngineTypes<
+            ExecutionData = BerachainExecutionData,
+            PayloadAttributes = BerachainPayloadAttributes,
+        >,
     Pool: TransactionPool + 'static,
     Validator: EngineValidator<EngineT>,
     ChainSpec: EthereumHardforks + BerachainHardforks + Send + Sync + 'static,
@@ -480,10 +483,10 @@ where
         trace!(target: "rpc::engine", "Serving engine_newPayloadV4P11");
         trace!(target: "rpc::engine", "received parent_proposer_pub_key {:?}", parent_proposer_pub_key);
 
-        Self::validate_payload_v4_p11_requirements(
+        Self::validate_prague1_requirements(
             &*self.chain_spec,
             payload.timestamp(),
-            parent_proposer_pub_key,
+            Some(parent_proposer_pub_key),
         )?;
 
         // Accept requests as a hash only if it is explicitly allowed
@@ -536,6 +539,15 @@ where
         payload_attributes: Option<EngineT::PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
         trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV3P11");
+
+        if let Some(ref attrs) = payload_attributes {
+            Self::validate_prague1_requirements(
+                &*self.chain_spec,
+                attrs.timestamp(),
+                attrs.prev_proposer_pubkey(),
+            )?;
+        }
+
         Ok(self.inner.fork_choice_updated_v3_metered(fork_choice_state, payload_attributes).await?)
     }
 
