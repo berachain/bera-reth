@@ -348,24 +348,6 @@ pub struct BerachainEngineApi<Provider, PayloadT: PayloadTypes, Pool, Validator,
     chain_spec: Arc<ChainSpec>,
 }
 
-/// Validates requirements for newPayloadV4 - Prague1 must not be active
-fn validate_payload_v4_requirements<ChainSpec>(
-    chain_spec: &ChainSpec,
-    timestamp: u64,
-) -> RpcResult<()>
-where
-    ChainSpec: EthereumHardforks + BerachainHardforks,
-{
-    if chain_spec.is_prague1_active_at_timestamp(timestamp) {
-        return Err(EngineApiError::EngineObjectValidationError(
-            EngineObjectValidationError::UnsupportedFork,
-        )
-        .into());
-    }
-
-    Ok(())
-}
-
 /// Validates Prague1 requirements for P11 methods
 fn validate_prague1_requirements<ChainSpec>(
     chain_spec: &ChainSpec,
@@ -447,7 +429,12 @@ where
             return Err(EngineApiError::UnexpectedRequestsHash.into());
         }
 
-        validate_payload_v4_requirements(&*self.chain_spec, payload.timestamp())?;
+        if self.chain_spec.is_prague1_active_at_timestamp(payload.timestamp()) {
+            return Err(EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::UnsupportedFork,
+            )
+            .into());
+        }
 
         let berachain_payload = BerachainExecutionData::new(
             payload.into(),
@@ -690,17 +677,6 @@ mod tests {
         let pubkey = Some(BlsPublicKey::random());
 
         let result = validate_prague1_requirements(&chain_spec, timestamp, pubkey);
-
-        // The result returns a jsonrpsee ErrorObject, so let's just check it's an error
-        assert!(result.is_err(), "Should return UnsupportedFork error");
-    }
-
-    #[test]
-    fn test_validate_payload_v4_requirements_post_prague1() {
-        let chain_spec = MockChainSpec { prague1_time: 1000 };
-        let timestamp = 1000; // At Prague1 activation
-
-        let result = validate_payload_v4_requirements(&chain_spec, timestamp);
 
         // The result returns a jsonrpsee ErrorObject, so let's just check it's an error
         assert!(result.is_err(), "Should return UnsupportedFork error");
