@@ -135,7 +135,7 @@ jobs:
         run: cargo install cargo-nextest --locked
 
       - name: Run fuzz tests
-        run: TEST_FUZZ=1 TEST_FUZZ_RUNS=100 cargo nextest run fuzz --locked
+        run: TEST_FUZZ=1 cargo nextest run fuzz --locked
 
   docs:
     name: Check documentation
