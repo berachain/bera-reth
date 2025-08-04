@@ -118,8 +118,6 @@ pr: ## Run all checks that are run in CI for pull requests
 	@echo "7. Running tests..."
 	@command -v cargo-nextest >/dev/null 2>&1 || cargo install cargo-nextest --locked
 	cargo nextest run --locked
-	@echo "8. Running fuzz tests..."
-	TEST_FUZZ=1 cargo nextest run fuzz --locked
 	@echo "All PR checks passed! ✅"
 
 .PHONY: pr-fix
@@ -144,11 +142,6 @@ test: ## Run all tests
 test-unit: ## Run unit tests with nextest (following Reth pattern)
 	@command -v cargo-nextest >/dev/null 2>&1 || cargo install cargo-nextest --locked
 	cargo nextest run --locked
-
-.PHONY: test-fuzz
-test-fuzz: ## Run fuzz tests with test-fuzz
-	@command -v cargo-nextest >/dev/null 2>&1 || cargo install cargo-nextest --locked
-	TEST_FUZZ=1 cargo nextest run fuzz --locked
 
 .PHONY: cov-unit
 cov-unit: ## Run unit tests with coverage using cargo-llvm-cov

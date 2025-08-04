@@ -317,10 +317,10 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
         hasher.update(parent_beacon_block);
     }
 
-    // // Include prev_proposer_pubkey in the hash if present
-    // if let Some(proposer_pubkey) = attributes.prev_proposer_pubkey {
-    //     hasher.update(proposer_pubkey);
-    // }
+    // Include prev_proposer_pubkey in the hash if present
+    if let Some(proposer_pubkey) = attributes.prev_proposer_pubkey {
+        hasher.update(proposer_pubkey);
+    }
 
     let out = hasher.finalize();
     PayloadId::new(out.as_slice()[..8].try_into().expect("sufficient length"))
@@ -352,6 +352,48 @@ mod tests {
             },
             prev_proposer_pubkey,
         }
+    }
+
+    #[test]
+    fn test_pubkey_affects_payload_id() {
+        let parent = b256!("0000000000000000000000000000000000000000000000000000000000000001");
+
+        let attributes_no_pubkey = create_test_attributes(
+            1000,
+            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
+            Address::from([0x01; 20]),
+            None,
+            None,
+            None, // No pubkey
+        );
+
+        let attributes_with_pubkey = create_test_attributes(
+            1000,
+            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
+            Address::from([0x01; 20]),
+            None,
+            None,
+            Some(BlsPublicKey::from([0x42; 48])), // Fixed pubkey
+        );
+
+        let id_no_pubkey = berachain_payload_id(&parent, &attributes_no_pubkey);
+        let id_with_pubkey = berachain_payload_id(&parent, &attributes_with_pubkey);
+
+        // Critical test: presence of pubkey should affect payload ID
+        assert_ne!(id_no_pubkey, id_with_pubkey);
+
+        // Test different pubkeys produce different IDs
+        let attributes_different_pubkey = create_test_attributes(
+            1000,
+            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
+            Address::from([0x01; 20]),
+            None,
+            None,
+            Some(BlsPublicKey::from([0x43; 48])), // Different pubkey
+        );
+
+        let id_different_pubkey = berachain_payload_id(&parent, &attributes_different_pubkey);
+        assert_ne!(id_with_pubkey, id_different_pubkey);
     }
 
     #[test]
