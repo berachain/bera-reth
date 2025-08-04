@@ -319,7 +319,7 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
 
     // Include prev_proposer_pubkey in the hash if present
     if let Some(proposer_pubkey) = attributes.prev_proposer_pubkey {
-        hasher.update(proposer_pubkey.as_ref());
+        hasher.update(proposer_pubkey);
     }
 
     let out = hasher.finalize();
