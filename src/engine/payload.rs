@@ -7,6 +7,7 @@ use alloy_eips::{
     eip7685::Requests,
 };
 use alloy_primitives::{Address, B256, U256};
+use alloy_rlp::Encodable;
 use alloy_rpc_types::engine::{
     BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1, ExecutionPayloadV3,
@@ -18,7 +19,7 @@ use reth::{
     chainspec::EthereumHardforks,
 };
 use reth_engine_local::LocalPayloadAttributesBuilder;
-use reth_ethereum_engine_primitives::{BlobSidecars, BuiltPayloadConversionError, payload_id};
+use reth_ethereum_engine_primitives::{BlobSidecars, BuiltPayloadConversionError};
 use reth_node_ethereum::engine::EthPayloadAttributes;
 use reth_payload_primitives::BuiltPayload;
 use reth_primitives_traits::{NodePrimitives, SealedBlock};
@@ -94,7 +95,7 @@ impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
     where
         Self: Sized,
     {
-        let payload_id = payload_id(&parent, &attributes.inner);
+        let payload_id = berachain_payload_id(&parent, &attributes);
         Ok(Self {
             id: payload_id,
             parent,
@@ -289,4 +290,38 @@ impl BuiltPayload for BerachainBuiltPayload {
     fn requests(&self) -> Option<Requests> {
         self.requests.clone()
     }
+}
+
+/// Generates the payload id for Berachain payloads from the [`BerachainPayloadAttributes`].
+///
+/// This extends the standard Ethereum payload_id generation by including the
+/// optional prev_proposer_pubkey in the hash calculation, ensuring payload IDs
+/// are unique when the proposer pubkey differs.
+///
+/// Returns an 8-byte identifier by hashing the payload components with sha256 hash.
+pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttributes) -> PayloadId {
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(parent.as_slice());
+    hasher.update(&attributes.inner.timestamp.to_be_bytes()[..]);
+    hasher.update(attributes.inner.prev_randao.as_slice());
+    hasher.update(attributes.inner.suggested_fee_recipient.as_slice());
+
+    if let Some(withdrawals) = &attributes.inner.withdrawals {
+        let mut buf = Vec::new();
+        withdrawals.encode(&mut buf);
+        hasher.update(buf);
+    }
+
+    if let Some(parent_beacon_block) = attributes.inner.parent_beacon_block_root {
+        hasher.update(parent_beacon_block);
+    }
+
+    // Include prev_proposer_pubkey in the hash if present
+    if let Some(proposer_pubkey) = attributes.prev_proposer_pubkey {
+        hasher.update(proposer_pubkey.as_ref());
+    }
+
+    let out = hasher.finalize();
+    PayloadId::new(out.as_slice()[..8].try_into().expect("sufficient length"))
 }

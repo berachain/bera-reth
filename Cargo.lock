@@ -1504,6 +1504,7 @@ dependencies = [
  "reth-rpc-eth-types",
  "reth-transaction-pool",
  "serde",
+ "sha2 0.10.9",
  "test-fuzz",
  "thiserror 2.0.12",
  "tokio",
