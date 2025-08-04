@@ -317,10 +317,10 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
         hasher.update(parent_beacon_block);
     }
 
-    // Include prev_proposer_pubkey in the hash if present
-    if let Some(proposer_pubkey) = attributes.prev_proposer_pubkey {
-        hasher.update(proposer_pubkey);
-    }
+    // // Include prev_proposer_pubkey in the hash if present
+    // if let Some(proposer_pubkey) = attributes.prev_proposer_pubkey {
+    //     hasher.update(proposer_pubkey);
+    // }
 
     let out = hasher.finalize();
     PayloadId::new(out.as_slice()[..8].try_into().expect("sufficient length"))
@@ -338,7 +338,7 @@ mod tests {
         timestamp: u64,
         prev_randao: B256,
         fee_recipient: Address,
-        withdrawals: Option<Vec<alloy_eips::eip4895::Withdrawal>>,
+        withdrawals: Option<Vec<Withdrawal>>,
         parent_beacon_block_root: Option<B256>,
         prev_proposer_pubkey: Option<BlsPublicKey>,
     ) -> BerachainPayloadAttributes {
@@ -410,7 +410,7 @@ mod tests {
         pubkey_present: bool,
     ) {
         let beacon_root = if beacon_root_present { Some(B256::random()) } else { None };
-        let pubkey = if pubkey_present { Some(BlsPublicKey::from([0x42; 48])) } else { None };
+        let pubkey = if pubkey_present { Some(BlsPublicKey::random()) } else { None };
 
         let attributes = create_test_attributes(
             timestamp,
@@ -449,5 +449,41 @@ mod tests {
         let id_none = berachain_payload_id(&parent, &attributes_none);
         let id_empty = berachain_payload_id(&parent, &attributes_empty);
         assert_ne!(id_none, id_empty);
+
+        // Property 4: Pubkey presence affects payload ID
+        let attributes_no_pubkey =
+            create_test_attributes(timestamp, prev_randao, fee_recipient, None, beacon_root, None);
+        let attributes_with_pubkey = create_test_attributes(
+            timestamp,
+            prev_randao,
+            fee_recipient,
+            None,
+            beacon_root,
+            Some(BlsPublicKey::random()),
+        );
+        let id_no_pubkey = berachain_payload_id(&parent, &attributes_no_pubkey);
+        let id_with_pubkey = berachain_payload_id(&parent, &attributes_with_pubkey);
+        assert_ne!(id_no_pubkey, id_with_pubkey);
+
+        // Property 5: Different pubkeys produce different payload IDs
+        let attributes_pubkey1 = create_test_attributes(
+            timestamp,
+            prev_randao,
+            fee_recipient,
+            None,
+            beacon_root,
+            Some(BlsPublicKey::random()),
+        );
+        let attributes_pubkey2 = create_test_attributes(
+            timestamp,
+            prev_randao,
+            fee_recipient,
+            None,
+            beacon_root,
+            Some(BlsPublicKey::random()),
+        );
+        let id_pubkey1 = berachain_payload_id(&parent, &attributes_pubkey1);
+        let id_pubkey2 = berachain_payload_id(&parent, &attributes_pubkey2);
+        assert_ne!(id_pubkey1, id_pubkey2);
     }
 }
