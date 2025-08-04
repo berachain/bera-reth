@@ -5,10 +5,13 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 
 use bera_reth::{chainspec::BerachainChainSpecParser, node::BerachainNode};
 use clap::Parser;
-use reth::{CliRunner, beacon_consensus::EthBeaconConsensus};
+use reth::CliRunner;
 use std::sync::Arc;
 // Removed RessArgs since ress subprotocol is disabled
-use bera_reth::{chainspec::BerachainChainSpec, node::evm::config::BerachainEvmConfig};
+use bera_reth::{
+    chainspec::BerachainChainSpec, consensus::BerachainBeaconConsensus,
+    node::evm::config::BerachainEvmConfig,
+};
 use reth_cli_commands::node::NoArgs;
 use reth_ethereum_cli::Cli;
 use reth_evm::EthEvmFactory;
@@ -29,7 +32,7 @@ fn main() {
     let cli_components_builder = |spec: Arc<BerachainChainSpec>| {
         (
             BerachainEvmConfig::new_with_evm_factory(spec.clone(), EthEvmFactory::default()),
-            EthBeaconConsensus::new(spec),
+            BerachainBeaconConsensus::new(spec),
         )
     };
 
