@@ -325,3 +325,129 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
     let out = hasher.finalize();
     PayloadId::new(out.as_slice()[..8].try_into().expect("sufficient length"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::primitives::header::BlsPublicKey;
+    use alloy_primitives::{Address, B256, b256};
+    use reth_node_ethereum::engine::EthPayloadAttributes;
+    use test_fuzz::test_fuzz;
+
+    fn create_test_attributes(
+        timestamp: u64,
+        prev_randao: B256,
+        fee_recipient: Address,
+        withdrawals: Option<Vec<alloy_eips::eip4895::Withdrawal>>,
+        parent_beacon_block_root: Option<B256>,
+        prev_proposer_pubkey: Option<BlsPublicKey>,
+    ) -> BerachainPayloadAttributes {
+        BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                timestamp,
+                prev_randao,
+                suggested_fee_recipient: fee_recipient,
+                withdrawals,
+                parent_beacon_block_root,
+            },
+            prev_proposer_pubkey,
+        }
+    }
+
+    #[test]
+    fn test_withdrawals_encoding_differences() {
+        let parent = b256!("0000000000000000000000000000000000000000000000000000000000000001");
+
+        let attributes_none = create_test_attributes(
+            1000,
+            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
+            Address::from([0x01; 20]),
+            None, // No withdrawals
+            None,
+            None,
+        );
+
+        let attributes_empty = create_test_attributes(
+            1000,
+            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
+            Address::from([0x01; 20]),
+            Some(vec![]), // Empty withdrawals
+            None,
+            None,
+        );
+
+        let payload_id_none = berachain_payload_id(&parent, &attributes_none);
+        let payload_id_empty = berachain_payload_id(&parent, &attributes_empty);
+
+        // Critical test: None vs Some([]) should produce different hashes
+        // This matches geth behavior where None skips encoding, Some([]) encodes empty list
+        assert_ne!(payload_id_none, payload_id_empty);
+    }
+
+    #[test]
+    fn berachain_payload_attributes_serde() {
+        // Test basic deserialization
+        let json_basic = r#"{"timestamp":"0x1235","prevRandao":"0xf343b00e02dc34ec0124241f74f32191be28fb370bb48060f5fa4df99bda774c","suggestedFeeRecipient":"0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b","withdrawals":null,"parentBeaconBlockRoot":null}"#;
+        let attributes: BerachainPayloadAttributes = serde_json::from_str(json_basic).unwrap();
+        assert_eq!(attributes.inner.timestamp, 0x1235);
+        assert_eq!(attributes.prev_proposer_pubkey, None);
+
+        // Test with proposer pubkey (Berachain-specific)
+        let json_with_pubkey = r#"{"timestamp":"0x1235","prevRandao":"0xf343b00e02dc34ec0124241f74f32191be28fb370bb48060f5fa4df99bda774c","suggestedFeeRecipient":"0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b","withdrawals":null,"parentBeaconBlockRoot":null,"parentProposerPubKey":"0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}"#;
+        let attributes: BerachainPayloadAttributes =
+            serde_json::from_str(json_with_pubkey).unwrap();
+        assert!(attributes.prev_proposer_pubkey.is_some());
+    }
+
+    /// Property-based test: comprehensive payload ID generation validation
+    #[test_fuzz]
+    fn fuzz_payload_id_properties(
+        parent: B256,
+        timestamp: u64,
+        prev_randao: B256,
+        fee_recipient: Address,
+        beacon_root_present: bool,
+        pubkey_present: bool,
+    ) {
+        let beacon_root = if beacon_root_present { Some(B256::random()) } else { None };
+        let pubkey = if pubkey_present { Some(BlsPublicKey::from([0x42; 48])) } else { None };
+
+        let attributes = create_test_attributes(
+            timestamp,
+            prev_randao,
+            fee_recipient,
+            None,
+            beacon_root,
+            pubkey,
+        );
+
+        // Property 1: Determinism - same inputs always produce same output
+        let payload_id1 = berachain_payload_id(&parent, &attributes);
+        let payload_id2 = berachain_payload_id(&parent, &attributes);
+        assert_eq!(payload_id1, payload_id2);
+
+        // Property 2: Output format - always 8 bytes
+        assert_eq!(payload_id1.0.len(), 8);
+
+        // Property 3: Withdrawal encoding invariant
+        let attributes_none = create_test_attributes(
+            timestamp,
+            prev_randao,
+            fee_recipient,
+            None,
+            beacon_root,
+            pubkey,
+        );
+        let attributes_empty = create_test_attributes(
+            timestamp,
+            prev_randao,
+            fee_recipient,
+            Some(vec![]),
+            beacon_root,
+            pubkey,
+        );
+        let id_none = berachain_payload_id(&parent, &attributes_none);
+        let id_empty = berachain_payload_id(&parent, &attributes_empty);
+        assert_ne!(id_none, id_empty);
+    }
+}

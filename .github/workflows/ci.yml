@@ -116,8 +116,26 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
 
-      - name: Run tests
-        run: cargo test --all --locked --verbose
+      - name: Install nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run tests with nextest
+        run: cargo nextest run --locked
+
+  fuzz:
+    name: Run fuzz tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run fuzz tests
+        run: TEST_FUZZ=1 TEST_FUZZ_RUNS=100 cargo nextest run fuzz --locked
 
   docs:
     name: Check documentation
