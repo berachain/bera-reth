@@ -460,7 +460,6 @@ where
     ///
     /// Returns the hash of the transaction.
     async fn send_raw_transaction(&self, tx: Bytes) -> Result<B256, Self::Error> {
-        info!("bytes {}", tx.to_string());
         let recovered = recover_raw_transaction(&tx)?;
 
         // broadcast raw transaction to subscribers if there is any.
