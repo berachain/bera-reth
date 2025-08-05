@@ -137,7 +137,7 @@ COV_FILE := lcov.info
 .PHONY: test
 test: ## Run unit tests with nextest
 	@command -v cargo-nextest >/dev/null 2>&1 || cargo install cargo-nextest --locked
-	cargo nextest run --locked --verbose
+	cargo nextest run --locked
 
 .PHONY: cov-unit
 cov-unit: ## Run unit tests with coverage using cargo-llvm-cov
