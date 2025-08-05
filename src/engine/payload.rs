@@ -330,100 +330,107 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
 mod tests {
     use super::*;
     use crate::primitives::header::BlsPublicKey;
-    use alloy_primitives::{Address, B256, b256};
+    use alloy_primitives::{Address, b256};
     use reth_node_ethereum::engine::EthPayloadAttributes;
-    use test_fuzz::test_fuzz;
-
-    fn create_test_attributes(
-        timestamp: u64,
-        prev_randao: B256,
-        fee_recipient: Address,
-        withdrawals: Option<Vec<Withdrawal>>,
-        parent_beacon_block_root: Option<B256>,
-        prev_proposer_pubkey: Option<BlsPublicKey>,
-    ) -> BerachainPayloadAttributes {
-        BerachainPayloadAttributes {
-            inner: EthPayloadAttributes {
-                timestamp,
-                prev_randao,
-                suggested_fee_recipient: fee_recipient,
-                withdrawals,
-                parent_beacon_block_root,
-            },
-            prev_proposer_pubkey,
-        }
-    }
 
     #[test]
     fn test_pubkey_affects_payload_id() {
         let parent = b256!("0000000000000000000000000000000000000000000000000000000000000001");
 
-        let attributes_no_pubkey = create_test_attributes(
-            1000,
-            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
-            Address::from([0x01; 20]),
-            None,
-            None,
-            None, // No pubkey
-        );
+        let attributes_no_pubkey = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                timestamp: 1000,
+                prev_randao: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                ),
+                suggested_fee_recipient: Address::from([0x01; 20]),
+                withdrawals: None,
+                parent_beacon_block_root: None,
+            },
+            prev_proposer_pubkey: None,
+        };
 
-        let attributes_with_pubkey = create_test_attributes(
-            1000,
-            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
-            Address::from([0x01; 20]),
-            None,
-            None,
-            Some(BlsPublicKey::from([0x42; 48])), // Fixed pubkey
-        );
+        let attributes_with_pubkey = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                timestamp: 1000,
+                prev_randao: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                ),
+                suggested_fee_recipient: Address::from([0x01; 20]),
+                withdrawals: None,
+                parent_beacon_block_root: None,
+            },
+            prev_proposer_pubkey: Some(BlsPublicKey::from([0x42; 48])),
+        };
 
-        let id_no_pubkey = berachain_payload_id(&parent, &attributes_no_pubkey);
-        let id_with_pubkey = berachain_payload_id(&parent, &attributes_with_pubkey);
+        // Test via BerachainPayloadBuilderAttributes::try_new which calls berachain_payload_id
+        let builder_no_pubkey =
+            BerachainPayloadBuilderAttributes::try_new(parent, attributes_no_pubkey, 0).unwrap();
+        let builder_with_pubkey =
+            BerachainPayloadBuilderAttributes::try_new(parent, attributes_with_pubkey, 0).unwrap();
 
         // Critical test: presence of pubkey should affect payload ID
-        assert_ne!(id_no_pubkey, id_with_pubkey);
+        assert_ne!(builder_no_pubkey.payload_id(), builder_with_pubkey.payload_id());
 
         // Test different pubkeys produce different IDs
-        let attributes_different_pubkey = create_test_attributes(
-            1000,
-            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
-            Address::from([0x01; 20]),
-            None,
-            None,
-            Some(BlsPublicKey::from([0x43; 48])), // Different pubkey
-        );
+        let attributes_different_pubkey = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                timestamp: 1000,
+                prev_randao: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                ),
+                suggested_fee_recipient: Address::from([0x01; 20]),
+                withdrawals: None,
+                parent_beacon_block_root: None,
+            },
+            prev_proposer_pubkey: Some(BlsPublicKey::from([0x43; 48])),
+        };
 
-        let id_different_pubkey = berachain_payload_id(&parent, &attributes_different_pubkey);
-        assert_ne!(id_with_pubkey, id_different_pubkey);
+        let builder_different_pubkey =
+            BerachainPayloadBuilderAttributes::try_new(parent, attributes_different_pubkey, 0)
+                .unwrap();
+        assert_ne!(builder_with_pubkey.payload_id(), builder_different_pubkey.payload_id());
     }
 
     #[test]
     fn test_withdrawals_encoding_differences() {
         let parent = b256!("0000000000000000000000000000000000000000000000000000000000000001");
 
-        let attributes_none = create_test_attributes(
-            1000,
-            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
-            Address::from([0x01; 20]),
-            None, // No withdrawals
-            None,
-            None,
-        );
+        let attributes_none = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                timestamp: 1000,
+                prev_randao: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                ),
+                suggested_fee_recipient: Address::from([0x01; 20]),
+                withdrawals: None, // No withdrawals
+                parent_beacon_block_root: None,
+            },
+            prev_proposer_pubkey: None,
+        };
 
-        let attributes_empty = create_test_attributes(
-            1000,
-            b256!("0000000000000000000000000000000000000000000000000000000000000002"),
-            Address::from([0x01; 20]),
-            Some(vec![]), // Empty withdrawals
-            None,
-            None,
-        );
+        let attributes_empty = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                timestamp: 1000,
+                prev_randao: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                ),
+                suggested_fee_recipient: Address::from([0x01; 20]),
+                withdrawals: Some(vec![]), // Empty withdrawals
+                parent_beacon_block_root: None,
+            },
+            prev_proposer_pubkey: None,
+        };
 
-        let payload_id_none = berachain_payload_id(&parent, &attributes_none);
-        let payload_id_empty = berachain_payload_id(&parent, &attributes_empty);
+        // Test via BerachainPayloadBuilderAttributes::try_new which calls berachain_payload_id
+        let builder_none =
+            BerachainPayloadBuilderAttributes::try_new(parent, attributes_none, 0).unwrap();
+        let builder_empty =
+            BerachainPayloadBuilderAttributes::try_new(parent, attributes_empty, 0).unwrap();
 
         // Critical test: None vs Some([]) should produce different hashes
         // This matches geth behavior where None skips encoding, Some([]) encodes empty list
-        assert_ne!(payload_id_none, payload_id_empty);
+        assert_ne!(builder_none.payload_id(), builder_empty.payload_id());
     }
 
     #[test]
