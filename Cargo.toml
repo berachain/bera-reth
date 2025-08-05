@@ -21,16 +21,12 @@ bytes = "1.10.1"
 clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6.12"
-hex = "0.4.3"
 sha2 = "0.10"
 
 # rpc
 jsonrpsee = "0.25.1"
 jsonrpsee-core = "0.25.1"
-jsonrpsee-http-client = "0.25.1"
 jsonrpsee-proc-macros = "0.25.1"
-jsonrpsee-server = "0.25.1"
-jsonrpsee-types = "0.25.1"
 
 async-trait = "0.1.88"
 modular-bitfield = "0.11.2"
@@ -98,8 +94,8 @@ inherits = "release"
 debug = "full"
 strip = "none"
 
-[package.metadata.cargo-udeps.ignore]
-normal = ["test-fuzz"]
+[package.metadata.cargo-machete]
+ignored = ["modular-bitfield"]
 
 # [patch."https://github.com/paradigmxyz/reth"]
 # reth = { path = "../reth/bin/reth" }

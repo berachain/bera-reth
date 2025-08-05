@@ -98,14 +98,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: Install cargo-udeps
-        run: cargo install cargo-udeps --locked
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
 
       - name: Check for unused dependencies
-        run: cargo +nightly udeps --all-features --locked
+        run: cargo machete
 
   test:
     name: Run tests
