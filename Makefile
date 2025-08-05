@@ -135,13 +135,9 @@ pr-fix: ## Auto-fix formatting issues
 COV_FILE := lcov.info
 
 .PHONY: test
-test: ## Run all tests
-	cargo test --all --locked --verbose
-
-.PHONY: test-unit
-test-unit: ## Run unit tests with nextest (following Reth pattern)
+test: ## Run unit tests with nextest
 	@command -v cargo-nextest >/dev/null 2>&1 || cargo install cargo-nextest --locked
-	cargo nextest run --locked
+	cargo nextest run --locked --verbose
 
 .PHONY: cov-unit
 cov-unit: ## Run unit tests with coverage using cargo-llvm-cov
