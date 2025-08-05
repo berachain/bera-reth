@@ -92,6 +92,13 @@ pub struct BerachainHeader {
     pub extra_data: Bytes,
 }
 
+/// Implementation of CliHeader trait for CLI operations
+impl reth_cli_commands::common::CliHeader for BerachainHeader {
+    fn set_number(&mut self, number: u64) {
+        self.number = number;
+    }
+}
+
 impl BerachainHeader {
     fn header_payload_length(&self) -> usize {
         let mut length = 0;

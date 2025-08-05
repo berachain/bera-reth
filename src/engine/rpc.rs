@@ -25,10 +25,9 @@ use reth::{
     providers::{BlockReader, HeaderProvider, StateProviderFactory},
     rpc::api::IntoEngineApiRpcModule,
 };
-use reth_engine_primitives::EngineTypes;
-use reth_engine_tree::tree::EngineValidator;
+use reth_engine_primitives::{EngineApiValidator, EngineTypes};
 use reth_node_api::{AddOnsContext, FullNodeComponents};
-use reth_node_builder::rpc::{EngineApiBuilder, EngineValidatorBuilder};
+use reth_node_builder::rpc::{EngineApiBuilder, PayloadValidatorBuilder};
 use reth_node_core::version::{CARGO_PKG_VERSION, CLIENT_CODE, NAME_CLIENT, VERGEN_GIT_SHA};
 use reth_payload_primitives::{EngineObjectValidationError, PayloadAttributes, PayloadTypes};
 use reth_rpc_engine_api::{EngineApi, EngineApiError, EngineCapabilities};
@@ -60,7 +59,8 @@ where
             > + EngineTypes,
         >,
     >,
-    EV: EngineValidatorBuilder<N>,
+    EV: PayloadValidatorBuilder<N>,
+    EV::Validator: EngineApiValidator<<N::Types as NodeTypes>::Payload>,
 {
     type EngineApi = BerachainEngineApi<
         N::Provider,
@@ -383,7 +383,7 @@ where
             PayloadAttributes = BerachainPayloadAttributes,
         >,
     Pool: TransactionPool + 'static,
-    Validator: EngineValidator<EngineT>,
+    Validator: EngineApiValidator<EngineT>,
     ChainSpec: EthereumHardforks + BerachainHardforks + Send + Sync + 'static,
 {
     async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
