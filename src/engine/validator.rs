@@ -17,7 +17,7 @@ use reth_node_api::{AddOnsContext, FullNodeComponents, NodeTypes};
 use reth_node_builder::rpc::PayloadValidatorBuilder;
 use reth_payload_primitives::{
     EngineApiMessageVersion, EngineObjectValidationError, NewPayloadError, PayloadOrAttributes,
-    PayloadTypes, validate_version_specific_fields,
+    PayloadTypes, validate_execution_requests, validate_version_specific_fields,
 };
 use reth_payload_validator::{cancun, prague, shanghai};
 use reth_primitives_traits::{Block, RecoveredBlock, SealedBlock};
@@ -158,6 +158,13 @@ where
         version: EngineApiMessageVersion,
         payload_or_attrs: PayloadOrAttributes<'_, Types::ExecutionData, Types::PayloadAttributes>,
     ) -> Result<(), EngineObjectValidationError> {
+        // Validate execution requests if present in the payload
+        if let PayloadOrAttributes::ExecutionPayload(payload) = &payload_or_attrs &&
+            let Some(requests) = payload.sidecar.requests()
+        {
+            validate_execution_requests(requests)?;
+        }
+
         validate_version_specific_fields(self.chain_spec(), version, payload_or_attrs)
     }
 
