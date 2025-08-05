@@ -4,6 +4,7 @@ use alloy_primitives::{
 };
 use alloy_rlp::{Decodable, Encodable, length_of_length};
 use bytes::BufMut;
+use reth_cli_commands::common::CliHeader;
 use reth_codecs::Compact;
 use reth_db_api::table::{Compress, Decompress};
 use reth_primitives_traits::{BlockHeader, InMemorySize, serde_bincode_compat::RlpBincode};
@@ -13,7 +14,6 @@ use serde::{Deserialize, Serialize};
 pub type BlsPublicKey = FixedBytes<48>;
 
 /// Berachain block header with additional fields for consensus
-/// TODO: All of the implementations here need to be properly tested.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BerachainHeader {
@@ -93,7 +93,7 @@ pub struct BerachainHeader {
 }
 
 /// Implementation of CliHeader trait for CLI operations
-impl reth_cli_commands::common::CliHeader for BerachainHeader {
+impl CliHeader for BerachainHeader {
     fn set_number(&mut self, number: u64) {
         self.number = number;
     }

@@ -161,7 +161,7 @@ impl BerachainExecutionPayloadSidecar {
     }
 
     /// Returns the EIP-7685 requests if available
-    pub fn requests(&self) -> Option<&alloy_eips::eip7685::Requests> {
+    pub fn requests(&self) -> Option<&Requests> {
         self.inner.requests()
     }
 
@@ -244,7 +244,7 @@ impl From<ExecutionPayloadInputV2> for BerachainExecutionData {
     }
 }
 
-/// Validates that proposer pubkey is present after Prague1 and absent before Prague1
+/// Validates that the proposer pubkey is present after Prague1 and absent before Prague1
 pub fn validate_proposer_pubkey_prague1<ChainSpec: BerachainHardforks>(
     chain_spec: &ChainSpec,
     timestamp: u64,

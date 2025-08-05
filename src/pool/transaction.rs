@@ -16,7 +16,7 @@ use reth_primitives_traits::{InMemorySize, SignedTransaction};
 use reth_transaction_pool::{EthBlobTransactionSidecar, EthPoolTransaction, PoolTransaction};
 use std::sync::Arc;
 
-/// The default `PoolTransaction` for the Pool for Ethereum.
+/// The default `BerachainPooledTransaction` for the Pool for Berachain.
 ///
 /// This type wraps a consensus transaction with additional cached data that's
 /// frequently accessed by the pool for transaction ordering and validation:
@@ -121,14 +121,14 @@ impl Transaction for BerachainPooledTransaction {
     }
 }
 
-/// A type alias for `PooledTransaction` that's also generic over blob sidecar.
+/// A type alias that's also generic over blob sidecar.
 pub type BerachainPooledTransactionVariant =
     EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>;
 
 impl BerachainPooledTransaction {
     /// Create new instance of [Self].
     ///
-    /// Caution: In case of blob transactions, this does marks the blob sidecar as
+    /// Caution: In case of blob transactions, this marks the blob sidecar as
     /// [`EthBlobTransactionSidecar::Missing`]
     pub fn new(
         transaction: Recovered<EthereumTxEnvelope<TxEip4844>>,

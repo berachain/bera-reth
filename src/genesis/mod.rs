@@ -64,32 +64,12 @@ impl Default for BerachainGenesisConfig {
     fn default() -> Self {
         Self {
             prague1: BerachainForkConfig {
-                time: 0,                             // Activate immediately at genesis
-                base_fee_change_denominator: 48,     // Berachain standard value
-                minimum_base_fee_wei: 1_000_000_000, // 1 gwei
+                time: 0,                              // Activate immediately at genesis
+                base_fee_change_denominator: 48,      // Berachain standard value
+                minimum_base_fee_wei: 10_000_000_000, // 10 gwei
                 pol_distributor_address: default_pol_contract_address(),
             },
         }
-    }
-}
-
-impl BerachainForkConfig {
-    /// Creates validated config. Returns error if denominator is 0.
-    pub fn new(
-        time: u64,
-        base_fee_change_denominator: u128,
-        minimum_base_fee_wei: u64,
-        pol_distributor_address: Address,
-    ) -> Result<Self, BerachainConfigError> {
-        if base_fee_change_denominator == 0 {
-            return Err(BerachainConfigError::InvalidDenominator);
-        }
-        Ok(Self {
-            time,
-            base_fee_change_denominator,
-            minimum_base_fee_wei,
-            pol_distributor_address,
-        })
     }
 }
 

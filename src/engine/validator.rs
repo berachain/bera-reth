@@ -26,14 +26,12 @@ use std::{marker::PhantomData, sync::Arc};
 #[derive(Debug, Clone)]
 pub struct BerachainEngineValidator {
     inner: EthereumExecutionPayloadValidator<BerachainChainSpec>,
-    /// The inner chainspec is private, so we need this.
-    chain_spec: Arc<BerachainChainSpec>,
 }
 
 impl BerachainEngineValidator {
     /// Instantiates a new validator.
     pub fn new(chain_spec: Arc<BerachainChainSpec>) -> Self {
-        Self { inner: EthereumExecutionPayloadValidator::new(chain_spec.clone()), chain_spec }
+        Self { inner: EthereumExecutionPayloadValidator::new(chain_spec.clone()) }
     }
 
     /// Returns the chain spec used by the validator.
@@ -89,25 +87,25 @@ impl BerachainEngineValidator {
     ) -> Result<(), NewPayloadError> {
         shanghai::ensure_well_formed_fields(
             sealed_block.body(),
-            self.chain_spec.is_shanghai_active_at_timestamp(sealed_block.timestamp),
+            self.chain_spec().is_shanghai_active_at_timestamp(sealed_block.timestamp),
         )?;
 
         cancun::ensure_well_formed_fields(
             sealed_block,
             sidecar.inner.cancun(),
-            self.chain_spec.is_cancun_active_at_timestamp(sealed_block.timestamp),
+            self.chain_spec().is_cancun_active_at_timestamp(sealed_block.timestamp),
         )?;
 
         prague::ensure_well_formed_fields(
             sealed_block.body(),
             sidecar.inner.prague(),
-            self.chain_spec.is_prague_active_at_timestamp(sealed_block.timestamp),
+            self.chain_spec().is_prague_active_at_timestamp(sealed_block.timestamp),
         )?;
 
         prague1::ensure_well_formed_fields(
             sealed_block,
             sidecar.parent_proposer_pub_key,
-            self.chain_spec.is_prague1_active_at_timestamp(sealed_block.timestamp),
+            self.chain_spec().is_prague1_active_at_timestamp(sealed_block.timestamp),
         )?;
 
         Ok(())

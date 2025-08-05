@@ -146,16 +146,16 @@ where
                     ExecutionData = BerachainExecutionData,
                 >,
             >,
-            Provider: reth_chainspec::ChainSpecProvider<ChainSpec: EthereumHardforks>,
+            Provider: ChainSpecProvider<ChainSpec: EthereumHardforks>,
             Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
         >,
     EthB: EthApiBuilder<N>,
     PVB: PayloadValidatorBuilder<N>,
     EB: EngineApiBuilder<N>,
     EVB: EngineValidatorBuilder<N>,
-    RpcMiddleware: RethRpcMiddleware,
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
+    RpcMiddleware: RethRpcMiddleware,
 {
     type Handle = RpcHandle<N, EthB::EthApi>;
 

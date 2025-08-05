@@ -35,11 +35,7 @@ use reth_transaction_pool::TransactionPool;
 use std::sync::Arc;
 use tracing::{debug, trace};
 
-/// Builder for basic [`EngineApi`] implementation.
-///
-/// This provides a basic default implementation for opstack and ethereum engine API via
-/// [`EngineTypes`] and uses the general purpose [`EngineApi`] implementation as the builder's
-/// output.
+/// Builder for [`BerachainEngineApi`] implementation.
 #[derive(Debug, Default)]
 pub struct BerachainEngineApiBuilder<EV> {
     engine_validator_builder: EV,
