@@ -582,7 +582,6 @@ where
     EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives>,
 {
-    #[expect(clippy::type_complexity)]
     fn inspect<DB, I>(
         &self,
         db: DB,
@@ -608,12 +607,11 @@ where
                 TxKind::Create => {
                     return Err(EthApiError::InvalidParams(
                         "PoL transactions cannot be CREATE transactions".to_string(),
-                    )
-                    .into())
+                    ));
                 }
             };
 
-            evm.transact_system_call(SYSTEM_ADDRESS, to_address, tx_env.input().clone())
+            evm.inspect_system_call(SYSTEM_ADDRESS, to_address, tx_env.input().clone())
                 .map_err(Self::Error::from_evm_err)?
         } else {
             evm.transact(tx_env.clone()).map_err(Self::Error::from_evm_err)?
