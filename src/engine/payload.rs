@@ -427,6 +427,7 @@ mod tests {
             BerachainPayloadBuilderAttributes::try_new(parent, attributes_none, 0).unwrap();
         let builder_empty =
             BerachainPayloadBuilderAttributes::try_new(parent, attributes_empty, 0).unwrap();
+
         // Critical test: None vs Some([]) should produce different hashes
         // This matches geth behavior where None skips encoding, Some([]) encodes empty list
         assert_ne!(builder_none.payload_id(), builder_empty.payload_id());
