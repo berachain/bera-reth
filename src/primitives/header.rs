@@ -442,31 +442,35 @@ impl From<&Header> for BerachainHeader {
     }
 }
 
-impl From<Header> for BerachainHeader {
-    fn from(value: Header) -> Self {
-        BerachainHeader {
-            parent_hash: value.parent_hash,
-            ommers_hash: value.ommers_hash,
-            beneficiary: value.beneficiary,
-            state_root: value.state_root,
-            transactions_root: value.transactions_root,
-            receipts_root: value.receipts_root,
-            withdrawals_root: value.withdrawals_root,
-            logs_bloom: value.logs_bloom,
-            difficulty: value.difficulty,
-            number: value.number,
-            gas_limit: value.gas_limit,
-            gas_used: value.gas_used,
-            timestamp: value.timestamp,
-            mix_hash: value.mix_hash,
-            nonce: value.nonce,
-            base_fee_per_gas: value.base_fee_per_gas,
-            blob_gas_used: value.blob_gas_used,
-            excess_blob_gas: value.excess_blob_gas,
-            parent_beacon_block_root: value.parent_beacon_block_root,
-            requests_hash: value.requests_hash,
-            prev_proposer_pubkey: None,
-            extra_data: value.extra_data,
+impl BerachainHeader {
+    /// Creates a BerachainHeader from a standard Header with optional previous proposer public key
+    pub fn from_header_with_proposer(
+        header: Header,
+        prev_proposer_pubkey: Option<BlsPublicKey>,
+    ) -> Self {
+        Self {
+            parent_hash: header.parent_hash,
+            ommers_hash: header.ommers_hash,
+            beneficiary: header.beneficiary,
+            state_root: header.state_root,
+            transactions_root: header.transactions_root,
+            receipts_root: header.receipts_root,
+            withdrawals_root: header.withdrawals_root,
+            logs_bloom: header.logs_bloom,
+            difficulty: header.difficulty,
+            number: header.number,
+            gas_limit: header.gas_limit,
+            gas_used: header.gas_used,
+            timestamp: header.timestamp,
+            mix_hash: header.mix_hash,
+            nonce: header.nonce,
+            base_fee_per_gas: header.base_fee_per_gas,
+            blob_gas_used: header.blob_gas_used,
+            excess_blob_gas: header.excess_blob_gas,
+            parent_beacon_block_root: header.parent_beacon_block_root,
+            requests_hash: header.requests_hash,
+            prev_proposer_pubkey,
+            extra_data: header.extra_data,
         }
     }
 }

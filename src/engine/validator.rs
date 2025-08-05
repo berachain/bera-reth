@@ -54,15 +54,21 @@ impl BerachainEngineValidator {
             .map_err(|e| NewPayloadError::Other(e.into()))?;
 
         // Convert header from standard to BerachainHeader
-        let mut berachain_header = BerachainHeader::from(standard_block.header.clone());
-
-        berachain_header.prev_proposer_pubkey = sidecar.parent_proposer_pub_key;
+        let berachain_header = BerachainHeader::from_header_with_proposer(
+            standard_block.header.clone(),
+            sidecar.parent_proposer_pub_key,
+        );
 
         // Create BerachainBlock with converted header and body
         // Ommers are empty on Berachain anyway as we don't have uncle blocks due to different
         // consensus mechanism.
-        let berachain_ommers: Vec<BerachainHeader> =
-            standard_block.body.ommers.iter().map(|h| BerachainHeader::from(h.clone())).collect();
+        let berachain_ommers: Vec<BerachainHeader> = standard_block
+            .body
+            .ommers
+            .iter()
+            .map(|h| BerachainHeader::from_header_with_proposer(h.clone(), None))
+            .collect();
+
         let berachain_body: alloy_consensus::BlockBody<BerachainTxEnvelope, BerachainHeader> =
             alloy_consensus::BlockBody {
                 transactions: standard_block.body.transactions.clone(),
