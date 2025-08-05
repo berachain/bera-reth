@@ -26,10 +26,6 @@ use reth_primitives_traits::{NodePrimitives, SealedBlock};
 use std::{convert::Infallible, sync::Arc};
 
 /// Berachain-specific payload attributes
-///
-/// This structure wraps Ethereum payload attributes and provides extension
-/// points for Berachain-specific functionality. Currently it delegates to
-/// Ethereum attributes but can be extended with additional fields as needed.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BerachainPayloadAttributes {
     #[serde(flatten)]
@@ -58,10 +54,6 @@ impl BerachainPayloadAttributes {
 }
 
 /// Berachain payload builder attributes
-///
-/// Internal representation of payload attributes used during the payload building process.
-/// This structure maintains compatibility with Ethereum while providing extension points
-/// for Berachain-specific payload building logic.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BerachainPayloadBuilderAttributes {
     /// Id of the payload
@@ -80,6 +72,7 @@ pub struct BerachainPayloadBuilderAttributes {
     pub withdrawals: Withdrawals,
     /// Root of the parent beacon block
     pub parent_beacon_block_root: Option<B256>,
+    /// Previous proposer public key
     pub prev_proposer_pubkey: Option<BlsPublicKey>,
 }
 

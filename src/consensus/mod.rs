@@ -33,7 +33,6 @@ where
 
 #[derive(Debug, Clone)]
 pub struct BerachainBeaconConsensus {
-    /// Inner Ethereum beacon consensus implementation
     inner: EthBeaconConsensus<BerachainChainSpec>,
     chain_spec: Arc<BerachainChainSpec>,
 }

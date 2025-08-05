@@ -11,14 +11,13 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use reth::chainspec::EthereumHardforks;
-use reth_engine_primitives::PayloadValidator;
-use reth_engine_tree::tree::EngineValidator;
+use reth_engine_primitives::{EngineApiValidator, PayloadValidator};
 use reth_ethereum_payload_builder::EthereumExecutionPayloadValidator;
-use reth_node_api::{AddOnsContext, FullNodeComponents, NodeTypes, PayloadTypes};
-use reth_node_builder::rpc::EngineValidatorBuilder;
+use reth_node_api::{AddOnsContext, FullNodeComponents, NodeTypes};
+use reth_node_builder::rpc::PayloadValidatorBuilder;
 use reth_payload_primitives::{
     EngineApiMessageVersion, EngineObjectValidationError, NewPayloadError, PayloadOrAttributes,
-    validate_execution_requests, validate_version_specific_fields,
+    PayloadTypes, validate_execution_requests, validate_version_specific_fields,
 };
 use reth_payload_validator::{cancun, prague, shanghai};
 use reth_primitives_traits::{Block, RecoveredBlock, SealedBlock};
@@ -27,14 +26,12 @@ use std::{marker::PhantomData, sync::Arc};
 #[derive(Debug, Clone)]
 pub struct BerachainEngineValidator {
     inner: EthereumExecutionPayloadValidator<BerachainChainSpec>,
-    /// The inner chainspec is private, so we need this.
-    chain_spec: Arc<BerachainChainSpec>,
 }
 
 impl BerachainEngineValidator {
     /// Instantiates a new validator.
     pub fn new(chain_spec: Arc<BerachainChainSpec>) -> Self {
-        Self { inner: EthereumExecutionPayloadValidator::new(chain_spec.clone()), chain_spec }
+        Self { inner: EthereumExecutionPayloadValidator::new(chain_spec.clone()) }
     }
 
     /// Returns the chain spec used by the validator.
@@ -55,15 +52,21 @@ impl BerachainEngineValidator {
             .map_err(|e| NewPayloadError::Other(e.into()))?;
 
         // Convert header from standard to BerachainHeader
-        let mut berachain_header = BerachainHeader::from(standard_block.header.clone());
-
-        berachain_header.prev_proposer_pubkey = sidecar.parent_proposer_pub_key;
+        let berachain_header = BerachainHeader::from_header_with_proposer(
+            standard_block.header.clone(),
+            sidecar.parent_proposer_pub_key,
+        );
 
         // Create BerachainBlock with converted header and body
         // Ommers are empty on Berachain anyway as we don't have uncle blocks due to different
         // consensus mechanism.
-        let berachain_ommers: Vec<BerachainHeader> =
-            standard_block.body.ommers.iter().map(|h| BerachainHeader::from(h.clone())).collect();
+        let berachain_ommers: Vec<BerachainHeader> = standard_block
+            .body
+            .ommers
+            .iter()
+            .map(|h| BerachainHeader::from_header_with_proposer(h.clone(), None))
+            .collect();
+
         let berachain_body: alloy_consensus::BlockBody<BerachainTxEnvelope, BerachainHeader> =
             alloy_consensus::BlockBody {
                 transactions: standard_block.body.transactions.clone(),
@@ -84,34 +87,33 @@ impl BerachainEngineValidator {
     ) -> Result<(), NewPayloadError> {
         shanghai::ensure_well_formed_fields(
             sealed_block.body(),
-            self.chain_spec.is_shanghai_active_at_timestamp(sealed_block.timestamp),
+            self.chain_spec().is_shanghai_active_at_timestamp(sealed_block.timestamp),
         )?;
 
         cancun::ensure_well_formed_fields(
             sealed_block,
             sidecar.inner.cancun(),
-            self.chain_spec.is_cancun_active_at_timestamp(sealed_block.timestamp),
+            self.chain_spec().is_cancun_active_at_timestamp(sealed_block.timestamp),
         )?;
 
         prague::ensure_well_formed_fields(
             sealed_block.body(),
             sidecar.inner.prague(),
-            self.chain_spec.is_prague_active_at_timestamp(sealed_block.timestamp),
+            self.chain_spec().is_prague_active_at_timestamp(sealed_block.timestamp),
         )?;
 
         prague1::ensure_well_formed_fields(
             sealed_block,
             sidecar.parent_proposer_pub_key,
-            self.chain_spec.is_prague1_active_at_timestamp(sealed_block.timestamp),
+            self.chain_spec().is_prague1_active_at_timestamp(sealed_block.timestamp),
         )?;
 
         Ok(())
     }
 }
 
-impl PayloadValidator for BerachainEngineValidator {
+impl PayloadValidator<BerachainEngineTypes> for BerachainEngineValidator {
     type Block = BerachainBlock;
-    type ExecutionData = BerachainExecutionData;
 
     fn ensure_well_formed_payload(
         &self,
@@ -142,7 +144,7 @@ impl PayloadValidator for BerachainEngineValidator {
     }
 }
 
-impl<Types> EngineValidator<Types> for BerachainEngineValidator
+impl<Types> EngineApiValidator<Types> for BerachainEngineValidator
 where
     Types: PayloadTypes<
             PayloadAttributes = BerachainPayloadAttributes,
@@ -152,18 +154,12 @@ where
     fn validate_version_specific_fields(
         &self,
         version: EngineApiMessageVersion,
-        payload_or_attrs: PayloadOrAttributes<'_, Self::ExecutionData, BerachainPayloadAttributes>,
+        payload_or_attrs: PayloadOrAttributes<'_, Types::ExecutionData, Types::PayloadAttributes>,
     ) -> Result<(), EngineObjectValidationError> {
-        // Extract execution requests from the payload if present
-        let execution_requests =
-            if let PayloadOrAttributes::ExecutionPayload(payload) = &payload_or_attrs {
-                payload.sidecar.requests()
-            } else {
-                None
-            };
-
-        // Validate execution requests if present
-        if let Some(requests) = execution_requests {
+        // Validate execution requests if present in the payload
+        if let PayloadOrAttributes::ExecutionPayload(payload) = &payload_or_attrs &&
+            let Some(requests) = payload.sidecar.requests()
+        {
             validate_execution_requests(requests)?;
         }
 
@@ -173,12 +169,12 @@ where
     fn ensure_well_formed_attributes(
         &self,
         version: EngineApiMessageVersion,
-        attributes: &BerachainPayloadAttributes,
+        attributes: &Types::PayloadAttributes,
     ) -> Result<(), EngineObjectValidationError> {
         validate_version_specific_fields(
             self.chain_spec(),
             version,
-            PayloadOrAttributes::<Self::ExecutionData, BerachainPayloadAttributes>::PayloadAttributes(
+            PayloadOrAttributes::<Types::ExecutionData, Types::PayloadAttributes>::PayloadAttributes(
                 attributes,
             ),
         )
@@ -191,14 +187,15 @@ pub struct BerachainEngineValidatorBuilder {
     _phantom: PhantomData<BerachainChainSpec>,
 }
 
-impl<Node, Types> EngineValidatorBuilder<Node> for BerachainEngineValidatorBuilder
+impl<Node> PayloadValidatorBuilder<Node> for BerachainEngineValidatorBuilder
 where
-    Types: NodeTypes<
+    Node: FullNodeComponents<
+        Types: NodeTypes<
             ChainSpec = BerachainChainSpec,
             Payload = BerachainEngineTypes,
             Primitives = BerachainPrimitives,
         >,
-    Node: FullNodeComponents<Types = Types>,
+    >,
 {
     type Validator = BerachainEngineValidator;
 
