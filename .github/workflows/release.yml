@@ -67,11 +67,11 @@ jobs:
       matrix:
         configs:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             profile: maxperf
             allow_fail: false
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             profile: maxperf
             allow_fail: false
     steps:
