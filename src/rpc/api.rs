@@ -41,7 +41,6 @@ use reth_rpc_eth_types::{
     utils::recover_raw_transaction,
 };
 use reth_transaction_pool::{AddedTransactionOutcome, TransactionOrigin};
-use tracing::info;
 
 impl fmt::Display for BerachainTxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
