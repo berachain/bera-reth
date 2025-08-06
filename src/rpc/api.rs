@@ -14,7 +14,10 @@ use core::fmt;
 use derive_more::Deref;
 use reth::{
     providers::{ProviderError, ProviderHeader, ProviderTx},
-    revm::context::{Transaction as TxEnvTransaction, result::ResultAndState},
+    revm::{
+        context::{Transaction as TxEnvTransaction, result::ResultAndState},
+        context_interface::result::ExecutionResult,
+    },
     rpc::compat::{RpcConvert, RpcTypes},
     tasks::{
         TaskSpawner,
@@ -609,8 +612,18 @@ where
                 }
             };
 
-            evm.inspect_system_call(SYSTEM_ADDRESS, to_address, tx_env.input().clone())
-                .map_err(Self::Error::from_evm_err)?
+            let mut result = evm
+                .inspect_system_call(SYSTEM_ADDRESS, to_address, tx_env.input().clone())
+                .map_err(Self::Error::from_evm_err)?;
+
+            // Set gas_used to 0 for POL transactions
+            result.result = match result.result {
+                ExecutionResult::Success { reason, gas_refunded, logs, output, .. } => {
+                    ExecutionResult::Success { reason, gas_used: 0, gas_refunded, logs, output }
+                }
+                other => other,
+            };
+            result
         } else {
             evm.transact(tx_env.clone()).map_err(Self::Error::from_evm_err)?
         };
