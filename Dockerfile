@@ -64,7 +64,7 @@ RUN TARGET=$(cat /tmp/target.txt) && \
     cp /app/target/$TARGET/$BUILD_PROFILE/bera-reth /app/bera-reth
 
 # Use Ubuntu as the release image
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && \
