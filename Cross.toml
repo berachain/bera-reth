@@ -36,7 +36,7 @@ pre-build = [
   "apt install --yes gcc gcc-aarch64-linux-gnu libclang-dev make",
 ]
 
-# Static linking flags for Ubuntu 22.04 compatibility  
+# Static linking flags for Ubuntu 22.04 compatibility
 [target.aarch64-unknown-linux-gnu.env]
 passthrough = [
   "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc",
