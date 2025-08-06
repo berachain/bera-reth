@@ -121,7 +121,7 @@ mod tests {
 
         // Test JSON serialization with RPC fields
         let json = serde_json::to_string_pretty(&pol_tx).expect("Should serialize to JSON");
-        println!("PoL transaction JSON:\n{}", json);
+        println!("PoL transaction JSON:\n{json}");
 
         // Verify key fields are present in camelCase
         assert!(json.contains("\"chainId\""));
