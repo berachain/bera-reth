@@ -236,7 +236,7 @@ dependencies = [
 [[package]]
 name = "alloy-evm"
 version = "0.16.2"
-source = "git+https://github.com/rezbera/evm?rev=e79ef9b#e79ef9b74c58f02689c127a6380ced4dafec33fb"
+source = "git+https://github.com/berachain/evm?rev=9e19de0#9e19de079ea30767fad3de2ec1618c011d388f43"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",

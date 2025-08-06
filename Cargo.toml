@@ -98,8 +98,8 @@ ignored = ["modular-bitfield"]
 
 [patch.crates-io]
 # Use patched alloy-evm with system call inspection support
-# Based on https://github.com/rezbera/evm/tree/rezbera/system-inspector-alloy-custom commit df5c8e7
-alloy-evm = { git = "https://github.com/rezbera/evm", rev = "e79ef9b" }
+# Based on https://github.com/berachain/evm/pull/2
+alloy-evm = { git = "https://github.com/berachain/evm", rev = "9e19de0" }
 
 # Use patched revm with system call inspection support
 # Based on https://github.com/bluealloy/revm commit 9008e93
