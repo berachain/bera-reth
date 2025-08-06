@@ -28,7 +28,7 @@ RUN cargo build --profile $BUILD_PROFILE --locked --bin bera-reth
 # Copy binary from debug directory (dev profile builds to debug dir)
 RUN cp /app/target/debug/bera-reth /app/bera-reth
 
-# Use Ubuntu as the release image  
+# Use Ubuntu as the release image
 FROM ubuntu:24.04 AS runtime
 
 # Install runtime dependencies

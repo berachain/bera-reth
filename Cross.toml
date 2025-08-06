@@ -23,6 +23,12 @@ pre-build = [
   "apt install --yes gcc libclang-dev make",
 ]
 
+# Static linking flags for Ubuntu 22.04 compatibility
+[target.x86_64-unknown-linux-gnu.env]
+passthrough = [
+  "RUSTFLAGS=-C target-feature=+crt-static -C link-arg=-lgcc -C link-arg=-static-libgcc",
+]
+
 [target.aarch64-unknown-linux-gnu]
 image = "ubuntu:24.04"
 pre-build = [
@@ -30,9 +36,11 @@ pre-build = [
   "apt install --yes gcc gcc-aarch64-linux-gnu libclang-dev make",
 ]
 
+# Static linking flags for Ubuntu 22.04 compatibility
 [target.aarch64-unknown-linux-gnu.env]
 passthrough = [
   "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc",
+  "RUSTFLAGS=-C target-feature=+crt-static -C link-arg=-lgcc -C link-arg=-static-libgcc",
 ]
 
 [build.env]
