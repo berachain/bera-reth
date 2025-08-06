@@ -49,6 +49,7 @@ pub enum TxConversionError {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
+#[serde(rename_all = "camelCase")]
 pub struct PoLTx {
     #[serde(with = "alloy_serde::quantity")]
     pub chain_id: ChainId,
