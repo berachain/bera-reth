@@ -1,4 +1,5 @@
 pub mod pol;
+pub mod rpc;
 pub mod txtype;
 
 /// Transaction type identifier for Berachain POL transactions
@@ -22,7 +23,6 @@ use alloy_primitives::{
 };
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rpc_types_eth::TransactionRequest;
-use jsonrpsee_core::Serialize;
 use reth::{providers::errors::db::DatabaseError, revm::context::TxEnv};
 use reth_codecs::{
     Compact,
@@ -34,7 +34,6 @@ use reth_primitives_traits::{
     InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
 };
 use reth_rpc_convert::{SignTxRequestError, SignableTxRequest};
-use serde::Deserialize;
 use std::{hash::Hash, mem::size_of};
 
 /// Error type for transaction conversion failures
@@ -48,21 +47,17 @@ pub enum TxConversionError {
     UnsupportedBerachainTransaction,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Compact)]
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq, Compact)]
 pub struct PoLTx {
-    #[serde(with = "alloy_serde::quantity")]
     pub chain_id: ChainId,
-    #[serde(skip)]
     pub from: Address, // system address - serde skip as from is derived from recover_signer in RPC
     pub to: Address,
-    #[serde(with = "alloy_serde::quantity")]
     pub nonce: u64, // MUST be block_number - 1 for POL transactions per specification
-    #[serde(with = "alloy_serde::quantity", rename = "gas", alias = "gasLimit")]
     pub gas_limit: u64,
-    #[serde(with = "alloy_serde::quantity")]
     pub gas_price: u128, // gas_price to match Go struct
     pub input: Bytes,
 }
+
 impl Transaction for PoLTx {
     fn chain_id(&self) -> Option<ChainId> {
         Some(self.chain_id)
