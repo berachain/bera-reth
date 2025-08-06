@@ -25,7 +25,7 @@ pre-build = [
 
 [target.x86_64-unknown-linux-gnu.env]
 passthrough = [
-  "RUSTFLAGS=-C link-arg=-lgcc -C link-arg=-static-libgcc",
+  "RUSTFLAGS=-C target-feature=+crt-static -C link-arg=-lgcc -C link-arg=-static-libgcc",
 ]
 
 [target.aarch64-unknown-linux-gnu]
@@ -38,7 +38,7 @@ pre-build = [
 [target.aarch64-unknown-linux-gnu.env]
 passthrough = [
   "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc",
-  "RUSTFLAGS=-C link-arg=-lgcc -C link-arg=-static-libgcc",
+  "RUSTFLAGS=-C target-feature=+crt-static -C link-arg=-lgcc -C link-arg=-static-libgcc",
 ]
 
 [build.env]
