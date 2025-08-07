@@ -35,6 +35,7 @@ use std::{borrow::Cow, sync::Arc};
 
 #[derive(Debug)]
 pub struct BerachainBlockExecutor<'a, Evm> {
+    /// Berachain chain specification.
     spec: Arc<BerachainChainSpec>,
     /// Context for block execution.
     pub ctx: BerachainBlockExecutionCtx<'a>,

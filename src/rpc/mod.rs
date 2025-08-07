@@ -2,7 +2,10 @@ pub mod api;
 pub mod receipt;
 
 use crate::{
-    engine::{BerachainExecutionData, rpc::BerachainEngineApiBuilder},
+    engine::{
+        BerachainExecutionData, rpc::BerachainEngineApiBuilder,
+        validator::BerachainEngineValidatorBuilder,
+    },
     node::evm::config::BerachainNextBlockEnvAttributes,
     primitives::BerachainPrimitives,
     rpc::{
@@ -14,14 +17,15 @@ use reth::{
     api::{FullNodeComponents, HeaderTy, PrimitivesTy},
     chainspec::EthereumHardforks,
     revm::context::TxEnv,
-    rpc::{api::eth::FromEvmError, server_types::eth::EthApiError},
+    rpc::{api::eth::FromEvmError, builder::Identity, server_types::eth::EthApiError},
 };
 use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, TxEnvFor};
-use reth_node_api::{AddOnsContext, FullNodeTypes, NodeAddOns, NodeTypes};
+use reth_node_api::{FullNodeTypes, NodeAddOns, NodeTypes};
 use reth_node_builder::rpc::{
-    EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder, EthApiBuilder, EthApiCtx,
-    RethRpcAddOns, RpcAddOns, RpcHandle,
+    BasicEngineValidatorBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
+    EthApiBuilder, EthApiCtx, PayloadValidatorBuilder, RethRpcAddOns, RethRpcMiddleware, RpcAddOns,
+    RpcHandle,
 };
 use reth_rpc_convert::{RpcConvert, RpcConverter};
 use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
@@ -78,18 +82,15 @@ where
 pub struct BerachainAddOns<
     N: FullNodeComponents,
     EthB: EthApiBuilder<N>,
-    EV,
-    EB = BerachainEngineApiBuilder<EV>,
+    PVB,
+    EB = BerachainEngineApiBuilder<PVB>,
+    EVB = BasicEngineValidatorBuilder<PVB>,
+    RpcMiddleware = Identity,
 > {
-    inner: RpcAddOns<N, EthB, EV, EB>,
+    inner: RpcAddOns<N, EthB, PVB, EB, EVB, RpcMiddleware>,
 }
 
-impl<N> Default
-    for BerachainAddOns<
-        N,
-        BerachainEthApiBuilder,
-        crate::engine::validator::BerachainEngineValidatorBuilder,
-    >
+impl<N> Default for BerachainAddOns<N, BerachainEthApiBuilder, BerachainEngineValidatorBuilder>
 where
     N: FullNodeComponents,
     BerachainEthApiBuilder: EthApiBuilder<N>,
@@ -98,21 +99,25 @@ where
         Self {
             inner: RpcAddOns::new(
                 BerachainEthApiBuilder,
-                crate::engine::validator::BerachainEngineValidatorBuilder::default(),
-                BerachainEngineApiBuilder::default(),
+                BerachainEngineValidatorBuilder::default(),
+                BerachainEngineApiBuilder::<BerachainEngineValidatorBuilder>::default(),
+                BasicEngineValidatorBuilder::new(BerachainEngineValidatorBuilder::default()),
                 Default::default(),
             ),
         }
     }
 }
 
-impl<N, EthB, EV, EB> BerachainAddOns<N, EthB, EV, EB>
+impl<N, EthB, PVB, EB, EVB, RpcMiddleware> BerachainAddOns<N, EthB, PVB, EB, EVB, RpcMiddleware>
 where
     N: FullNodeComponents,
     EthB: EthApiBuilder<N>,
 {
     /// Replace the engine API builder.
-    pub fn with_engine_api<T>(self, engine_api_builder: T) -> BerachainAddOns<N, EthB, EV, T>
+    pub fn with_engine_api<T>(
+        self,
+        engine_api_builder: T,
+    ) -> BerachainAddOns<N, EthB, PVB, T, EVB, RpcMiddleware>
     where
         T: Send,
     {
@@ -120,20 +125,18 @@ where
         BerachainAddOns { inner: inner.with_engine_api(engine_api_builder) }
     }
 
-    /// Replace the engine validator builder.
-    pub fn with_engine_validator<T>(
+    /// Replace the payload validator builder.
+    pub fn with_payload_validator<V, T>(
         self,
-        engine_validator_builder: T,
-    ) -> BerachainAddOns<N, EthB, T, EB>
-    where
-        T: Send,
-    {
+        payload_validator_builder: T,
+    ) -> BerachainAddOns<N, EthB, T, EB, EVB, RpcMiddleware> {
         let Self { inner } = self;
-        BerachainAddOns { inner: inner.with_engine_validator(engine_validator_builder) }
+        BerachainAddOns { inner: inner.with_payload_validator(payload_validator_builder) }
     }
 }
 
-impl<N, EthB, EV, EB> NodeAddOns<N> for BerachainAddOns<N, EthB, EV, EB>
+impl<N, EthB, PVB, EB, EVB, RpcMiddleware> NodeAddOns<N>
+    for BerachainAddOns<N, EthB, PVB, EB, EVB, RpcMiddleware>
 where
     N: FullNodeComponents<
             Types: NodeTypes<
@@ -143,13 +146,16 @@ where
                     ExecutionData = BerachainExecutionData,
                 >,
             >,
+            Provider: ChainSpecProvider<ChainSpec: EthereumHardforks>,
             Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
         >,
     EthB: EthApiBuilder<N>,
-    EV: EngineValidatorBuilder<N>,
+    PVB: PayloadValidatorBuilder<N>,
     EB: EngineApiBuilder<N>,
+    EVB: EngineValidatorBuilder<N>,
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
+    RpcMiddleware: RethRpcMiddleware,
 {
     type Handle = RpcHandle<N, EthB::EthApi>;
 
@@ -161,7 +167,7 @@ where
     }
 }
 
-impl<N, EthB, EV, EB> RethRpcAddOns<N> for BerachainAddOns<N, EthB, EV, EB>
+impl<N, EthB, PVB, EB, EVB> RethRpcAddOns<N> for BerachainAddOns<N, EthB, PVB, EB, EVB>
 where
     N: FullNodeComponents<
             Types: NodeTypes<
@@ -174,8 +180,9 @@ where
             Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
         >,
     EthB: EthApiBuilder<N>,
-    EV: EngineValidatorBuilder<N>,
+    PVB: PayloadValidatorBuilder<N>,
     EB: EngineApiBuilder<N>,
+    EVB: EngineValidatorBuilder<N>,
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
@@ -186,7 +193,7 @@ where
     }
 }
 
-impl<N, EthB, EV, EB> EngineValidatorAddOn<N> for BerachainAddOns<N, EthB, EV, EB>
+impl<N, EthB, PVB, EB, EVB> EngineValidatorAddOn<N> for BerachainAddOns<N, EthB, PVB, EB, EVB>
 where
     N: FullNodeComponents<
             Types: NodeTypes<
@@ -199,14 +206,15 @@ where
             Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
         >,
     EthB: EthApiBuilder<N>,
-    EV: EngineValidatorBuilder<N>,
+    PVB: Send,
     EB: EngineApiBuilder<N>,
+    EVB: EngineValidatorBuilder<N>,
     EthApiError: FromEvmError<N::Evm>,
     EvmFactoryFor<N::Evm>: EvmFactory<Tx = TxEnv>,
 {
-    type Validator = EV::Validator;
+    type ValidatorBuilder = EVB;
 
-    async fn engine_validator(&self, ctx: &AddOnsContext<'_, N>) -> eyre::Result<Self::Validator> {
-        self.inner.engine_validator(ctx).await
+    fn engine_validator_builder(&self) -> Self::ValidatorBuilder {
+        self.inner.engine_validator_builder()
     }
 }

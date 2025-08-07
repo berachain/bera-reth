@@ -7,7 +7,7 @@ use crate::{
     consensus::BerachainConsensusBuilder,
     engine::{
         BerachainEngineTypes, builder::BerachainPayloadServiceBuilder,
-        rpc::BerachainEngineApiBuilder, validator::BerachainEngineValidatorBuilder,
+        validator::BerachainEngineValidatorBuilder,
     },
     node::evm::BerachainExecutorBuilder,
     pool::BerachainPoolBuilder,
@@ -38,7 +38,6 @@ use std::sync::Arc;
 #[non_exhaustive]
 pub struct BerachainNode;
 
-// Same as ETH Except we use BerachainChainSpec
 impl NodeTypes for BerachainNode {
     type Primitives = BerachainPrimitives;
     type ChainSpec = BerachainChainSpec;
@@ -58,36 +57,6 @@ impl<N> Node<N> for BerachainNode
 where
     N: FullNodeTypes<Types = Self>,
 {
-    /// Reth SDK ComponentsBuilder defining the core node architecture.
-    ///
-    /// Each component handles a specific domain of blockchain node operations:
-    ///
-    /// - **EthereumPoolBuilder**: Transaction pool management and validation
-    ///   - Maintains mempool of pending transactions
-    ///   - Validates transactions according to chain rules
-    ///   - Provides transactions for block building
-    ///
-    /// - **`BasicPayloadServiceBuilder<BerachainPayloadServiceBuilder>`**: Block building and
-    ///   payload creation
-    ///   - Triggered by Engine API `forkchoice_updated` calls from consensus layer
-    ///   - Assembles transactions from pool into block payloads
-    ///   - Handles payload building jobs and manages build timeouts
-    ///   - Uses BerachainPayloadBuilder for Berachain-specific block construction
-    ///
-    /// - **EthereumNetworkBuilder**: P2P networking and peer management
-    ///   - Handles block/transaction propagation via devp2p
-    ///   - Manages peer connections and discovery
-    ///   - Synchronizes blockchain state with network peers
-    ///
-    /// - **BerachainExecutorBuilder**: EVM execution environment
-    ///   - Creates standard Ethereum EVM with Berachain chain specification
-    ///   - Executes transactions and manages state transitions
-    ///   - Handles hardfork logic including Prague1 minimum base fee
-    ///
-    /// - **EthereumConsensusBuilder**: Block validation and consensus rules
-    ///   - Validates block headers, transactions, and state transitions
-    ///   - Enforces Ethereum consensus rules with Berachain extensions
-    ///   - Manages fork choice and canonical chain determination
     type ComponentsBuilder = ComponentsBuilder<
         N,
         BerachainPoolBuilder,
@@ -97,14 +66,6 @@ where
         BerachainConsensusBuilder,
     >;
 
-    /// Reth SDK AddOns providing RPC and Engine API interfaces.
-    ///
-    /// - **EthApiBuilder**: Standard Ethereum JSON-RPC API implementation
-    /// - **BerachainEngineValidatorBuilder**: Validates Engine API requests with Berachain rules
-    /// - **BasicEngineApiBuilder**: Handles consensus layer communication via Engine API
-    ///   - Processes `forkchoice_updated` to trigger payload building
-    ///   - Handles `new_payload` for block execution and validation
-    ///   - Manages consensus-execution layer synchronization
     type AddOns = BerachainAddOns<
         NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
         BerachainEthApiBuilder,
@@ -123,8 +84,6 @@ where
 
     fn add_ons(&self) -> Self::AddOns {
         BerachainAddOns::default()
-            .with_engine_validator(BerachainEngineValidatorBuilder::default())
-            .with_engine_api(BerachainEngineApiBuilder::<BerachainEngineValidatorBuilder>::default())
     }
 }
 

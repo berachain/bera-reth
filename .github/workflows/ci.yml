@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup dprint
         uses: dprint/check@v2.3
 
@@ -82,13 +82,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
-      
+
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
-      
+
       - name: Run security audit
         run: cargo deny check
 
@@ -97,15 +97,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@nightly
-      
-      - name: Install cargo-udeps
-        run: cargo install cargo-udeps --locked
-      
+
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
+
       - name: Check for unused dependencies
-        run: cargo +nightly udeps --all-features --locked
+        run: cargo machete
 
   test:
     name: Run tests
@@ -116,18 +113,21 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
 
-      - name: Run tests
-        run: cargo test --all --locked --verbose
+      - name: Install nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run tests with nextest
+        run: cargo nextest run --locked
 
   docs:
     name: Check documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
-      
+
       - name: Check documentation
         run: cargo doc --all --no-deps --document-private-items
         env:

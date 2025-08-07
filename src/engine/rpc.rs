@@ -1,6 +1,7 @@
 use crate::{
     engine::{
-        BerachainExecutionData, BerachainExecutionPayloadSidecar, validate_proposer_pubkey_prague1,
+        BerachainExecutionData, BerachainExecutionPayloadSidecar,
+        payload::BerachainPayloadAttributes, validate_proposer_pubkey_prague1,
     },
     hardforks::BerachainHardforks,
     primitives::header::BlsPublicKey,
@@ -15,10 +16,8 @@ use alloy_rpc_types::engine::{
     ExecutionPayloadV1, ExecutionPayloadV3, ForkchoiceState, ForkchoiceUpdated, PayloadId,
     PayloadStatus,
 };
-// Constructor removed since we're using custom construction
 use jsonrpsee_core::{RpcResult, server::RpcModule};
 use jsonrpsee_proc_macros::rpc;
-use jsonrpsee_types;
 use reth::{
     api::NodeTypes,
     chainspec::EthereumHardforks,
@@ -26,38 +25,38 @@ use reth::{
     providers::{BlockReader, HeaderProvider, StateProviderFactory},
     rpc::api::IntoEngineApiRpcModule,
 };
-use reth_engine_primitives::EngineTypes;
-use reth_engine_tree::tree::EngineValidator;
+use reth_engine_primitives::{EngineApiValidator, EngineTypes};
 use reth_node_api::{AddOnsContext, FullNodeComponents};
-use reth_node_builder::rpc::{EngineApiBuilder, EngineValidatorBuilder};
+use reth_node_builder::rpc::{EngineApiBuilder, PayloadValidatorBuilder};
 use reth_node_core::version::{CARGO_PKG_VERSION, CLIENT_CODE, NAME_CLIENT, VERGEN_GIT_SHA};
-use reth_payload_primitives::PayloadTypes;
-use reth_rpc_engine_api::{
-    EngineApi, EngineApiError, EngineCapabilities, INVALID_PAYLOAD_ATTRIBUTES,
-};
+use reth_payload_primitives::{EngineObjectValidationError, PayloadAttributes, PayloadTypes};
+use reth_rpc_engine_api::{EngineApi, EngineApiError, EngineCapabilities};
 use reth_transaction_pool::TransactionPool;
 use std::sync::Arc;
 use tracing::{debug, trace};
 
-/// Builder for basic [`EngineApi`] implementation.
-///
-/// This provides a basic default implementation for opstack and ethereum engine API via
-/// [`EngineTypes`] and uses the general purpose [`EngineApi`] implementation as the builder's
-/// output.
+/// Builder for [`BerachainEngineApi`] implementation.
 #[derive(Debug, Default)]
 pub struct BerachainEngineApiBuilder<EV> {
     engine_validator_builder: EV,
 }
+
+pub const BERACHAIN_ADDITIONAL_CAPABILITIES: &[&str] =
+    &["engine_newPayloadV4P11", "engine_forkchoiceUpdatedV3P11", "engine_getPayloadV4P11"];
 
 impl<N, EV> EngineApiBuilder<N> for BerachainEngineApiBuilder<EV>
 where
     N: FullNodeComponents<
         Types: NodeTypes<
             ChainSpec: EthereumHardforks + BerachainHardforks,
-            Payload: PayloadTypes<ExecutionData = BerachainExecutionData> + EngineTypes,
+            Payload: PayloadTypes<
+                ExecutionData = BerachainExecutionData,
+                PayloadAttributes = BerachainPayloadAttributes,
+            > + EngineTypes,
         >,
     >,
-    EV: EngineValidatorBuilder<N>,
+    EV: PayloadValidatorBuilder<N>,
+    EV::Validator: EngineApiValidator<<N::Types as NodeTypes>::Payload>,
 {
     type EngineApi = BerachainEngineApi<
         N::Provider,
@@ -345,61 +344,29 @@ pub struct BerachainEngineApi<Provider, PayloadT: PayloadTypes, Pool, Validator,
     chain_spec: Arc<ChainSpec>,
 }
 
-impl<Provider, PayloadT: PayloadTypes, Pool, Validator, ChainSpec>
-    BerachainEngineApi<Provider, PayloadT, Pool, Validator, ChainSpec>
+/// Validates Prague1 requirements for P11 methods
+fn validate_prague1_requirements<ChainSpec>(
+    chain_spec: &ChainSpec,
+    timestamp: u64,
+    proposer_pubkey: Option<BlsPublicKey>,
+) -> RpcResult<()>
 where
     ChainSpec: EthereumHardforks + BerachainHardforks,
 {
-    /// Validates requirements for newPayloadV4 - Prague1 must not be active
-    fn validate_payload_v4_requirements(chain_spec: &ChainSpec, timestamp: u64) -> RpcResult<()> {
-        if chain_spec.is_prague1_active_at_timestamp(timestamp) {
-            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                "newPayloadV4P11 required for Prague1 fork, use newPayloadV4P11 instead",
-                None::<()>,
-            ))
-            .into());
-        }
-
-        // Validate that no proposer pubkey is provided (should be None)
-        validate_proposer_pubkey_prague1(chain_spec, timestamp, None).map_err(|error| {
-            EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                error.to_string(),
-                None::<()>,
-            ))
-        })?;
-
-        Ok(())
+    if !chain_spec.is_prague1_active_at_timestamp(timestamp) {
+        return Err(EngineApiError::EngineObjectValidationError(
+            EngineObjectValidationError::UnsupportedFork,
+        )
+        .into());
     }
 
-    /// Validates requirements for newPayloadV4P11 - Prague1 must be active
-    fn validate_payload_v4_p11_requirements(
-        chain_spec: &ChainSpec,
-        timestamp: u64,
-        parent_proposer_pub_key: BlsPublicKey,
-    ) -> RpcResult<()> {
-        if !chain_spec.is_prague1_active_at_timestamp(timestamp) {
-            return Err(EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                INVALID_PAYLOAD_ATTRIBUTES,
-                "Prague1 fork not active, use newPayloadV4 instead",
-                None::<()>,
-            ))
-            .into());
-        }
+    validate_proposer_pubkey_prague1(chain_spec, timestamp, proposer_pubkey).map_err(|error| {
+        EngineApiError::EngineObjectValidationError(EngineObjectValidationError::invalid_params(
+            error,
+        ))
+    })?;
 
-        // Validate that proposer pubkey is required for P11
-        validate_proposer_pubkey_prague1(chain_spec, timestamp, Some(parent_proposer_pub_key))
-            .map_err(|error| {
-                EngineApiError::other(jsonrpsee_types::ErrorObject::owned(
-                    INVALID_PAYLOAD_ATTRIBUTES,
-                    error.to_string(),
-                    None::<()>,
-                ))
-            })?;
-
-        Ok(())
-    }
+    Ok(())
 }
 
 #[async_trait::async_trait]
@@ -407,9 +374,12 @@ impl<Provider, EngineT, Pool, Validator, ChainSpec> BerachainEngineApiServer<Eng
     for BerachainEngineApi<Provider, EngineT, Pool, Validator, ChainSpec>
 where
     Provider: HeaderProvider + BlockReader + StateProviderFactory + 'static,
-    EngineT: EngineTypes<ExecutionData = BerachainExecutionData>,
+    EngineT: EngineTypes<
+            ExecutionData = BerachainExecutionData,
+            PayloadAttributes = BerachainPayloadAttributes,
+        >,
     Pool: TransactionPool + 'static,
-    Validator: EngineValidator<EngineT>,
+    Validator: EngineApiValidator<EngineT>,
     ChainSpec: EthereumHardforks + BerachainHardforks + Send + Sync + 'static,
 {
     async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
@@ -455,7 +425,12 @@ where
             return Err(EngineApiError::UnexpectedRequestsHash.into());
         }
 
-        Self::validate_payload_v4_requirements(&*self.chain_spec, payload.timestamp())?;
+        if self.chain_spec.is_prague1_active_at_timestamp(payload.timestamp()) {
+            return Err(EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::UnsupportedFork,
+            )
+            .into());
+        }
 
         let berachain_payload = BerachainExecutionData::new(
             payload.into(),
@@ -480,10 +455,10 @@ where
         trace!(target: "rpc::engine", "Serving engine_newPayloadV4P11");
         trace!(target: "rpc::engine", "received parent_proposer_pub_key {:?}", parent_proposer_pub_key);
 
-        Self::validate_payload_v4_p11_requirements(
+        validate_prague1_requirements(
             &*self.chain_spec,
             payload.timestamp(),
-            parent_proposer_pub_key,
+            Some(parent_proposer_pub_key),
         )?;
 
         // Accept requests as a hash only if it is explicitly allowed
@@ -536,6 +511,15 @@ where
         payload_attributes: Option<EngineT::PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
         trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV3P11");
+
+        if let Some(attrs) = &payload_attributes {
+            validate_prague1_requirements(
+                &*self.chain_spec,
+                attrs.timestamp(),
+                attrs.prev_proposer_pubkey(),
+            )?;
+        }
+
         Ok(self.inner.fork_choice_updated_v3_metered(fork_choice_state, payload_attributes).await?)
     }
 
@@ -613,7 +597,9 @@ where
     }
 
     async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
-        Ok(self.inner.capabilities().list())
+        let mut capabilities = self.inner.capabilities().clone();
+        BERACHAIN_ADDITIONAL_CAPABILITIES.iter().for_each(|&cap| capabilities.add_capability(cap));
+        Ok(capabilities.list())
     }
 
     async fn get_blobs_v1(

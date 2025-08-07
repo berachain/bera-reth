@@ -14,9 +14,9 @@ pub type BerachainBlock = alloy_consensus::Block<BerachainTxEnvelope, BerachainH
 pub type BerachainBlockBody = alloy_consensus::BlockBody<BerachainTxEnvelope, BerachainHeader>;
 
 impl NodePrimitives for BerachainPrimitives {
-    type Block = BerachainBlock; // Uses your transaction type
-    type BlockHeader = BerachainHeader; // Custom Berachain header with prev_proposer_pubkey
-    type BlockBody = BerachainBlockBody; // Uses your transaction type
-    type SignedTx = BerachainTxEnvelope; // Your custom transaction envelope
-    type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>; // Berachain receipts with transaction type
+    type Block = BerachainBlock;
+    type BlockHeader = BerachainHeader;
+    type BlockBody = BerachainBlockBody;
+    type SignedTx = BerachainTxEnvelope;
+    type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>;
 }

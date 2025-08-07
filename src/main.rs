@@ -3,16 +3,18 @@
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
-use bera_reth::{chainspec::BerachainChainSpecParser, node::BerachainNode};
+use bera_reth::{
+    chainspec::{BerachainChainSpec, BerachainChainSpecParser},
+    consensus::BerachainBeaconConsensus,
+    node::{BerachainNode, evm::config::BerachainEvmConfig},
+};
 use clap::Parser;
-use reth::{CliRunner, beacon_consensus::EthBeaconConsensus};
-use std::sync::Arc;
-// Removed RessArgs since ress subprotocol is disabled
-use bera_reth::{chainspec::BerachainChainSpec, node::evm::config::BerachainEvmConfig};
+use reth::CliRunner;
 use reth_cli_commands::node::NoArgs;
 use reth_ethereum_cli::Cli;
 use reth_evm::EthEvmFactory;
 use reth_node_builder::NodeHandle;
+use std::sync::Arc;
 use tracing::info;
 
 /// Main entry point. Sets up runtime, signal handlers, and launches Berachain node.
@@ -29,7 +31,7 @@ fn main() {
     let cli_components_builder = |spec: Arc<BerachainChainSpec>| {
         (
             BerachainEvmConfig::new_with_evm_factory(spec.clone(), EthEvmFactory::default()),
-            EthBeaconConsensus::new(spec),
+            BerachainBeaconConsensus::new(spec),
         )
     };
 

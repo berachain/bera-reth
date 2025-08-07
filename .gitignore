@@ -5,3 +5,7 @@
 # Coverage reports
 lcov.info
 target/llvm-cov/
+
+# GPG keys (for release signing)
+bera-reth-gpg-key-*.asc
+bera-reth-gpg-key-*.base64

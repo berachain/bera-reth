@@ -3,8 +3,8 @@ use crate::{
     rpc::receipt::BerachainReceiptEnvelope,
     transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE},
 };
-use alloy_consensus::Transaction;
-use alloy_eips::eip2930::AccessList;
+use alloy_consensus::{Transaction, transaction::Recovered};
+use alloy_eips::{Typed2718, eip2930::AccessList, eip7002::SYSTEM_ADDRESS};
 use alloy_network::{
     BuildResult, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
 };
@@ -13,7 +13,12 @@ use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
 use reth::{
-    providers::{ProviderHeader, ProviderTx},
+    providers::{ProviderError, ProviderHeader, ProviderTx},
+    revm::{
+        DatabaseCommit,
+        context::{Transaction as TxEnvTransaction, result::ResultAndState},
+        context_interface::result::ExecutionResult,
+    },
     rpc::compat::{RpcConvert, RpcTypes},
     tasks::{
         TaskSpawner,
@@ -21,7 +26,8 @@ use reth::{
     },
     transaction_pool::{PoolTransaction, TransactionPool},
 };
-use reth_evm::TxEnvFor;
+use reth_evm::{ConfigureEvm, Database, Evm, EvmEnvFor, HaltReasonFor, InspectorFor, TxEnvFor};
+use reth_primitives_traits::SignedTransaction;
 use reth_rpc::eth::DevSigner;
 use reth_rpc_convert::SignableTxRequest;
 use reth_rpc_eth_api::{
@@ -545,6 +551,47 @@ where
     fn max_simulate_blocks(&self) -> u64 {
         self.inner.max_simulate_blocks()
     }
+
+    fn replay_transactions_until<'a, DB, I>(
+        &self,
+        db: &mut DB,
+        evm_env: EvmEnvFor<Self::Evm>,
+        transactions: I,
+        target_tx_hash: B256,
+    ) -> Result<usize, Self::Error>
+    where
+        DB: reth::revm::Database<Error = ProviderError> + DatabaseCommit + core::fmt::Debug,
+        I: IntoIterator<Item = Recovered<&'a ProviderTx<Self::Provider>>>,
+    {
+        let mut evm = self.evm_config().evm_with_env(db, evm_env);
+        let mut index = 0;
+        for tx in transactions {
+            if *tx.tx_hash() == target_tx_hash {
+                // reached the target transaction
+                break
+            }
+
+            let tx_env = self.evm_config().tx_env(tx);
+            if tx.ty() == POL_TX_TYPE {
+                // Handle PoL transactions as system calls
+                let to_address = match tx_env.kind() {
+                    TxKind::Call(addr) => addr,
+                    TxKind::Create => {
+                        return Err(EthApiError::InvalidParams(
+                            "PoL transactions cannot be CREATE transactions".to_string(),
+                        ));
+                    }
+                };
+
+                evm.transact_system_call(SYSTEM_ADDRESS, to_address, tx_env.input().clone())
+                    .map_err(Self::Error::from_evm_err)?;
+            } else {
+                evm.transact_commit(tx_env).map_err(Self::Error::from_evm_err)?;
+            }
+            index += 1;
+        }
+        Ok(index)
+    }
 }
 
 impl<N, Rpc> EstimateCall for BerachainApi<N, Rpc>
@@ -579,6 +626,49 @@ where
     EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives>,
 {
+    fn inspect<DB, I>(
+        &self,
+        db: DB,
+        evm_env: EvmEnvFor<Self::Evm>,
+        tx_env: TxEnvFor<Self::Evm>,
+        inspector: I,
+    ) -> Result<
+        (ResultAndState<HaltReasonFor<Self::Evm>>, (EvmEnvFor<Self::Evm>, TxEnvFor<Self::Evm>)),
+        Self::Error,
+    >
+    where
+        DB: Database<Error = ProviderError>,
+        I: InspectorFor<Self::Evm, DB>,
+    {
+        let mut evm = self.evm_config().evm_with_env_and_inspector(db, evm_env.clone(), inspector);
+        let res = if TxEnvTransaction::tx_type(&tx_env) == POL_TX_TYPE {
+            // Handle PoL transactions as system calls
+            let to_address = match tx_env.kind() {
+                TxKind::Call(addr) => addr,
+                TxKind::Create => {
+                    return Err(EthApiError::InvalidParams(
+                        "PoL transactions cannot be CREATE transactions".to_string(),
+                    ));
+                }
+            };
+
+            let mut result = evm
+                .inspect_system_call(SYSTEM_ADDRESS, to_address, tx_env.input().clone())
+                .map_err(Self::Error::from_evm_err)?;
+
+            // Set gas_used to 0 for POL transactions
+            result.result = match result.result {
+                ExecutionResult::Success { reason, gas_refunded, logs, output, .. } => {
+                    ExecutionResult::Success { reason, gas_used: 0, gas_refunded, logs, output }
+                }
+                other => other,
+            };
+            result
+        } else {
+            evm.transact(tx_env.clone()).map_err(Self::Error::from_evm_err)?
+        };
+        Ok((res, (evm_env, tx_env)))
+    }
 }
 
 impl<N, Rpc> LoadState for BerachainApi<N, Rpc>
