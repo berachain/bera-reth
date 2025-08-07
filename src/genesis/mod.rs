@@ -23,10 +23,6 @@ pub enum BerachainConfigError {
     #[error("Base fee change denominator cannot be zero")]
     InvalidDenominator,
 
-    /// Fork activation time is invalid (e.g., in the past for future forks)
-    #[error("Invalid fork activation time: {0}")]
-    InvalidActivationTime(u64),
-
     /// PoL distributor address is missing from Prague1 configuration
     #[error("PoL distributor address is required in Prague1 configuration but was not provided")]
     MissingPoLDistributorAddress,
@@ -101,10 +97,7 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                 Ok(cfg)
             }
             Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
-            None => {
-                info!("No berachain configuration found in genesis, using defaults");
-                Err(BerachainConfigError::MissingBerachainField)
-            }
+            None => Err(BerachainConfigError::MissingBerachainField),
         }
     }
 }

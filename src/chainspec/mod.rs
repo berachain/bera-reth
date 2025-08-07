@@ -82,7 +82,24 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn display_hardforks(&self) -> Box<dyn Display> {
-        Box::new(self.inner.display_hardforks())
+        let inner_display = self.inner.display_hardforks().to_string();
+
+        // Only show Prague1 configuration if it's configured as a timestamp-based fork
+        let prague1_details = match self.fork(BerachainHardfork::Prague1) {
+            ForkCondition::Timestamp(time) => {
+                let base_fee_params = self.base_fee_params_at_timestamp(time);
+                format!(
+                    "\nBerachain Prague1 configuration: {{time={}, base_fee_denominator={}, min_base_fee={} gwei, pol_distributor={}}}",
+                    time,
+                    base_fee_params.max_change_denominator,
+                    self.prague1_minimum_base_fee / 1_000_000_000,
+                    self.pol_contract_address
+                )
+            }
+            _ => "\nPrague1 Misconfigured".to_string(),
+        };
+
+        Box::new(format!("{}{}", inner_display, prague1_details))
     }
 
     fn genesis_header(&self) -> &Self::Header {
@@ -295,7 +312,7 @@ impl From<Genesis> for BerachainChainSpec {
         ));
 
         let paris_block_and_final_difficulty =
-            Some((0, genesis.config.terminal_total_difficulty.unwrap_or_default()));
+            Some((0, genesis.config.terminal_total_difficulty.unwrap()));
 
         // Extract blob parameters directly from blob_schedule
         let blob_params = genesis.config.blob_schedule_blob_params();
