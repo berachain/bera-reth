@@ -87,7 +87,6 @@ impl EthChainSpec for BerachainChainSpec {
     fn display_hardforks(&self) -> Box<dyn Display> {
         let inner_display = self.inner.display_hardforks().to_string();
 
-        // Only show Prague1 configuration if it's configured as a timestamp-based fork
         let prague1_details = match self.fork(BerachainHardfork::Prague1) {
             ForkCondition::Timestamp(time) => {
                 let base_fee_params = self.base_fee_params_at_timestamp(time);
@@ -102,7 +101,7 @@ impl EthChainSpec for BerachainChainSpec {
             _ => "\nPrague1 Misconfigured".to_string(),
         };
 
-        Box::new(format!("{}{}", inner_display, prague1_details))
+        Box::new(format!("{inner_display}{prague1_details}"))
     }
 
     fn genesis_header(&self) -> &Self::Header {
