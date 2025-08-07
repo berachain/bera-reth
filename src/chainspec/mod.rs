@@ -21,7 +21,10 @@ use reth::{
     primitives::SealedHeader,
     revm::primitives::{Address, B256, U256, b256},
 };
-use reth_chainspec::{ChainSpec, DepositContract, EthChainSpec, Hardforks, make_genesis_header};
+use reth_chainspec::{
+    ChainSpec, DepositContract, EthChainSpec, Hardforks, MAINNET_PRUNE_DELETE_LIMIT,
+    make_genesis_header,
+};
 use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use reth_evm::eth::spec::EthExecutorSpec;
@@ -375,7 +378,7 @@ impl From<Genesis> for BerachainChainSpec {
             deposit_contract,
             blob_params,
             base_fee_params,
-            ..Default::default()
+            prune_delete_limit: MAINNET_PRUNE_DELETE_LIMIT,
         };
 
         let mut genesis_header = BerachainHeader::from(inner.genesis_header());
@@ -541,6 +544,41 @@ mod tests {
         let params = chain_spec.base_fee_params_at_timestamp(0);
         assert_eq!(params.max_change_denominator, 100);
         assert_eq!(params.elasticity_multiplier, 2);
+    }
+
+    #[test]
+    fn test_default_prune_delete_limit_is_20000() {
+        // Test that the default prune delete limit from ..Default::default() is 20000
+        // (MAINNET_PRUNE_DELETE_LIMIT)
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0);
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 8,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Verify prune delete limit defaults to 20000 (MAINNET_PRUNE_DELETE_LIMIT)
+        assert_eq!(
+            chain_spec.prune_delete_limit(),
+            20000,
+            "Default prune delete limit should be 20000 (MAINNET_PRUNE_DELETE_LIMIT)"
+        );
+        assert_eq!(
+            chain_spec.inner.prune_delete_limit, 20000,
+            "Inner ChainSpec prune delete limit should be 20000"
+        );
     }
 
     #[test]
