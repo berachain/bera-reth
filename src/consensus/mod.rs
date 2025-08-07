@@ -34,7 +34,6 @@ where
 #[derive(Debug, Clone)]
 pub struct BerachainBeaconConsensus {
     inner: EthBeaconConsensus<BerachainChainSpec>,
-    /// Berachain chain specification.
     chain_spec: Arc<BerachainChainSpec>,
 }
 
