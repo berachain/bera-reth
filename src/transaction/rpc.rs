@@ -1,5 +1,4 @@
 use super::PoLTx;
-use alloy_eips::eip2930::AccessList;
 use alloy_primitives::{Address, Bytes, ChainId, U256};
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +27,6 @@ pub struct PoLTxRpc {
     pub max_fee_per_gas: u128, // Same as gas_price for PoL
     #[serde(with = "alloy_serde::quantity")]
     pub max_priority_fee_per_gas: u128, // Same as gas_price for PoL
-    pub access_list: AccessList, // Empty for PoL transactions
     #[serde(with = "alloy_serde::quantity")]
     pub v: u64, // 0 - no real signature for PoL
     pub r: U256,     // 0 - no real signature for PoL
@@ -49,7 +47,6 @@ impl From<&PoLTx> for PoLTxRpc {
             value: U256::ZERO, // PoL transactions always have zero value
             max_fee_per_gas: pol_tx.gas_price, // Same as gas_price for PoL
             max_priority_fee_per_gas: pol_tx.gas_price, // Same as gas_price for PoL
-            access_list: AccessList::default(), // Empty for PoL transactions
             v: 0,              // No real signature for PoL
             r: U256::ZERO,     // No real signature for PoL
             s: U256::ZERO,     // No real signature for PoL
@@ -131,7 +128,6 @@ mod tests {
         assert!(json.contains("\"value\""));
         assert!(json.contains("\"maxFeePerGas\""));
         assert!(json.contains("\"maxPriorityFeePerGas\""));
-        assert!(json.contains("\"accessList\""));
         assert!(json.contains("\"v\""));
         assert!(json.contains("\"r\""));
         assert!(json.contains("\"s\""));
@@ -139,8 +135,8 @@ mod tests {
         // Test that value is "0x0" (zero)
         assert!(json.contains("\"value\": \"0x0\""));
 
-        // Test that access list is empty
-        assert!(json.contains("\"accessList\": []"));
+        // Access list should not be present in JSON (skipped)
+        assert!(!json.contains("\"accessList\""));
 
         // Test deserialization (should work with derived Deserialize)
         let deserialized: PoLTx =
@@ -164,7 +160,6 @@ mod tests {
         assert_eq!(rpc.value, U256::ZERO);
         assert_eq!(rpc.max_fee_per_gas, pol_tx.gas_price);
         assert_eq!(rpc.max_priority_fee_per_gas, pol_tx.gas_price);
-        assert_eq!(rpc.access_list, AccessList::default());
         assert_eq!(rpc.v, 0);
         assert_eq!(rpc.r, U256::ZERO);
         assert_eq!(rpc.s, U256::ZERO);
