@@ -141,9 +141,10 @@ impl Consensus<BerachainBlock> for BerachainBeaconConsensus {
         if self.chain_spec.is_prague1_active_at_timestamp(block.header().timestamp) {
             self.validate_pol_transaction(block)?;
         } else {
-            let transactions: Vec<_> = block.body().transactions().collect();
-            if let Some(index) =
-                transactions.iter().position(|tx| matches!(tx, BerachainTxEnvelope::Berachain(_)))
+            if let Some(index) = block
+                .body()
+                .transactions()
+                .position(|tx| matches!(tx, BerachainTxEnvelope::Berachain(_)))
             {
                 return Err(ConsensusError::Other(format!(
                     "PoL transaction found at position {index} before Prague1 fork activation"
@@ -182,8 +183,9 @@ mod tests {
         primitives::header::BlsPublicKey,
         transaction::pol::{create_pol_transaction, validate_pol_transaction},
     };
-    use alloy_primitives::U256;
+    use alloy_primitives::{U256, hex::FromHex};
     use reth_chainspec::EthChainSpec;
+    use reth_primitives_traits::BlockBody;
     use std::sync::Arc;
 
     fn mock_berachain_chainspec() -> Arc<BerachainChainSpec> {
@@ -333,6 +335,183 @@ mod tests {
             pol_tx1.hash(),
             pol_tx2.hash(),
             "Identical PoL transactions should have identical hashes"
+        );
+    }
+
+    #[test]
+    fn test_pre_prague1_pol_transaction_rejected() {
+        use crate::primitives::BerachainBlockBody;
+        use alloy_primitives::{B256, BlockHash};
+        use reth_primitives_traits::{SealedBlock, SealedHeader};
+
+        let chain_spec = mock_berachain_chainspec();
+        let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
+        let pubkey = mock_bls_pubkey();
+        let block_number = U256::from(10);
+        let base_fee = 1000u64;
+
+        // Verify Prague1 activation timestamp for context
+        println!(
+            "Prague1 activation timestamp: {:?}",
+            chain_spec.is_prague1_active_at_timestamp(0)
+        );
+        assert!(
+            !chain_spec.is_prague1_active_at_timestamp(0),
+            "Timestamp 0 should be before Prague1 activation"
+        );
+
+        // Create a PoL transaction
+        let pol_tx_envelope =
+            create_pol_transaction(chain_spec, pubkey, block_number, base_fee).unwrap();
+
+        // Create a block body with the PoL transaction
+        let transactions = vec![pol_tx_envelope];
+        let mut block_body = BerachainBlockBody::default();
+        block_body.transactions = transactions.clone();
+
+        // Create a header with timestamp BEFORE Prague1 activation (assuming Prague1 activates
+        // later)
+        let mut header = BerachainHeader::default();
+        header.number = block_number.to::<u64>();
+        header.timestamp = 0; // Pre-Prague1 timestamp
+        header.base_fee_per_gas = Some(base_fee);
+        header.ommers_hash =
+            B256::from_hex("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+                .unwrap();
+        header.transactions_root = block_body.calculate_tx_root();
+
+        let sealed_header = SealedHeader::new(header, BlockHash::ZERO);
+        let block = SealedBlock::from_sealed_parts(sealed_header, block_body);
+
+        // Validation should fail because PoL transaction exists before Prague1
+        let result = consensus.validate_block_pre_execution(&block);
+        println!("Validation result: {:?}", result);
+
+        assert!(result.is_err(), "Pre-Prague1 block with PoL transaction should fail validation");
+
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("before Prague1 fork activation"),
+            "Error should mention Prague1 fork activation"
+        );
+        assert!(error_msg.contains("position 0"), "Error should indicate PoL transaction position");
+    }
+
+    #[test]
+    fn test_pre_prague1_normal_transactions_accepted() {
+        use crate::primitives::BerachainBlockBody;
+        use alloy_consensus::{Signed, TxLegacy};
+        use alloy_primitives::{Address, BlockHash, TxKind};
+        use reth_primitives_traits::{SealedBlock, SealedHeader};
+
+        let chain_spec = mock_berachain_chainspec();
+        let consensus = BerachainBeaconConsensus::new(chain_spec);
+
+        // Create normal Ethereum transaction
+        let tx = TxLegacy {
+            chain_id: Some(1),
+            nonce: 0,
+            gas_price: 1000,
+            gas_limit: 21000,
+            to: TxKind::Call(Address::ZERO),
+            value: U256::ZERO,
+            input: Default::default(),
+        };
+
+        let signature = alloy_primitives::Signature::test_signature();
+        let signed_tx = Signed::new_unhashed(tx, signature);
+        let eth_tx_envelope = crate::transaction::BerachainTxEnvelope::Ethereum(
+            alloy_consensus::TxEnvelope::Legacy(signed_tx),
+        );
+
+        let transactions = vec![eth_tx_envelope];
+        let mut block_body = BerachainBlockBody::default();
+        block_body.transactions = transactions.clone();
+
+        let mut header = crate::primitives::BerachainHeader::default();
+        header.number = 10;
+        header.timestamp = 0; // Pre-Prague1 timestamp
+        header.base_fee_per_gas = Some(1000);
+        header.ommers_hash = alloy_primitives::B256::from_hex(
+            "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+        )
+        .unwrap();
+        header.transactions_root = block_body.calculate_tx_root();
+
+        let sealed_header = SealedHeader::new(header, BlockHash::ZERO);
+        let block = SealedBlock::from_sealed_parts(sealed_header, block_body);
+
+        // Validation should succeed for normal transactions pre-Prague1
+        let result = consensus.validate_block_pre_execution(&block);
+        assert!(
+            result.is_ok(),
+            "Pre-Prague1 block with normal transactions should pass validation"
+        );
+    }
+
+    #[test]
+    fn test_pre_prague1_pol_transaction_at_different_positions() {
+        use crate::primitives::BerachainBlockBody;
+        use alloy_consensus::{Signed, TxLegacy};
+        use alloy_primitives::{Address, BlockHash, TxKind};
+        use reth_primitives_traits::{SealedBlock, SealedHeader};
+
+        let chain_spec = mock_berachain_chainspec();
+        let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
+        let pubkey = mock_bls_pubkey();
+        let block_number = U256::from(10);
+        let base_fee = 1000u64;
+
+        // Create normal Ethereum transaction
+        let tx = TxLegacy {
+            chain_id: Some(1),
+            nonce: 0,
+            gas_price: 1000,
+            gas_limit: 21000,
+            to: TxKind::Call(Address::ZERO),
+            value: U256::ZERO,
+            input: Default::default(),
+        };
+
+        let signature = alloy_primitives::Signature::test_signature();
+        let signed_tx = Signed::new_unhashed(tx, signature);
+        let eth_tx_envelope = crate::transaction::BerachainTxEnvelope::Ethereum(
+            alloy_consensus::TxEnvelope::Legacy(signed_tx),
+        );
+
+        // Create a PoL transaction
+        let pol_tx_envelope =
+            create_pol_transaction(chain_spec, pubkey, block_number, base_fee).unwrap();
+
+        // Test PoL transaction at position 1 (second transaction)
+        let transactions = vec![eth_tx_envelope.clone(), pol_tx_envelope];
+        let mut block_body = BerachainBlockBody::default();
+        block_body.transactions = transactions.clone();
+
+        let mut header = crate::primitives::BerachainHeader::default();
+        header.number = block_number.to::<u64>();
+        header.timestamp = 0; // Pre-Prague1 timestamp
+        header.base_fee_per_gas = Some(base_fee);
+        header.ommers_hash = alloy_primitives::B256::from_hex(
+            "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+        )
+        .unwrap();
+        header.transactions_root = block_body.calculate_tx_root();
+
+        let sealed_header = SealedHeader::new(header, BlockHash::ZERO);
+        let block = SealedBlock::from_sealed_parts(sealed_header, block_body);
+
+        // Validation should fail with PoL transaction at position 1
+        let result = consensus.validate_block_pre_execution(&block);
+        assert!(
+            result.is_err(),
+            "Pre-Prague1 block with PoL transaction at position 1 should fail"
+        );
+
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("position 1"),
+            "Error should indicate PoL transaction at position 1"
         );
     }
 }
