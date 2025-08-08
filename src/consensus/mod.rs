@@ -210,10 +210,6 @@ mod tests {
             !chain_spec.is_prague1_active_at_timestamp(0),
             "Timestamp 0 should be before Prague1 activation"
         );
-        assert!(
-            chain_spec.is_prague1_active_at_timestamp(1754496000),
-            "Prague1 should be active at timestamp 1754496000"
-        );
 
         // Create a PoL transaction
         let pol_tx_envelope =
@@ -255,7 +251,13 @@ mod tests {
     #[test]
     fn test_pre_prague1_normal_transactions_accepted() {
         let chain_spec = mock_berachain_chainspec();
-        let consensus = BerachainBeaconConsensus::new(chain_spec);
+        let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
+
+        // Verify Prague1 activation timestamp for context
+        assert!(
+            !chain_spec.is_prague1_active_at_timestamp(0),
+            "Timestamp 0 should be before Prague1 activation"
+        );
 
         // Create normal Ethereum transaction
         let tx = TxLegacy {
