@@ -215,27 +215,29 @@ mod tests {
 
         // Create a block body with the PoL transaction
         let transactions = vec![pol_tx_envelope];
-        let mut block_body = BerachainBlockBody::default();
-        block_body.transactions = transactions.clone();
-        block_body.withdrawals = Some(Withdrawals::default());
+        let block_body = BerachainBlockBody {
+            transactions: transactions.clone(),
+            withdrawals: Some(Withdrawals::default()),
+            ..Default::default()
+        };
 
         // Create a header with timestamp BEFORE Prague1 activation
-        let mut header = BerachainHeader::default();
-        header.number = block_number.to::<u64>();
-        header.timestamp = 0; // Pre-Prague1 timestamp (Prague1 activates at 1754496000)
-        header.base_fee_per_gas = Some(base_fee);
-        header.ommers_hash = EMPTY_OMMER_ROOT_HASH;
-        header.transactions_root = block_body.calculate_tx_root();
-        header.withdrawals_root = Some(EMPTY_WITHDRAWALS);
-        header.blob_gas_used = Some(0);
+        let header = BerachainHeader {
+            number: block_number.to::<u64>(),
+            timestamp: 0, // Pre-Prague1 timestamp (Prague1 activates at 1754496000)
+            base_fee_per_gas: Some(base_fee),
+            ommers_hash: EMPTY_OMMER_ROOT_HASH,
+            transactions_root: block_body.calculate_tx_root(),
+            withdrawals_root: Some(EMPTY_WITHDRAWALS),
+            blob_gas_used: Some(0),
+            ..Default::default()
+        };
 
         let sealed_header = SealedHeader::new(header, BlockHash::ZERO);
         let block = SealedBlock::from_sealed_parts(sealed_header, block_body);
 
         // Validation should fail because PoL transaction exists before Prague1
         let result = consensus.validate_block_pre_execution(&block);
-        println!("Validation result: {:?}", result);
-
         assert!(result.is_err(), "Pre-Prague1 block with PoL transaction should fail validation");
 
         let error_msg = result.unwrap_err().to_string();
@@ -274,18 +276,22 @@ mod tests {
             BerachainTxEnvelope::Ethereum(alloy_consensus::TxEnvelope::Legacy(signed_tx));
 
         let transactions = vec![eth_tx_envelope];
-        let mut block_body = BerachainBlockBody::default();
-        block_body.transactions = transactions.clone();
-        block_body.withdrawals = Some(Withdrawals::default());
+        let block_body = BerachainBlockBody {
+            transactions: transactions.clone(),
+            withdrawals: Some(Withdrawals::default()),
+            ..Default::default()
+        };
 
-        let mut header = BerachainHeader::default();
-        header.number = 10;
-        header.timestamp = 0; // Pre-Prague1 timestamp
-        header.base_fee_per_gas = Some(1000);
-        header.ommers_hash = EMPTY_OMMER_ROOT_HASH;
-        header.transactions_root = block_body.calculate_tx_root();
-        header.withdrawals_root = Some(EMPTY_WITHDRAWALS);
-        header.blob_gas_used = Some(0);
+        let header = BerachainHeader {
+            number: 10,
+            timestamp: 0, // Pre-Prague1 timestamp
+            base_fee_per_gas: Some(1000),
+            ommers_hash: EMPTY_OMMER_ROOT_HASH,
+            transactions_root: block_body.calculate_tx_root(),
+            withdrawals_root: Some(EMPTY_WITHDRAWALS),
+            blob_gas_used: Some(0),
+            ..Default::default()
+        };
 
         let sealed_header = SealedHeader::new(header, BlockHash::ZERO);
         let block = SealedBlock::from_sealed_parts(sealed_header, block_body);
