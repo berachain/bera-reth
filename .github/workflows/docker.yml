@@ -18,7 +18,7 @@ jobs:
       make-target: docker-build-push
 
   docker-latest:
-    if: ${{ !contains(github.ref, '-rc') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') && !contains(github.ref, '+') && !contains(github.ref, '_') }}
     permissions:
       contents: read
       packages: write
