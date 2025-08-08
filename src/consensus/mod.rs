@@ -140,6 +140,15 @@ impl Consensus<BerachainBlock> for BerachainBeaconConsensus {
 
         if self.chain_spec.is_prague1_active_at_timestamp(block.header().timestamp) {
             self.validate_pol_transaction(block)?;
+        } else {
+            let transactions: Vec<_> = block.body().transactions().collect();
+            if let Some(index) =
+                transactions.iter().position(|tx| matches!(tx, BerachainTxEnvelope::Berachain(_)))
+            {
+                return Err(ConsensusError::Other(format!(
+                    "PoL transaction found at position {index} before Prague1 fork activation"
+                )));
+            }
         }
         Ok(())
     }
