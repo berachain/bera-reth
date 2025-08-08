@@ -183,6 +183,7 @@ mod tests {
         primitives::header::BlsPublicKey,
         transaction::pol::{create_pol_transaction, validate_pol_transaction},
     };
+    use alloy_consensus::EMPTY_OMMER_ROOT_HASH;
     use alloy_primitives::{U256, hex::FromHex};
     use reth_chainspec::EthChainSpec;
     use reth_primitives_traits::BlockBody;
@@ -197,14 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn test_consensus_creation() {
-        let chain_spec = mock_berachain_chainspec();
-        let consensus = BerachainBeaconConsensus::new(chain_spec);
-
-        assert_eq!(consensus.chain_spec.chain_id(), 1);
-    }
-
-    #[test]
+    // TODO: Move this to pol.rs as this is not a consensus tests
     fn test_pol_transaction_creation_and_validation() {
         let chain_spec = mock_berachain_chainspec();
         let pubkey = mock_bls_pubkey();
@@ -228,6 +222,7 @@ mod tests {
     }
 
     #[test]
+    // TODO: Move this to pol.rs as this is not a consensus tests
     fn test_pol_transaction_validation_wrong_pubkey() {
         let chain_spec = mock_berachain_chainspec();
         let correct_pubkey = mock_bls_pubkey();
@@ -255,6 +250,7 @@ mod tests {
     }
 
     #[test]
+    // TODO: Move this to pol.rs as this is not a consensus tests
     fn test_pol_transaction_validation_wrong_base_fee() {
         let chain_spec = mock_berachain_chainspec();
         let pubkey = mock_bls_pubkey();
@@ -282,6 +278,7 @@ mod tests {
     }
 
     #[test]
+    // TODO: Move this to pol.rs as this is not a consensus tests
     fn test_pol_transaction_validation_wrong_block_number() {
         let chain_spec = mock_berachain_chainspec();
         let pubkey = mock_bls_pubkey();
@@ -309,6 +306,7 @@ mod tests {
     }
 
     #[test]
+    // TODO: Move this to pol.rs as this is not a consensus tests
     fn test_pol_transaction_deterministic_hashes() {
         let chain_spec = mock_berachain_chainspec();
         let pubkey = mock_bls_pubkey();
@@ -341,7 +339,7 @@ mod tests {
     #[test]
     fn test_pre_prague1_pol_transaction_rejected() {
         use crate::primitives::BerachainBlockBody;
-        use alloy_primitives::{B256, BlockHash};
+        use alloy_primitives::BlockHash;
         use reth_primitives_traits::{SealedBlock, SealedHeader};
 
         let chain_spec = mock_berachain_chainspec();
@@ -375,9 +373,7 @@ mod tests {
         header.number = block_number.to::<u64>();
         header.timestamp = 0; // Pre-Prague1 timestamp
         header.base_fee_per_gas = Some(base_fee);
-        header.ommers_hash =
-            B256::from_hex("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
-                .unwrap();
+        header.ommers_hash = EMPTY_OMMER_ROOT_HASH;
         header.transactions_root = block_body.calculate_tx_root();
 
         let sealed_header = SealedHeader::new(header, BlockHash::ZERO);
