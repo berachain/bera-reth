@@ -90,6 +90,7 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             return Ok(());
         }
 
+        // This panic should never occur due to the above validation
         let prev_proposer_pubkey = self.ctx.prev_proposer_pubkey.unwrap();
 
         // Use shared POL transaction creation logic

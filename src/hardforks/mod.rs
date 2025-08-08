@@ -5,7 +5,7 @@ use reth::chainspec::{EthereumHardforks, ForkCondition, hardfork};
 hardfork!(
     /// Berachain hardforks to be mixed with [`EthereumHardfork`]
     BerachainHardfork {
-        /// Prague1 hardfork: Enforces 1 gwei minimum base fee
+        /// Prague1 hardfork: Introduces BRIP-0002 and BRIP-0004
         Prague1,
     }
 );
