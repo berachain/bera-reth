@@ -177,7 +177,6 @@ impl HeaderValidator<BerachainHeader> for BerachainBeaconConsensus {
 mod tests {
     use super::*;
     use crate::{
-        chainspec::BerachainChainSpec,
         primitives::{BerachainBlockBody, BerachainHeader, header::BlsPublicKey},
         transaction::{BerachainTxEnvelope, pol::create_pol_transaction},
     };
@@ -185,16 +184,8 @@ mod tests {
     use alloy_eips::eip4895::Withdrawals;
     use alloy_primitives::{Address, BlockHash, TxKind, U256};
     use reth_primitives_traits::{BlockBody, SealedBlock, SealedHeader};
-    use std::sync::Arc;
 
-    fn mock_berachain_chainspec() -> Arc<BerachainChainSpec> {
-        use alloy_genesis::Genesis;
-        use reth_cli::chainspec::parse_genesis;
-
-        let genesis_json = include_str!("../../tests/fixtures/bepolia-genesis.json");
-        let genesis = parse_genesis(genesis_json).expect("Failed to parse bepolia genesis");
-        Arc::new(BerachainChainSpec::from(genesis))
-    }
+    use crate::test_utils::bepolia_chainspec;
 
     fn mock_bls_pubkey() -> BlsPublicKey {
         BlsPublicKey::from([1u8; 48])
@@ -202,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_pre_prague1_pol_transaction_rejected() {
-        let chain_spec = mock_berachain_chainspec();
+        let chain_spec = bepolia_chainspec();
         let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
         let pubkey = mock_bls_pubkey();
         let block_number = U256::from(10);
@@ -255,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_pre_prague1_normal_transactions_accepted() {
-        let chain_spec = mock_berachain_chainspec();
+        let chain_spec = bepolia_chainspec();
         let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
 
         // Verify Prague1 activation timestamp for context
