@@ -87,7 +87,12 @@ mod tests {
     use std::sync::Arc;
 
     fn mock_berachain_chainspec() -> Arc<BerachainChainSpec> {
-        crate::test::bepolia_chainspec()
+        use alloy_genesis::Genesis;
+        use reth_cli::chainspec::parse_genesis;
+
+        let genesis_json = include_str!("../../tests/fixtures/bepolia-genesis.json");
+        let genesis = parse_genesis(genesis_json).expect("Failed to parse bepolia genesis");
+        Arc::new(BerachainChainSpec::from(genesis))
     }
 
     fn mock_bls_pubkey() -> BlsPublicKey {

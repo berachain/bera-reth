@@ -12,6 +12,3 @@ pub mod pool;
 pub mod primitives;
 pub mod rpc;
 pub mod transaction;
-
-#[cfg(test)]
-pub mod test;

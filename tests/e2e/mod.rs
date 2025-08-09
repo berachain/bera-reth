@@ -25,7 +25,7 @@ const TEST_PRIVATE_KEY: &str = "0xfffdbb37105441e14b0ee6330d855d8504ff39e705c3af
 pub async fn setup_test_boilerplate() -> eyre::Result<(TaskManager, Arc<BerachainChainSpec>)> {
     let tasks = TaskManager::current();
 
-    let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/eth-genesis.json");
+    let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bepolia-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path).expect("Failed to read genesis file");
     let genesis = parse_genesis(&genesis_json).expect("Failed to parse genesis");
     let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
