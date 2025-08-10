@@ -72,7 +72,7 @@ async fn setup_test_with_gas_boundary_pol_contract()
 }
 
 #[tokio::test]
-async fn test_pol_gas_limit_boundary_succeeds() -> eyre::Result<()> {
+async fn test_pol_gas_limit_is_30_million() -> eyre::Result<()> {
     let (tasks, chain_spec) = setup_test_with_gas_boundary_pol_contract().await?;
     let executor = tasks.executor();
 
