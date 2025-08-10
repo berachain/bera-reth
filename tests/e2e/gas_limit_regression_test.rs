@@ -1,7 +1,9 @@
 //! Gas limit regression tests for PoL transactions
 //!
-//! These tests verify that the 30M gas limit for system calls in REVM
-//! remains compatible with PoL transaction execution.
+//! These tests verify that the 30M gas limit for system calls in REVM does not change
+//!
+//! Context: REVM hardcodes a 30M gas limit for system calls in the handler:
+//! https://github.com/bluealloy/revm/blob/f3c794b4df282d8053d60e67bca5c4a306031357/crates/handler/src/system_call.rs#L65
 
 use crate::e2e::berachain_payload_attributes_generator;
 use alloy_genesis::Genesis;
@@ -93,7 +95,7 @@ async fn test_pol_gas_limit_boundary_succeeds() -> eyre::Result<()> {
     // Verify we have transactions (should include the PoL tx)
     assert!(!transactions.is_empty(), "Block should contain at least one PoL transaction");
 
-    // Verify the first transaction is a PoL transaction and did not revert
+    // Verify the first transaction is a PoL transaction
     let first_tx = &transactions[0];
     assert!(
         matches!(first_tx, BerachainTxEnvelope::Berachain(_)),
@@ -119,25 +121,6 @@ async fn test_pol_gas_limit_boundary_succeeds() -> eyre::Result<()> {
     println!("   Block number: {}", block.number);
     println!("   Transaction count: {}", transactions.len());
     println!("   PoL transaction hash: {tx_hash:#x}");
-
-    // Log all receipt fields
-    println!("📋 Transaction Receipt Details:");
-    println!("   transaction_hash: {:#x}", receipt.transaction_hash);
-    println!("   transaction_index: {:?}", receipt.transaction_index);
-    println!("   block_hash: {:?}", receipt.block_hash.map(|h| format!("{h:#x}")));
-    println!("   block_number: {:?}", receipt.block_number);
-    println!("   gas_used: {}", receipt.gas_used);
-    println!("   cumulative_gas_used: {}", receipt.cumulative_gas_used());
-    println!("   effective_gas_price: {}", receipt.effective_gas_price);
-    println!("   from: {:#x}", receipt.from);
-    println!("   to: {:?}", receipt.to.map(|addr| format!("{addr:#x}")));
-    println!(
-        "   contract_address: {:?}",
-        receipt.contract_address.map(|addr| format!("{addr:#x}"))
-    );
-    println!("   status: {}", receipt.status());
-    println!("   logs count: {}", receipt.logs().len());
-    println!("   inner envelope: {:?}", receipt.inner);
 
     Ok(())
 }
