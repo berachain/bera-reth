@@ -88,7 +88,7 @@ async fn test_pol_gas_limit_is_30_million() -> eyre::Result<()> {
 
     let mut ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
 
-    println!("🚀 Testing PoL transaction with strict 30M gas limit validation...");
+    println!("Testing PoL transaction with strict 30M gas limit validation...");
 
     // Advance a block - this should create and execute a PoL transaction
     let payload = ctx.advance_block().await?;
