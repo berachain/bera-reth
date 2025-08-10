@@ -118,22 +118,22 @@ async fn test_pol_gas_limit_boundary_succeeds() -> eyre::Result<()> {
     println!("✅ PoL transaction with gas boundary validation executed successfully!");
     println!("   Block number: {}", block.number);
     println!("   Transaction count: {}", transactions.len());
-    println!("   PoL transaction hash: {:#x}", tx_hash);
+    println!("   PoL transaction hash: {tx_hash:#x}");
 
     // Log all receipt fields
     println!("📋 Transaction Receipt Details:");
     println!("   transaction_hash: {:#x}", receipt.transaction_hash);
     println!("   transaction_index: {:?}", receipt.transaction_index);
-    println!("   block_hash: {:?}", receipt.block_hash.map(|h| format!("{:#x}", h)));
+    println!("   block_hash: {:?}", receipt.block_hash.map(|h| format!("{h:#x}")));
     println!("   block_number: {:?}", receipt.block_number);
     println!("   gas_used: {}", receipt.gas_used);
     println!("   cumulative_gas_used: {}", receipt.cumulative_gas_used());
     println!("   effective_gas_price: {}", receipt.effective_gas_price);
     println!("   from: {:#x}", receipt.from);
-    println!("   to: {:?}", receipt.to.map(|addr| format!("{:#x}", addr)));
+    println!("   to: {:?}", receipt.to.map(|addr| format!("{addr:#x}")));
     println!(
         "   contract_address: {:?}",
-        receipt.contract_address.map(|addr| format!("{:#x}", addr))
+        receipt.contract_address.map(|addr| format!("{addr:#x}"))
     );
     println!("   status: {}", receipt.status());
     println!("   logs count: {}", receipt.logs().len());
