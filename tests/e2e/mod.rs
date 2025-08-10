@@ -41,7 +41,7 @@ pub fn test_signer() -> eyre::Result<PrivateKeySigner> {
 }
 
 /// Create Berachain payload attributes for testing
-pub fn berachain_payload_attributes(timestamp: u64) -> BerachainPayloadBuilderAttributes {
+pub fn berachain_payload_attributes_generator(timestamp: u64) -> BerachainPayloadBuilderAttributes {
     let eth_attributes = EthPayloadAttributes {
         timestamp,
         prev_randao: B256::random(),

@@ -1,6 +1,6 @@
 //! Transaction integration tests for RPC injection, mempool handling, and PoL transactions
 
-use crate::e2e::{berachain_payload_attributes, setup_test_boilerplate, test_signer};
+use crate::e2e::{berachain_payload_attributes_generator, setup_test_boilerplate, test_signer};
 use alloy_consensus::BlockHeader;
 use alloy_eips::eip7002::SYSTEM_ADDRESS;
 use alloy_primitives::{Address, ChainId};
@@ -34,7 +34,7 @@ async fn test_eip1559_transaction_via_rpc_is_accepted() -> eyre::Result<()> {
         .launch()
         .await?;
 
-    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
+    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
     let signer = test_signer()?;
     let chain_id = chain_spec.chain_id();
 
@@ -115,7 +115,7 @@ async fn test_pol_transaction_rpc_injection_fails() -> eyre::Result<()> {
         .launch()
         .await?;
 
-    let ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
+    let ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
     let chain_id = chain_spec.chain_id();
     let fake_pol_tx = create_fake_pol_tx(chain_id);
 
@@ -159,7 +159,7 @@ async fn test_pol_transaction_mempool_insertion_fails() -> eyre::Result<()> {
         .launch()
         .await?;
 
-    let ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
+    let ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
     let chain_id = chain_spec.chain_id();
     let fake_pol_tx = create_fake_pol_tx(chain_id);
 
@@ -206,7 +206,7 @@ async fn test_pol_transaction_auto_inclusion() -> eyre::Result<()> {
         .launch()
         .await?;
 
-    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
+    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
     let initial_block = ctx.rpc.inner.eth_api().provider().best_block_number()?;
 
     let payload = ctx.advance_block().await?;

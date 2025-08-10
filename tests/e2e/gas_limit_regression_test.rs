@@ -3,14 +3,15 @@
 //! These tests verify that the 30M gas limit for system calls in REVM
 //! remains compatible with PoL transaction execution.
 
-use crate::e2e::berachain_payload_attributes;
+use crate::e2e::berachain_payload_attributes_generator;
 use alloy_genesis::Genesis;
+use alloy_network::ReceiptResponse;
 use alloy_primitives::{Address, Bytes};
 use alloy_sol_macro::sol;
 use bera_reth::{
     chainspec::BerachainChainSpec, node::BerachainNode, transaction::BerachainTxEnvelope,
 };
-use reth::{providers::ReceiptProvider, tasks::TaskManager};
+use reth::{rpc::api::EthApiServer, tasks::TaskManager};
 use reth_cli::chainspec::parse_genesis;
 use reth_e2e_test_utils::node::NodeTestContext;
 use reth_node_builder::{NodeBuilder, NodeHandle};
@@ -80,7 +81,7 @@ async fn test_pol_gas_limit_boundary_succeeds() -> eyre::Result<()> {
         .launch()
         .await?;
 
-    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes).await?;
+    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
 
     println!("🚀 Testing PoL transaction with 29.9M gas contract...");
 
@@ -99,18 +100,18 @@ async fn test_pol_gas_limit_boundary_succeeds() -> eyre::Result<()> {
         "First transaction should be a PoL transaction"
     );
 
-    // Get transaction receipt to verify it didn't revert
+    // Query the transaction receipt via RPC to verify it didn't revert
     let tx_hash = *first_tx.hash();
     let receipt = ctx
         .rpc
         .inner
         .eth_api()
-        .provider()
-        .receipt(tx_hash)?
+        .transaction_receipt(tx_hash)
+        .await?
         .ok_or_else(|| eyre::eyre!("Receipt not found for PoL transaction"))?;
 
     assert!(
-        receipt.success,
+        receipt.status(),
         "PoL transaction should not have reverted. This indicates the gas boundary validation failed."
     );
 
@@ -118,7 +119,25 @@ async fn test_pol_gas_limit_boundary_succeeds() -> eyre::Result<()> {
     println!("   Block number: {}", block.number);
     println!("   Transaction count: {}", transactions.len());
     println!("   PoL transaction hash: {:#x}", tx_hash);
-    println!("   PoL transaction gas used: {}", receipt.cumulative_gas_used);
+
+    // Log all receipt fields
+    println!("📋 Transaction Receipt Details:");
+    println!("   transaction_hash: {:#x}", receipt.transaction_hash);
+    println!("   transaction_index: {:?}", receipt.transaction_index);
+    println!("   block_hash: {:?}", receipt.block_hash.map(|h| format!("{:#x}", h)));
+    println!("   block_number: {:?}", receipt.block_number);
+    println!("   gas_used: {}", receipt.gas_used);
+    println!("   cumulative_gas_used: {}", receipt.cumulative_gas_used());
+    println!("   effective_gas_price: {}", receipt.effective_gas_price);
+    println!("   from: {:#x}", receipt.from);
+    println!("   to: {:?}", receipt.to.map(|addr| format!("{:#x}", addr)));
+    println!(
+        "   contract_address: {:?}",
+        receipt.contract_address.map(|addr| format!("{:#x}", addr))
+    );
+    println!("   status: {}", receipt.status());
+    println!("   logs count: {}", receipt.logs().len());
+    println!("   inner envelope: {:?}", receipt.inner);
 
     Ok(())
 }
