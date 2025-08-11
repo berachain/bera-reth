@@ -7,7 +7,7 @@
     <img src="https://github.com/berachain/bera-reth/actions/workflows/ci.yml/badge.svg" alt="CI"/>
   </a>
   <a href="https://github.com/berachain/bera-reth">
-    <img src="https://img.shields.io/badge/status-in%20development-yellow.svg" alt="Status"/>
+    <img src="https://img.shields.io/badge/status-production-brightgreen" alt="Status"/>
   </a>
 </p>
 
@@ -16,8 +16,6 @@
 # Bera-Reth
 
 A high-performance Rust execution client for Berachain, built with the Reth SDK.
-
-> ⚠️ **Not ready for production**
 
 ## Getting Started
 
