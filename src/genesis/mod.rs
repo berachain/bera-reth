@@ -60,9 +60,9 @@ impl Default for BerachainGenesisConfig {
     fn default() -> Self {
         Self {
             prague1: BerachainForkConfig {
-                time: 0,                              // Activate immediately at genesis
-                base_fee_change_denominator: 48,      // Berachain standard value
-                minimum_base_fee_wei: 10_000_000_000, // 10 gwei
+                time: 0,                             // Activate immediately at genesis
+                base_fee_change_denominator: 48,     // Berachain standard value
+                minimum_base_fee_wei: 1_000_000_000, // 1 gwei
                 pol_distributor_address: default_pol_contract_address(),
             },
         }
