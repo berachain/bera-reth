@@ -1,7 +1,9 @@
 //! Coinbase and system state change test for PoL transactions
 //!
-//! This test verifies that the PoL distributor contract properly transfers wei
-//! to msg.sender, system address, and coinbase on each transaction.
+//! This test verifies that system calls can modify multiple accounts during execution.
+//! Before https://github.com/alloy-rs/evm/pull/121, alloy-evm system calls would only
+//! retain state changes for the target contract, not for other addresses modified during
+//! the call. This test ensures that transfers to system address and coinbase persist.
 
 use crate::e2e::{POL_DISTRIBUTOR_ADDRESS, berachain_payload_attributes_generator};
 use alloy_eips::eip7002::SYSTEM_ADDRESS;
