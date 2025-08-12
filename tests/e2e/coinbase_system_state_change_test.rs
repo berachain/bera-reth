@@ -56,7 +56,7 @@ async fn setup_test_with_state_change_contract()
         account.code = Some(new_bytecode);
         account.balance = U256::from(CONTRACT_INITIAL_BALANCE);
         println!("Replaced PoL distributor contract with state change version");
-        println!("Set contract balance to {} wei", CONTRACT_INITIAL_BALANCE);
+        println!("Set contract balance to {CONTRACT_INITIAL_BALANCE} wei");
     } else {
         return Err(eyre::eyre!(
             "PoL distributor contract not found at {} in genesis file",
