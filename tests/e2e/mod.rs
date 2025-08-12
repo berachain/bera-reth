@@ -19,6 +19,7 @@ use std::{str::FromStr, sync::Arc};
 
 pub mod coinbase_system_state_change_test;
 pub mod gas_limit_regression_test;
+pub mod pol_revert_test;
 pub mod transaction_tests;
 
 const TEST_PRIVATE_KEY: &str = "0xfffdbb37105441e14b0ee6330d855d8504ff39e705c3afa8f859ac9865f99306";
