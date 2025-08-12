@@ -398,7 +398,7 @@ mod tests {
 
         assert_eq!(
             gas_limit, 36_000_000,
-            "Berachain must use default 36M gas limit from upstream Reth configuration"
+            "Berachain expects 36M gas limit from upstream Reth configuration"
         );
     }
 }
