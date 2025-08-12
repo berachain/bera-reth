@@ -665,6 +665,39 @@ impl SignableTxRequest<BerachainTxEnvelope> for TransactionRequest {
     }
 }
 
+/// Converts signed Ethereum typed transactions to BerachainTxEnvelope for simulation API
+impl From<Signed<EthereumTypedTransaction<alloy_consensus::TxEip4844Variant>>>
+    for BerachainTxEnvelope
+{
+    fn from(
+        signed_tx: Signed<EthereumTypedTransaction<alloy_consensus::TxEip4844Variant>>,
+    ) -> Self {
+        use alloy_consensus::EthereumTypedTransaction;
+        let (tx, signature, _hash) = signed_tx.into_parts();
+        match tx {
+            EthereumTypedTransaction::Legacy(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Legacy(tx.into_signed(signature)))
+            }
+            EthereumTypedTransaction::Eip2930(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Eip2930(tx.into_signed(signature)))
+            }
+            EthereumTypedTransaction::Eip1559(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Eip1559(tx.into_signed(signature)))
+            }
+            EthereumTypedTransaction::Eip4844(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Eip4844(
+                    alloy_consensus::TxEip4844::from(tx)
+                        .into_signed(signature)
+                        .map(alloy_consensus::TxEip4844Variant::TxEip4844),
+                ))
+            }
+            EthereumTypedTransaction::Eip7702(tx) => {
+                BerachainTxEnvelope::Ethereum(TxEnvelope::Eip7702(tx.into_signed(signature)))
+            }
+        }
+    }
+}
+
 impl From<BerachainTxEnvelope> for EthereumTxEnvelope<alloy_consensus::TxEip4844Variant> {
     fn from(berachain_tx: BerachainTxEnvelope) -> Self {
         match berachain_tx {
