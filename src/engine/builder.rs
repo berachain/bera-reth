@@ -383,3 +383,22 @@ where
 
     Ok(BuildOutcome::Better { payload, cached_reads })
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test_utils::bepolia_chainspec;
+    use reth_chainspec::EthChainSpec;
+    use reth_node_core::{args::PayloadBuilderArgs, cli::config::PayloadBuilderConfig};
+
+    #[test]
+    fn test_berachain_uses_36m_gas_limit() {
+        let chain_spec = bepolia_chainspec();
+        let config = PayloadBuilderArgs::default();
+        let gas_limit = config.gas_limit_for(chain_spec.chain());
+
+        assert_eq!(
+            gas_limit, 36_000_000,
+            "Berachain expects 36M gas limit from upstream Reth configuration"
+        );
+    }
+}

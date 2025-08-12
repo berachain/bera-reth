@@ -83,7 +83,8 @@ pub fn validate_pol_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::U256;
+    use alloy_eips::eip7002::SYSTEM_ADDRESS;
+    use alloy_primitives::{U256, address};
 
     use crate::test_utils::bepolia_chainspec;
 
@@ -193,6 +194,15 @@ mod tests {
             "PoL transaction with wrong block number should fail validation"
         );
         assert!(validation_result.unwrap_err().to_string().contains("hash mismatch"));
+    }
+
+    #[test]
+    fn test_eip7002_system_address_regression() {
+        assert_eq!(
+            SYSTEM_ADDRESS,
+            address!("fffffffffffffffffffffffffffffffffffffffe"),
+            "EIP-7002 system address must be 0xfffffffffffffffffffffffffffffffffffffffe"
+        );
     }
 
     #[test]
