@@ -15,7 +15,8 @@ use crate::{
     rpc::{BerachainAddOns, BerachainEthApiBuilder},
     transaction::BerachainTxEnvelope,
 };
-use alloy_consensus::error::ValueError;
+use alloy_consensus::{SignableTransaction, error::ValueError};
+use alloy_primitives::Signature;
 use alloy_rpc_types::TransactionRequest;
 use reth::{
     api::{BlockTy, FullNodeTypes, NodeTypes},
@@ -48,8 +49,11 @@ impl NodeTypes for BerachainNode {
 
 impl TryIntoSimTx<BerachainTxEnvelope> for TransactionRequest {
     fn try_into_sim_tx(self) -> Result<BerachainTxEnvelope, ValueError<Self>> {
-        // TODO: Add support for simulation API
-        Err(ValueError::new(self, "Simulation API is not supported on bera-reth yet"))
+        let tx = self
+            .build_typed_tx()
+            .map_err(|req| ValueError::new(req, "Transaction is not buildable"))?;
+        let signature = Signature::new(Default::default(), Default::default(), false);
+        Ok(tx.into_signed(signature).into())
     }
 }
 
