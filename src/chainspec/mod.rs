@@ -305,13 +305,15 @@ impl From<Genesis> for BerachainChainSpec {
             hardforks
                 .push((EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(prague_time)));
         }
-        if let Some(osaka_time) = genesis.config.osaka_time {
-            hardforks.push((EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(osaka_time)));
-        }
+
         hardforks.push((
             BerachainHardfork::Prague1.boxed(),
             ForkCondition::Timestamp(berachain_genesis_config.prague1.time),
         ));
+
+        if let Some(osaka_time) = genesis.config.osaka_time {
+            hardforks.push((EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(osaka_time)));
+        }
 
         let paris_block_and_final_difficulty =
             Some((0, genesis.config.terminal_total_difficulty.unwrap()));
