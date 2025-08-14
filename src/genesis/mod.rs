@@ -65,8 +65,8 @@ impl Default for BerachainGenesisConfig {
 }
 
 impl BerachainGenesisConfig {
-    /// Returns true if Prague1 fork is configured and enabled
-    pub fn is_prague1_configured(&self) -> bool {
+    /// Returns true if it's a berachain genesis
+    pub fn is_berachain(&self) -> bool {
         self.prague1.is_some()
     }
 }
@@ -195,7 +195,7 @@ mod tests {
 
         // Prague1 should not be configured
         assert_eq!(cfg.prague1, None);
-        assert!(!cfg.is_prague1_configured());
+        assert!(!cfg.is_berachain());
     }
 
     #[test]

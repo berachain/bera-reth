@@ -234,8 +234,8 @@ impl From<Genesis> for BerachainChainSpec {
             }
         };
 
-        // If Prague1 is not configured, fallback to Ethereum behavior
-        if !berachain_genesis_config.is_prague1_configured() {
+        // If not a berachain genesis, fallback to Ethereum behavior
+        if !berachain_genesis_config.is_berachain() {
             tracing::warn!(
                 "Prague1 not configured in berachain genesis. Defaulting to Ethereum behaviour"
             );
