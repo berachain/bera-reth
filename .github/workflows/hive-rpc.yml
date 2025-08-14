@@ -143,7 +143,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: berachain/hive
-          ref: main
+          ref: rezbera/hive-bera-reth
           path: hivetests
 
       # bera-reth client config is already in berachain/hive fork
@@ -203,7 +203,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: berachain/hive
-          ref: main
+          ref: rezbera/hive-bera-reth
           path: hivetests
 
       - name: Run RPC compatibility tests for reth
