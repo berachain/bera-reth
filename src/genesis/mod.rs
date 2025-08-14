@@ -173,6 +173,10 @@ mod tests {
         assert_eq!(prague1_config.time, 1620000000);
         assert_eq!(prague1_config.minimum_base_fee_wei, 1000000000);
         assert_eq!(prague1_config.base_fee_change_denominator, 48);
+        assert_eq!(
+            prague1_config.pol_distributor_address,
+            address!("4200000000000000000000000000000000000042")
+        );
     }
 
     #[test]
