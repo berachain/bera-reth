@@ -212,7 +212,7 @@ impl BerachainChainSpec {
 impl From<Genesis> for BerachainChainSpec {
     /// Intentionally panics if required fields are missing from genesis or invalid.
     fn from(genesis: Genesis) -> Self {
-        let berachain_genesis_config = BerachainGenesisConfig::from_genesis(&genesis.config.extra_fields)
+        let berachain_genesis_config = BerachainGenesisConfig::try_from(&genesis.config.extra_fields)
             .unwrap_or_else(|e| {
                 panic!(
                     "Failed to parse berachain genesis config: {e}. Please ensure the genesis file contains a valid 'berachain' configuration section"

@@ -11,10 +11,6 @@ use thiserror::Error;
 /// Errors for Berachain genesis configuration parsing
 #[derive(Debug, Error)]
 pub enum BerachainConfigError {
-    /// The required 'berachain' field is missing from the genesis configuration
-    #[error("Missing required 'berachain' field in genesis configuration")]
-    MissingBerachainField,
-
     /// Invalid configuration format or values
     #[error("Invalid berachain configuration: {0}")]
     InvalidConfig(#[from] serde_json::Error),
@@ -71,47 +67,6 @@ impl BerachainGenesisConfig {
     }
 }
 
-impl BerachainGenesisConfig {
-    /// Parse BerachainGenesisConfig from genesis
-    pub fn from_genesis(others: &OtherFields) -> Result<Self, BerachainConfigError> {
-        use tracing::info;
-
-        match others.get_deserialized::<Self>("berachain") {
-            Some(Ok(cfg)) => {
-                // If prague1 is configured, validate it fully
-                if let Some(prague1_config) = cfg.prague1 {
-                    if prague1_config.base_fee_change_denominator == 0 {
-                        return Err(BerachainConfigError::InvalidDenominator);
-                    }
-                    if prague1_config.pol_distributor_address.is_zero() {
-                        return Err(BerachainConfigError::MissingPoLDistributorAddress);
-                    }
-
-                    info!(
-                        "Loaded Berachain genesis configuration: Prague1 enabled at time={}, base_fee_denominator={}, min_base_fee={} gwei, pol_distributor={}",
-                        prague1_config.time,
-                        prague1_config.base_fee_change_denominator,
-                        prague1_config.minimum_base_fee_wei / 1_000_000_000,
-                        prague1_config.pol_distributor_address
-                    );
-                } else {
-                    info!(
-                        "Loaded Berachain genesis configuration: Prague1 not configured, defaulting to Ethereum behavior"
-                    );
-                }
-
-                Ok(cfg)
-            }
-            Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
-            None => {
-                // No berachain field - return a config that indicates it's not a berachain genesis
-                info!("No berachain configuration found, defaulting to Ethereum behavior");
-                Ok(Self { prague1: None })
-            }
-        }
-    }
-}
-
 impl TryFrom<&OtherFields> for BerachainGenesisConfig {
     type Error = BerachainConfigError;
 
@@ -146,7 +101,7 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                 Ok(cfg)
             }
             Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
-            None => Err(BerachainConfigError::MissingBerachainField),
+            None => Ok(Self { prague1: None }),
         }
     }
 }
@@ -166,7 +121,7 @@ mod tests {
 
         let v: Value = serde_json::from_str(json).unwrap();
         let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
-        let cfg = BerachainGenesisConfig::from_genesis(&other_fields).expect("should succeed");
+        let cfg = BerachainGenesisConfig::try_from(&other_fields).expect("should succeed");
 
         // Should return a config that indicates it's not a berachain genesis
         assert_eq!(cfg.prague1, None);
@@ -231,7 +186,7 @@ mod tests {
         let v: Value = serde_json::from_str(json).unwrap();
         let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
 
-        let cfg = BerachainGenesisConfig::from_genesis(&other_fields).expect("should succeed");
+        let cfg = BerachainGenesisConfig::try_from(&other_fields).expect("should succeed");
 
         // Prague1 should not be configured
         assert_eq!(cfg.prague1, None);
@@ -239,8 +194,8 @@ mod tests {
     }
 
     #[test]
-    fn test_genesis_config_from_genesis_error_handling() {
-        // Test that from_genesis returns errors instead of panicking
+    fn test_genesis_config_try_from_error_handling() {
+        // Test that try_from returns errors instead of panicking
         let json = r#"
         {
           "berachain": {
@@ -256,7 +211,7 @@ mod tests {
         let v: Value = serde_json::from_str(json).unwrap();
         let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
 
-        let result = BerachainGenesisConfig::from_genesis(&other_fields);
+        let result = BerachainGenesisConfig::try_from(&other_fields);
         assert!(result.is_err());
         assert!(
             result.unwrap_err().to_string().contains("Base fee change denominator cannot be zero")
