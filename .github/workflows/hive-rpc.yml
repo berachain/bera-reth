@@ -18,48 +18,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  prepare-bera-reth:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Pull bera-reth nightly image
-        run: |
-          # Pull latest bera-reth nightly for testing
-          docker pull ghcr.io/berachain/bera-reth:nightly
-          docker tag ghcr.io/berachain/bera-reth:nightly bera-reth:latest
-
-      - name: Save bera-reth image
-        run: |
-          mkdir -p /tmp/bera-reth-artifacts
-          docker save bera-reth:latest -o /tmp/bera-reth-artifacts/bera-reth.tar
-
-      - name: Upload bera-reth image
-        uses: actions/upload-artifact@v4
-        with:
-          name: bera-reth-image
-          path: /tmp/bera-reth-artifacts/bera-reth.tar
-
-  prepare-reth-nightly:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Pull reth nightly image
-        run: |
-          # Pull latest reth nightly for comparison
-          docker pull ghcr.io/paradigmxyz/reth:nightly
-          docker tag ghcr.io/paradigmxyz/reth:nightly reth:latest
-
-      - name: Save reth image
-        run: |
-          mkdir -p /tmp/reth-artifacts
-          docker save reth:latest -o /tmp/reth-artifacts/reth.tar
-
-      - name: Upload reth image
-        uses: actions/upload-artifact@v4
-        with:
-          name: reth-image
-          path: /tmp/reth-artifacts/reth.tar
-
   prepare-hive:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -107,7 +65,7 @@ jobs:
           path: ./hive_assets/
 
   test-bera-reth:
-    needs: [ prepare-bera-reth, prepare-hive ]
+    needs: [ prepare-hive ]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -119,20 +77,11 @@ jobs:
           name: hive-assets
           path: /tmp/hive
 
-      - name: Download bera-reth image
-        uses: actions/download-artifact@v4
-        with:
-          name: bera-reth-image
-          path: /tmp/images
-
       - name: Load Docker images
         run: |
           # Load hive images
           docker load -i /tmp/hive/rpc_compat.tar
           docker load -i /tmp/hive/hiveproxy.tar
-          
-          # Load bera-reth image
-          docker load -i /tmp/images/bera-reth.tar
 
       - name: Set up hive binary
         run: |
@@ -153,6 +102,7 @@ jobs:
         run: |
           cd hivetests
           echo "Running RPC compatibility tests for bera-reth"
+          # Hive will automatically pull ghcr.io/berachain/bera-reth:nightly
           hive --sim ethereum/rpc-compat --client bera-reth
 
       - name: Save bera-reth test results
@@ -167,7 +117,7 @@ jobs:
           path: /tmp/results/bera-reth-logs
 
   test-reth-nightly:
-    needs: [ prepare-reth-nightly, prepare-hive ]
+    needs: [ prepare-hive ]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -179,20 +129,11 @@ jobs:
           name: hive-assets
           path: /tmp/hive
 
-      - name: Download reth image
-        uses: actions/download-artifact@v4
-        with:
-          name: reth-image
-          path: /tmp/images
-
       - name: Load Docker images
         run: |
           # Load hive images
           docker load -i /tmp/hive/rpc_compat.tar
           docker load -i /tmp/hive/hiveproxy.tar
-          
-          # Load reth image
-          docker load -i /tmp/images/reth.tar
 
       - name: Set up hive binary
         run: |
@@ -210,6 +151,7 @@ jobs:
         run: |
           cd hivetests
           echo "Running RPC compatibility tests for reth:nightly"
+          # Hive will automatically pull ghcr.io/paradigmxyz/reth:nightly
           hive --sim ethereum/rpc-compat --client reth
 
       - name: Save reth test results
