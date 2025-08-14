@@ -196,15 +196,14 @@ jobs:
           echo "" >> /tmp/report.md
           
           # Check if both result sets exist
-          if [ -f /tmp/bera-reth-results/*.json ] && [ -f /tmp/reth-results/*.json ]; then
+          BERA_RETH_JSON=$(find /tmp/bera-reth-results -name "*.json" ! -name "hive.json" 2>/dev/null | head -1)
+          RETH_JSON=$(find /tmp/reth-results -name "*.json" ! -name "hive.json" 2>/dev/null | head -1)
+          
+          if [ -f "$BERA_RETH_JSON" ] && [ -f "$RETH_JSON" ]; then
             echo "### Test Summary" >> /tmp/report.md
             echo "" >> /tmp/report.md
           
             # Extract test counts from JSON files
-            BERA_RETH_JSON=$(find /tmp/bera-reth-results -name "*.json" ! -name "hive.json" | head -1)
-            RETH_JSON=$(find /tmp/reth-results -name "*.json" ! -name "hive.json" | head -1)
-          
-            if [ -f "$BERA_RETH_JSON" ] && [ -f "$RETH_JSON" ]; then
               BERA_RETH_PASSED=$(jq '[.testCases[] | select(.summaryResult.pass == true)] | length' "$BERA_RETH_JSON")
               BERA_RETH_TOTAL=$(jq '.testCases | length' "$BERA_RETH_JSON")
               BERA_RETH_FAILED=$((BERA_RETH_TOTAL - BERA_RETH_PASSED))
