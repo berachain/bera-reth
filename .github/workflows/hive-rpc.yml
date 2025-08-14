@@ -5,8 +5,6 @@ name: hive-rpc
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [ main ]
   schedule:
     - cron: "0 */6 * * *"
 
