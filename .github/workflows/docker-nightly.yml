@@ -2,8 +2,8 @@ name: Docker Nightly
 
 on:
   schedule:
-    # Run at 1:00 AM UTC every day
-    - cron: "0 1 * * *"
+    # Run at 1:00 AM and 1:00 PM UTC every day (every 12 hours)
+    - cron: "0 1,13 * * *"
   workflow_dispatch:
 
 jobs:

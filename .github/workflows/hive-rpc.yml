@@ -6,7 +6,8 @@ name: hive-rpc
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *"
+    # Run 5 hours after nightly builds (1 AM + 5 hours = 6 AM, 1 PM + 5 hours = 6 PM UTC)
+    - cron: "0 6,18 * * *"
 
 env:
   CARGO_TERM_COLOR: always
@@ -282,10 +283,49 @@ jobs:
           name: comparison-report
           path: /tmp/report.md
 
-      - name: Fail if bera-reth has different test failures than reth
+      - name: Create issue on regression
+        if: env.COMPARISON_STATUS == 'failure'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `fix: hive rpc regression detected - ${date}`,
+              body: `## Hive RPC Compatibility Regression
+            
+            **Date:** ${date}
+            **Workflow Run:** ${workflowUrl}
+            
+            ### Issue
+            Automated hive tests detected that bera-reth fails different individual tests than reth:nightly. This indicates a regression or behavioral difference that needs investigation.
+            
+            ### Next Steps
+            1. Review the [workflow run details](${workflowUrl}) for specific test differences
+            2. Check which tests are failing only in bera-reth vs reth:nightly
+            3. Investigate the root cause of the behavioral differences
+            4. Fix the regression or update tests if the change is intentional
+            
+            ### Test Commands
+            To reproduce locally:
+            \`\`\`bash
+            # Test bera-reth:
+            hive --sim ethereum/rpc-compat --client bera-reth
+            
+            # Test reth:nightly:
+            hive --sim ethereum/rpc-compat --client reth
+            \`\`\`
+            
+            This issue was automatically created by the hive-rpc workflow.`,
+              labels: ['hive', 'regression']
+            });
+
+      - name: Fail workflow on regression
         if: env.COMPARISON_STATUS == 'failure'
         run: |
           echo "❌ bera-reth fails different individual tests than reth:nightly"
-          echo "This indicates a regression or behavioral difference that needs investigation"
-          echo "Check the comparison report above for details on which specific tests differ"
+          echo "GitHub issue created for tracking this regression"
           exit 1
