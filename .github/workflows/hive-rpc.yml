@@ -226,9 +226,6 @@ jobs:
               else
                 echo "🎉 **bera-reth has $((0 - DIFF_FAILED)) fewer failures than reth:nightly**" >> /tmp/report.md
               fi
-            else
-              echo "❌ Could not parse test results JSON files" >> /tmp/report.md
-            fi
           else
             echo "❌ Test results missing - check job failures above" >> /tmp/report.md
           fi
