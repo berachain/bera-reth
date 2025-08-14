@@ -47,25 +47,27 @@ pub struct BerachainForkConfig {
 #[serde(rename_all = "camelCase")]
 pub struct BerachainGenesisConfig {
     /// Configuration for the Prague1 hardfork, which introduces minimum base fee enforcement
-    pub prague1: BerachainForkConfig,
-}
-
-/// Default PoL contract address
-fn default_pol_contract_address() -> Address {
-    address!("4200000000000000000000000000000000000042")
+    pub prague1: Option<BerachainForkConfig>,
 }
 
 impl Default for BerachainGenesisConfig {
     /// Default config with Prague1 activated immediately at genesis
     fn default() -> Self {
         Self {
-            prague1: BerachainForkConfig {
+            prague1: Some(BerachainForkConfig {
                 time: 0,                             // Activate immediately at genesis
                 base_fee_change_denominator: 48,     // Berachain standard value
                 minimum_base_fee_wei: 1_000_000_000, // 1 gwei
-                pol_distributor_address: default_pol_contract_address(),
-            },
+                pol_distributor_address: address!("4200000000000000000000000000000000000042"),
+            }),
         }
+    }
+}
+
+impl BerachainGenesisConfig {
+    /// Returns true if Prague1 fork is configured and enabled
+    pub fn is_prague1_configured(&self) -> bool {
+        self.prague1.is_some()
     }
 }
 
@@ -78,21 +80,27 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
 
         match others.get_deserialized::<Self>("berachain") {
             Some(Ok(cfg)) => {
-                // Validate the parsed configuration
-                if cfg.prague1.base_fee_change_denominator == 0 {
-                    return Err(BerachainConfigError::InvalidDenominator);
-                }
-                if cfg.prague1.pol_distributor_address.is_zero() {
-                    return Err(BerachainConfigError::MissingPoLDistributorAddress);
-                }
+                // If prague1 is configured, validate it fully
+                if let Some(prague1_config) = cfg.prague1 {
+                    if prague1_config.base_fee_change_denominator == 0 {
+                        return Err(BerachainConfigError::InvalidDenominator);
+                    }
+                    if prague1_config.pol_distributor_address.is_zero() {
+                        return Err(BerachainConfigError::MissingPoLDistributorAddress);
+                    }
 
-                info!(
-                    "Loaded Berachain genesis configuration: Prague1 time={}, base_fee_denominator={}, min_base_fee={} gwei, pol_distributor={}",
-                    cfg.prague1.time,
-                    cfg.prague1.base_fee_change_denominator,
-                    cfg.prague1.minimum_base_fee_wei / 1_000_000_000,
-                    cfg.prague1.pol_distributor_address
-                );
+                    info!(
+                        "Loaded Berachain genesis configuration: Prague1 enabled at time={}, base_fee_denominator={}, min_base_fee={} gwei, pol_distributor={}",
+                        prague1_config.time,
+                        prague1_config.base_fee_change_denominator,
+                        prague1_config.minimum_base_fee_wei / 1_000_000_000,
+                        prague1_config.pol_distributor_address
+                    );
+                } else {
+                    info!(
+                        "Loaded Berachain genesis configuration: Prague1 not configured, defaulting to Ethereum behavior"
+                    );
+                }
 
                 Ok(cfg)
             }
@@ -166,9 +174,28 @@ mod tests {
         let cfg = BerachainGenesisConfig::try_from(&other_fields)
             .expect("berachain field must deserialize");
 
-        assert_eq!(cfg.prague1.time, 1620000000);
-        assert_eq!(cfg.prague1.minimum_base_fee_wei, 1000000000);
-        assert_eq!(cfg.prague1.base_fee_change_denominator, 48);
+        let prague1_config = cfg.prague1.expect("Prague1 should be configured");
+        assert_eq!(prague1_config.time, 1620000000);
+        assert_eq!(prague1_config.minimum_base_fee_wei, 1000000000);
+        assert_eq!(prague1_config.base_fee_change_denominator, 48);
+    }
+
+    #[test]
+    fn test_genesis_config_berachain_present_no_prague1() {
+        // Berachain field present but no prague1 -> should be valid with prague1 = None
+        let json = r#"
+        {
+          "berachain": {}
+        }
+        "#;
+        let v: Value = serde_json::from_str(json).unwrap();
+        let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
+
+        let cfg = BerachainGenesisConfig::try_from(&other_fields).expect("should be valid");
+
+        // Prague1 should not be configured
+        assert_eq!(cfg.prague1, None);
+        assert!(!cfg.is_prague1_configured());
     }
 
     #[test]
