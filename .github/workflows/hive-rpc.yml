@@ -218,9 +218,9 @@ jobs:
               echo "| reth:nightly | $RETH_PASSED | $RETH_FAILED | $RETH_TOTAL |" >> /tmp/report.md
               echo "" >> /tmp/report.md
           
-              # Extract lists of failed test names
-              jq -r '.testCases[] | select(.summaryResult.pass == false) | .name' "$BERA_RETH_JSON" | sort > /tmp/bera_reth_failed.txt
-              jq -r '.testCases[] | select(.summaryResult.pass == false) | .name' "$RETH_JSON" | sort > /tmp/reth_failed.txt
+              # Extract lists of failed test names (strip client suffix)
+              jq -r '.testCases[] | select(.summaryResult.pass == false) | .name' "$BERA_RETH_JSON" | sed 's/ (bera-reth)$//' | sort > /tmp/bera_reth_failed.txt
+              jq -r '.testCases[] | select(.summaryResult.pass == false) | .name' "$RETH_JSON" | sed 's/ (reth)$//' | sort > /tmp/reth_failed.txt
               
               # Compare the lists of failed tests
               if cmp -s /tmp/bera_reth_failed.txt /tmp/reth_failed.txt; then
