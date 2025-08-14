@@ -36,6 +36,7 @@ pub struct BerachainHeader {
     /// of each transaction in the transactions list portion of the block.
     pub receipts_root: B256,
     /// The Keccak 256-bit hash of the withdrawals list portion of this block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub withdrawals_root: Option<B256>,
     /// The Bloom filter composed from indexable information (logger address and log topics)
     /// contained in each log entry from the receipt of each transaction in the transactions list.
