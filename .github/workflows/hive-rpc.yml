@@ -1,0 +1,308 @@
+# Runs hive RPC compatibility tests for bera-reth
+# Runs every 6 hours and compares results to reth:nightly
+
+name: hive-rpc
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  prepare-bera-reth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Pull bera-reth nightly image
+        run: |
+          # Pull latest bera-reth nightly for testing
+          docker pull ghcr.io/berachain/bera-reth:nightly
+          docker tag ghcr.io/berachain/bera-reth:nightly bera-reth:latest
+
+      - name: Save bera-reth image
+        run: |
+          mkdir -p /tmp/bera-reth-artifacts
+          docker save bera-reth:latest -o /tmp/bera-reth-artifacts/bera-reth.tar
+
+      - name: Upload bera-reth image
+        uses: actions/upload-artifact@v4
+        with:
+          name: bera-reth-image
+          path: /tmp/bera-reth-artifacts/bera-reth.tar
+
+  prepare-reth-nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Pull reth nightly image
+        run: |
+          # Pull latest reth nightly for comparison
+          docker pull ghcr.io/paradigmxyz/reth:nightly
+          docker tag ghcr.io/paradigmxyz/reth:nightly reth:latest
+
+      - name: Save reth image
+        run: |
+          mkdir -p /tmp/reth-artifacts
+          docker save reth:latest -o /tmp/reth-artifacts/reth.tar
+
+      - name: Upload reth image
+        uses: actions/upload-artifact@v4
+        with:
+          name: reth-image
+          path: /tmp/reth-artifacts/reth.tar
+
+  prepare-hive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout hive tests
+        uses: actions/checkout@v4
+        with:
+          repository: berachain/hive
+          ref: main
+          path: hivetests
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "^1.21"
+      - run: go version
+
+      - name: Create hive assets directory
+        run: mkdir -p hive_assets/
+
+      - name: Build hive binary and simulators
+        run: |
+          cd hivetests
+          go build .
+          
+          # Build RPC compatibility simulator images
+          echo "Building RPC compatibility simulator"
+          ./hive --sim "ethereum/rpc-compat" --sim.timelimit 1s || true
+
+      - name: Save hive assets
+        run: |
+          cd hivetests
+          # Save hive binary
+          mv ./hive ../hive_assets/
+          
+          # Save simulator images
+          docker save hive/simulators/ethereum/rpc-compat:latest -o ../hive_assets/rpc_compat.tar
+          docker save hive/hiveproxy:latest -o ../hive_assets/hiveproxy.tar
+
+      - name: Upload hive assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: hive-assets
+          path: ./hive_assets/
+
+  test-bera-reth:
+    needs: [prepare-bera-reth, prepare-hive]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download hive assets
+        uses: actions/download-artifact@v4
+        with:
+          name: hive-assets
+          path: /tmp/hive
+
+      - name: Download bera-reth image
+        uses: actions/download-artifact@v4
+        with:
+          name: bera-reth-image
+          path: /tmp/images
+
+      - name: Load Docker images
+        run: |
+          # Load hive images
+          docker load -i /tmp/hive/rpc_compat.tar
+          docker load -i /tmp/hive/hiveproxy.tar
+          
+          # Load bera-reth image
+          docker load -i /tmp/images/bera-reth.tar
+
+      - name: Set up hive binary
+        run: |
+          mv /tmp/hive/hive /usr/local/bin/hive
+          chmod +x /usr/local/bin/hive
+
+      - name: Checkout hive tests
+        uses: actions/checkout@v4
+        with:
+          repository: berachain/hive
+          ref: main
+          path: hivetests
+
+      # bera-reth client config is already in berachain/hive fork
+      # No need to copy configuration
+
+      - name: Run RPC compatibility tests for bera-reth
+        run: |
+          cd hivetests
+          echo "Running RPC compatibility tests for bera-reth"
+          hive --sim ethereum/rpc-compat --client bera-reth
+
+      - name: Save bera-reth test results
+        run: |
+          mkdir -p /tmp/results
+          cp -r hivetests/workspace/logs /tmp/results/bera-reth-logs
+
+      - name: Upload bera-reth results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bera-reth-results
+          path: /tmp/results/bera-reth-logs
+
+  test-reth-nightly:
+    needs: [prepare-reth-nightly, prepare-hive]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download hive assets
+        uses: actions/download-artifact@v4
+        with:
+          name: hive-assets
+          path: /tmp/hive
+
+      - name: Download reth image
+        uses: actions/download-artifact@v4
+        with:
+          name: reth-image
+          path: /tmp/images
+
+      - name: Load Docker images
+        run: |
+          # Load hive images
+          docker load -i /tmp/hive/rpc_compat.tar
+          docker load -i /tmp/hive/hiveproxy.tar
+          
+          # Load reth image
+          docker load -i /tmp/images/reth.tar
+
+      - name: Set up hive binary
+        run: |
+          mv /tmp/hive/hive /usr/local/bin/hive
+          chmod +x /usr/local/bin/hive
+
+      - name: Checkout hive tests
+        uses: actions/checkout@v4
+        with:
+          repository: berachain/hive
+          ref: main
+          path: hivetests
+
+      - name: Run RPC compatibility tests for reth
+        run: |
+          cd hivetests
+          echo "Running RPC compatibility tests for reth:nightly"
+          hive --sim ethereum/rpc-compat --client reth
+
+      - name: Save reth test results
+        run: |
+          mkdir -p /tmp/results
+          cp -r hivetests/workspace/logs /tmp/results/reth-logs
+
+      - name: Upload reth results
+        uses: actions/upload-artifact@v4
+        with:
+          name: reth-results
+          path: /tmp/results/reth-logs
+
+  compare-results:
+    needs: [test-bera-reth, test-reth-nightly]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download bera-reth results
+        uses: actions/download-artifact@v4
+        with:
+          name: bera-reth-results
+          path: /tmp/bera-reth-results
+        continue-on-error: true
+
+      - name: Download reth results
+        uses: actions/download-artifact@v4
+        with:
+          name: reth-results
+          path: /tmp/reth-results
+        continue-on-error: true
+
+      - name: Generate comparison report
+        run: |
+          echo "## Hive RPC Compatibility Test Results" >> /tmp/report.md
+          echo "" >> /tmp/report.md
+          echo "**Run Date:** $(date -u)" >> /tmp/report.md
+          echo "" >> /tmp/report.md
+          
+          # Check if both result sets exist
+          if [ -f /tmp/bera-reth-results/*.json ] && [ -f /tmp/reth-results/*.json ]; then
+            echo "### Test Summary" >> /tmp/report.md
+            echo "" >> /tmp/report.md
+            
+            # Extract test counts from JSON files
+            BERA_RETH_JSON=$(find /tmp/bera-reth-results -name "*.json" ! -name "hive.json" | head -1)
+            RETH_JSON=$(find /tmp/reth-results -name "*.json" ! -name "hive.json" | head -1)
+            
+            if [ -f "$BERA_RETH_JSON" ] && [ -f "$RETH_JSON" ]; then
+              BERA_RETH_PASSED=$(jq '[.testCases[] | select(.summaryResult.pass == true)] | length' "$BERA_RETH_JSON")
+              BERA_RETH_TOTAL=$(jq '.testCases | length' "$BERA_RETH_JSON")
+              BERA_RETH_FAILED=$((BERA_RETH_TOTAL - BERA_RETH_PASSED))
+              
+              RETH_PASSED=$(jq '[.testCases[] | select(.summaryResult.pass == true)] | length' "$RETH_JSON")
+              RETH_TOTAL=$(jq '.testCases | length' "$RETH_JSON")
+              RETH_FAILED=$((RETH_TOTAL - RETH_PASSED))
+              
+              echo "| Client | Passed | Failed | Total |" >> /tmp/report.md
+              echo "|--------|--------|--------|-------|" >> /tmp/report.md
+              echo "| bera-reth | $BERA_RETH_PASSED | $BERA_RETH_FAILED | $BERA_RETH_TOTAL |" >> /tmp/report.md
+              echo "| reth:nightly | $RETH_PASSED | $RETH_FAILED | $RETH_TOTAL |" >> /tmp/report.md
+              echo "" >> /tmp/report.md
+              
+              DIFF_FAILED=$((BERA_RETH_FAILED - RETH_FAILED))
+              if [ $DIFF_FAILED -eq 0 ]; then
+                echo "✅ **bera-reth has the same number of failures as reth:nightly**" >> /tmp/report.md
+              elif [ $DIFF_FAILED -gt 0 ]; then
+                echo "❌ **bera-reth has $DIFF_FAILED more failures than reth:nightly**" >> /tmp/report.md
+              else
+                echo "🎉 **bera-reth has $((0 - DIFF_FAILED)) fewer failures than reth:nightly**" >> /tmp/report.md
+              fi
+            else
+              echo "❌ Could not parse test results JSON files" >> /tmp/report.md
+            fi
+          else
+            echo "❌ Test results missing - check job failures above" >> /tmp/report.md
+          fi
+          
+          echo "" >> /tmp/report.md
+          echo "### Artifacts" >> /tmp/report.md
+          echo "- bera-reth test logs: Available as 'bera-reth-results' artifact" >> /tmp/report.md
+          echo "- reth:nightly test logs: Available as 'reth-results' artifact" >> /tmp/report.md
+          echo "" >> /tmp/report.md
+          echo "### Workflow Run" >> /tmp/report.md
+          echo "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> /tmp/report.md
+
+      - name: Display comparison report
+        run: |
+          echo "=== HIVE RPC COMPATIBILITY COMPARISON ==="
+          cat /tmp/report.md
+
+      - name: Upload comparison report
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparison-report
+          path: /tmp/report.md
