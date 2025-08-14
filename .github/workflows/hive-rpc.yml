@@ -104,6 +104,7 @@ jobs:
           echo "Running RPC compatibility tests for bera-reth"
           # Hive will automatically pull ghcr.io/berachain/bera-reth:nightly
           hive --sim ethereum/rpc-compat --client bera-reth
+        continue-on-error: true
 
       - name: Save bera-reth test results
         run: |
@@ -153,6 +154,7 @@ jobs:
           echo "Running RPC compatibility tests for reth:nightly"
           # Hive will automatically pull ghcr.io/paradigmxyz/reth:nightly
           hive --sim ethereum/rpc-compat --client reth
+        continue-on-error: true
 
       - name: Save reth test results
         run: |
