@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: berachain/hive
-          ref: rezbera/hive-bera-reth
+          ref: master
           path: hivetests
 
       - uses: actions/setup-go@v5
@@ -92,7 +92,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: berachain/hive
-          ref: rezbera/hive-bera-reth
+          ref: master
           path: hivetests
 
       # bera-reth client config is already in berachain/hive fork
@@ -145,7 +145,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: berachain/hive
-          ref: rezbera/hive-bera-reth
+          ref: master
           path: hivetests
 
       - name: Run RPC compatibility tests for reth
@@ -221,10 +221,13 @@ jobs:
               DIFF_FAILED=$((BERA_RETH_FAILED - RETH_FAILED))
               if [ $DIFF_FAILED -eq 0 ]; then
                 echo "✅ **bera-reth has the same number of failures as reth:nightly**" >> /tmp/report.md
+                echo "COMPARISON_STATUS=success" >> $GITHUB_ENV
               elif [ $DIFF_FAILED -gt 0 ]; then
                 echo "❌ **bera-reth has $DIFF_FAILED more failures than reth:nightly**" >> /tmp/report.md
+                echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
               else
-                echo "🎉 **bera-reth has $((0 - DIFF_FAILED)) fewer failures than reth:nightly**" >> /tmp/report.md
+                echo "❌ **bera-reth has $((0 - DIFF_FAILED)) fewer failures than reth:nightly**" >> /tmp/report.md
+                echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
               fi
           else
             echo "❌ Test results missing - check job failures above" >> /tmp/report.md
@@ -242,9 +245,25 @@ jobs:
         run: |
           echo "=== HIVE RPC COMPATIBILITY COMPARISON ==="
           cat /tmp/report.md
+          echo ""
+          echo "=== LOCAL TESTING COMMANDS ==="
+          echo "To test this locally, run these commands from your hive directory:"
+          echo ""
+          echo "# Test bera-reth:"
+          echo "hive --sim ethereum/rpc-compat --client bera-reth"
+          echo ""
+          echo "# Test reth:nightly:"
+          echo "hive --sim ethereum/rpc-compat --client reth"
 
       - name: Upload comparison report
         uses: actions/upload-artifact@v4
         with:
           name: comparison-report
           path: /tmp/report.md
+
+      - name: Fail if bera-reth has different failures than reth
+        if: env.COMPARISON_STATUS == 'failure'
+        run: |
+          echo "❌ bera-reth has a different number of failures than reth:nightly"
+          echo "This indicates a regression or behavioral difference that needs investigation"
+          exit 1
