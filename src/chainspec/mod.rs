@@ -212,39 +212,21 @@ impl BerachainChainSpec {
 impl From<Genesis> for BerachainChainSpec {
     /// Intentionally panics if required fields are missing from genesis or invalid.
     fn from(genesis: Genesis) -> Self {
-        let berachain_genesis_config = match BerachainGenesisConfig::try_from(
-            &genesis.config.extra_fields,
-        ) {
-            Ok(config) => config,
-            Err(e) => {
-                use crate::genesis::BerachainConfigError;
-                match e {
-                    BerachainConfigError::MissingBerachainField => {
-                        tracing::warn!(
-                            "No berachain configuration found in genesis. Defaulting to Ethereum behaviour"
-                        );
-                        return Self::ethereum_fallback(genesis);
-                    }
-                    _ => {
-                        panic!(
-                            "Failed to parse berachain genesis config: {e}. Please ensure the genesis file contains a valid 'berachain' configuration section"
-                        );
-                    }
-                }
-            }
-        };
+        let berachain_genesis_config = BerachainGenesisConfig::from_genesis(&genesis.config.extra_fields)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to parse berachain genesis config: {e}. Please ensure the genesis file contains a valid 'berachain' configuration section"
+                );
+            });
 
         // If not a berachain genesis, fallback to Ethereum behavior
         if !berachain_genesis_config.is_berachain() {
-            tracing::warn!(
-                "Prague1 not configured in berachain genesis. Defaulting to Ethereum behaviour"
-            );
             return Self::ethereum_fallback(genesis);
         }
 
         let prague1_config = berachain_genesis_config
             .prague1
-            .expect("Prague1 should be Some since is_prague1_enabled() was true");
+            .expect("Prague1 should be Some since is_berachain() was true");
 
         // Berachain networks must start with Cancun at genesis
         if genesis.config.cancun_time != Some(0) {
