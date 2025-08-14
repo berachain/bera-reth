@@ -15,7 +15,7 @@ FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 
 # Use dev profile for faster builds (Cargo's debug profile)
-ARG BUILD_PROFILE=dev
+ARG BUILD_PROFILE=release
 ENV BUILD_PROFILE=$BUILD_PROFILE
 
 # Builds dependencies with debug profile (faster linking, keeps symbols)
@@ -25,8 +25,8 @@ RUN cargo chef cook --profile $BUILD_PROFILE --recipe-path recipe.json
 COPY . .
 RUN cargo build --profile $BUILD_PROFILE --locked --bin bera-reth
 
-# Copy binary from debug directory (dev profile builds to debug dir)
-RUN cp /app/target/debug/bera-reth /app/bera-reth
+# Copy binary from debug directory (release profile builds to release dir)
+RUN cp /app/target/release/bera-reth /app/bera-reth
 
 # Use Ubuntu as the release image
 FROM ubuntu:24.04 AS runtime
@@ -48,6 +48,6 @@ EXPOSE 30303 30303/udp 9001 8545 8546 8551
 
 # Set environment to show we're in debug mode
 ENV RUST_LOG=debug
-ENV BUILD_TYPE=debug
+ENV BUILD_TYPE=release
 
 ENTRYPOINT ["/usr/local/bin/bera-reth"]
