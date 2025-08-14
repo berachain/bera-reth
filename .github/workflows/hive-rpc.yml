@@ -203,7 +203,7 @@ jobs:
             echo "### Test Summary" >> /tmp/report.md
             echo "" >> /tmp/report.md
           
-            # Extract test counts from JSON files
+            # Extract test counts and failed test lists from JSON files
               BERA_RETH_PASSED=$(jq '[.testCases[] | select(.summaryResult.pass == true)] | length' "$BERA_RETH_JSON")
               BERA_RETH_TOTAL=$(jq '.testCases | length' "$BERA_RETH_JSON")
               BERA_RETH_FAILED=$((BERA_RETH_TOTAL - BERA_RETH_PASSED))
@@ -218,15 +218,38 @@ jobs:
               echo "| reth:nightly | $RETH_PASSED | $RETH_FAILED | $RETH_TOTAL |" >> /tmp/report.md
               echo "" >> /tmp/report.md
           
-              DIFF_FAILED=$((BERA_RETH_FAILED - RETH_FAILED))
-              if [ $DIFF_FAILED -eq 0 ]; then
-                echo "✅ **bera-reth has the same number of failures as reth:nightly**" >> /tmp/report.md
+              # Extract lists of failed test names
+              jq -r '.testCases[] | select(.summaryResult.pass == false) | .name' "$BERA_RETH_JSON" | sort > /tmp/bera_reth_failed.txt
+              jq -r '.testCases[] | select(.summaryResult.pass == false) | .name' "$RETH_JSON" | sort > /tmp/reth_failed.txt
+              
+              # Compare the lists of failed tests
+              if cmp -s /tmp/bera_reth_failed.txt /tmp/reth_failed.txt; then
+                echo "✅ **bera-reth fails the exact same tests as reth:nightly**" >> /tmp/report.md
                 echo "COMPARISON_STATUS=success" >> $GITHUB_ENV
-              elif [ $DIFF_FAILED -gt 0 ]; then
-                echo "❌ **bera-reth has $DIFF_FAILED more failures than reth:nightly**" >> /tmp/report.md
-                echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
               else
-                echo "❌ **bera-reth has $((0 - DIFF_FAILED)) fewer failures than reth:nightly**" >> /tmp/report.md
+                echo "❌ **bera-reth fails different tests than reth:nightly**" >> /tmp/report.md
+                echo "" >> /tmp/report.md
+                
+                # Show which tests fail only in bera-reth
+                BERA_ONLY=$(comm -23 /tmp/bera_reth_failed.txt /tmp/reth_failed.txt)
+                if [ -n "$BERA_ONLY" ]; then
+                  echo "**Tests failing only in bera-reth:**" >> /tmp/report.md
+                  echo '```' >> /tmp/report.md
+                  echo "$BERA_ONLY" >> /tmp/report.md
+                  echo '```' >> /tmp/report.md
+                  echo "" >> /tmp/report.md
+                fi
+                
+                # Show which tests fail only in reth
+                RETH_ONLY=$(comm -13 /tmp/bera_reth_failed.txt /tmp/reth_failed.txt)
+                if [ -n "$RETH_ONLY" ]; then
+                  echo "**Tests failing only in reth:nightly:**" >> /tmp/report.md
+                  echo '```' >> /tmp/report.md
+                  echo "$RETH_ONLY" >> /tmp/report.md
+                  echo '```' >> /tmp/report.md
+                  echo "" >> /tmp/report.md
+                fi
+                
                 echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
               fi
           else
@@ -261,9 +284,10 @@ jobs:
           name: comparison-report
           path: /tmp/report.md
 
-      - name: Fail if bera-reth has different failures than reth
+      - name: Fail if bera-reth has different test failures than reth
         if: env.COMPARISON_STATUS == 'failure'
         run: |
-          echo "❌ bera-reth has a different number of failures than reth:nightly"
+          echo "❌ bera-reth fails different individual tests than reth:nightly"
           echo "This indicates a regression or behavioral difference that needs investigation"
+          echo "Check the comparison report above for details on which specific tests differ"
           exit 1
