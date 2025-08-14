@@ -226,7 +226,7 @@ jobs:
   compare-results:
     needs: [ test-bera-reth, test-reth-nightly ]
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && !cancelled()
     steps:
       - uses: actions/checkout@v4
 
