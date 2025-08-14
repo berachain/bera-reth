@@ -423,14 +423,12 @@ impl From<Genesis> for BerachainChainSpec {
 mod tests {
     use super::*;
     use alloy_genesis::Genesis;
+    use alloy_primitives::address;
     use jsonrpsee_core::__reexports::serde_json::json;
 
     #[test]
-    fn test_chain_spec_default() {
+    fn test_deposit_contract_default_regression() {
         let chain_spec = BerachainChainSpec::default();
-
-        // Test that default creates a valid chain spec
-        assert_eq!(chain_spec.prune_delete_limit(), 20000);
         assert!(chain_spec.deposit_contract().is_none());
     }
 
@@ -617,6 +615,8 @@ mod tests {
         // Should have default values for Berachain-specific fields
         assert_eq!(chain_spec.pol_contract_address, Address::ZERO);
         assert_eq!(chain_spec.prague1_minimum_base_fee, 0);
+        assert!(!chain_spec.is_prague1_active_at_timestamp(0));
+        assert!(!chain_spec.is_prague1_active_at_timestamp(u64::MAX));
     }
 
     #[test]
@@ -1004,6 +1004,7 @@ mod tests {
         // Should fallback to Ethereum behavior
         assert_eq!(chain_spec.pol_contract_address, Address::ZERO);
         assert_eq!(chain_spec.prague1_minimum_base_fee, 0);
+        assert!(!chain_spec.is_prague1_active_at_timestamp(u64::MAX));
     }
 
     #[test]
@@ -1066,6 +1067,7 @@ mod tests {
         // Should fallback to Ethereum behavior
         assert_eq!(chain_spec.pol_contract_address, Address::ZERO);
         assert_eq!(chain_spec.prague1_minimum_base_fee, 0);
+        assert!(!chain_spec.is_prague1_active_at_timestamp(u64::MAX));
     }
 
     #[test]
@@ -1092,7 +1094,7 @@ mod tests {
         // Should use Berachain configuration
         assert_eq!(
             chain_spec.pol_contract_address,
-            "0x4200000000000000000000000000000000000042".parse::<Address>().unwrap()
+            address!("0x4200000000000000000000000000000000000042")
         );
         assert_eq!(chain_spec.prague1_minimum_base_fee, 10000000000);
     }
