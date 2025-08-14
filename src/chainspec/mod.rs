@@ -274,8 +274,8 @@ impl From<Genesis> for BerachainChainSpec {
         }
 
         // Validate Prague1 comes after Prague if both are configured
-        match (genesis.config.prague_time, Some(prague1_config.time)) {
-            (Some(prague_time), Some(prague1_time)) if prague1_time < prague_time => {
+        match (genesis.config.prague_time, prague1_config.time) {
+            (Some(prague_time), prague1_time) if prague1_time < prague_time => {
                 panic!(
                     "Prague1 hardfork must activate at or after Prague hardfork. Prague time: {prague_time}, Prague1 time: {prague1_time}. Check that Prague1 time is not malformed (should be a valid Unix timestamp).",
                 );
