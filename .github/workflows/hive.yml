@@ -1,7 +1,7 @@
 # Runs hive compatibility tests for bera-reth
 # Tests multiple simulators in parallel and compares results to reth:nightly
 
-name: hive-rpc
+name: hive
 
 on:
   workflow_dispatch:
