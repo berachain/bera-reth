@@ -1,7 +1,7 @@
-# Runs hive sync compatibility tests for bera-reth
-# Runs every 12 hours and compares results to reth:nightly
+# Runs hive compatibility tests for bera-reth
+# Tests multiple simulators in parallel and compares results to reth:nightly
 
-name: hive-sync
+name: hive
 
 on:
   workflow_dispatch:
@@ -17,9 +17,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  hive-sync-comparison:
+  prepare-hive:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
+    outputs:
+      simulators: ${{ steps.build-simulators.outputs.simulators }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,21 +36,66 @@ jobs:
         with:
           go-version: "^1.21"
 
-      - name: Build hive binary and simulators
+      - name: Build hive binary and cache simulators
+        id: build-simulators
         run: |
           cd hivetests
           go build .
           
-          # Build sync simulator images
-          echo "Building sync simulator"
+          # Build all simulator images we'll need
+          echo "Building RPC compatibility simulator"
+          ./hive --sim "ethereum/rpc-compat" --sim.timelimit 1s || true
+          
+          echo "Building sync simulator" 
           ./hive --sim "ethereum/sync" --sim.timelimit 1s || true
+          
+          # Create list of built simulators for matrix
+          echo "simulators=[\"ethereum/rpc-compat\", \"ethereum/sync\"]" >> $GITHUB_OUTPUT
 
-      - name: Run sync compatibility tests for both clients
+      - name: Save hive workspace
+        run: |
+          mkdir -p /tmp/hive-assets
+          tar -czf /tmp/hive-assets/hive-binary.tar.gz -C hivetests .
+
+      - name: Upload hive assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: hive-assets
+          path: /tmp/hive-assets
+
+  test:
+    needs: prepare-hive
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - sim: ethereum/rpc-compat
+            name: rpc-compat
+          - sim: ethereum/sync
+            name: sync
+    name: hive ${{ matrix.scenario.name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download hive assets
+        uses: actions/download-artifact@v4
+        with:
+          name: hive-assets
+          path: /tmp/hive-assets
+
+      - name: Extract hive workspace
+        run: |
+          mkdir -p hivetests
+          tar -xzf /tmp/hive-assets/hive-binary.tar.gz -C hivetests
+
+      - name: Run ${{ matrix.scenario.sim }} tests for both clients
         run: |
           cd hivetests
-          echo "Running sync compatibility tests for bera-reth and reth:nightly"
+          echo "Running ${{ matrix.scenario.sim }} tests for bera-reth and reth:nightly"
           # Test both clients in a single run for direct comparison
-          ./hive --sim ethereum/sync --client bera-reth,reth
+          ./hive --sim ${{ matrix.scenario.sim }} --client bera-reth,reth
         continue-on-error: true
 
       - name: Save test results
@@ -59,7 +106,7 @@ jobs:
       - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
-          name: hive-results
+          name: hive-results-${{ matrix.scenario.name }}
           path: /tmp/results/hive-logs
 
       - name: Compare test results using standalone script
@@ -71,20 +118,21 @@ jobs:
           set -e
           
           # Display the comparison output
-          echo "=== HIVE SYNC COMPATIBILITY COMPARISON ==="
+          echo "=== HIVE ${{ matrix.scenario.name }} COMPATIBILITY COMPARISON ==="
           cat /tmp/comparison_output.txt
           
           # Create markdown report from script output
-          echo "## Hive Sync Compatibility Test Results" > /tmp/report.md
+          echo "## Hive ${{ matrix.scenario.name }} Compatibility Test Results" > /tmp/report.md
           echo "" >> /tmp/report.md
           echo "**Run Date:** $(date -u)" >> /tmp/report.md
+          echo "**Simulator:** ${{ matrix.scenario.sim }}" >> /tmp/report.md
           echo "" >> /tmp/report.md
           echo '```' >> /tmp/report.md
           cat /tmp/comparison_output.txt >> /tmp/report.md
           echo '```' >> /tmp/report.md
           echo "" >> /tmp/report.md
           echo "### Artifacts" >> /tmp/report.md
-          echo "- Combined test logs: Available as 'hive-results' artifact" >> /tmp/report.md
+          echo "- Test logs: Available as 'hive-results-${{ matrix.scenario.name }}' artifact" >> /tmp/report.md
           echo "" >> /tmp/report.md
           echo "### Workflow Run" >> /tmp/report.md
           echo "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> /tmp/report.md
@@ -99,7 +147,7 @@ jobs:
       - name: Upload comparison report
         uses: actions/upload-artifact@v4
         with:
-          name: comparison-report
+          name: comparison-report-${{ matrix.scenario.name }}
           path: /tmp/report.md
 
       - name: Create issue on regression
@@ -109,22 +157,25 @@ jobs:
           script: |
             const date = new Date().toISOString().split('T')[0];
             const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const simulator = '${{ matrix.scenario.sim }}';
+            const name = '${{ matrix.scenario.name }}';
             
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `fix: hive sync regression detected - ${date}`,
-              body: `## Hive Sync Compatibility Regression
+              title: `fix: hive ${name} regression detected - ${date}`,
+              body: `## Hive ${name} Compatibility Regression
             
             **Date:** ${date}
+            **Simulator:** ${simulator}
             **Workflow Run:** ${workflowUrl}
             
             ### Issue
-            Automated hive tests detected that bera-reth fails different individual sync tests than reth:nightly. This indicates a regression or behavioral difference that needs investigation.
+            Automated hive tests detected that bera-reth fails different individual ${name} tests than reth:nightly. This indicates a regression or behavioral difference that needs investigation.
             
             ### Next Steps
             1. Review the [workflow run details](${workflowUrl}) for specific test differences
-            2. Check which sync tests are failing only in bera-reth vs reth:nightly
+            2. Check which ${name} tests are failing only in bera-reth vs reth:nightly
             3. Investigate the root cause of the behavioral differences
             4. Fix the regression or update tests if the change is intentional
             
@@ -132,16 +183,16 @@ jobs:
             To reproduce locally:
             \`\`\`bash
             # Test both clients simultaneously:
-            hive --sim ethereum/sync --client bera-reth,reth
+            hive --sim ${simulator} --client bera-reth,reth
             \`\`\`
             
-            This issue was automatically created by the hive-sync workflow.`,
+            This issue was automatically created by the hive workflow.`,
               labels: ['hive', 'regression']
             });
 
-      - name: Fail workflow on regression
+      - name: Fail job on regression
         if: env.COMPARISON_STATUS == 'failure'
         run: |
-          echo "❌ bera-reth fails different sync tests than reth:nightly"
+          echo "❌ bera-reth fails different ${{ matrix.scenario.name }} tests than reth:nightly"
           echo "GitHub issue created for tracking this regression"
           exit 1
