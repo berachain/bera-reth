@@ -97,16 +97,16 @@ jobs:
             
             # Compare the lists of failed tests
             if cmp -s /tmp/bera_reth_failed.txt /tmp/reth_failed.txt; then
-              echo "✅ **bera-reth fails the exact same tests as reth:nightly**" >> /tmp/report.md
+              echo "✅ **bera-reth:nightly fails the exact same tests as reth:nightly**" >> /tmp/report.md
               echo "COMPARISON_STATUS=success" >> $GITHUB_ENV
             else
-              echo "❌ **bera-reth fails different tests than reth:nightly**" >> /tmp/report.md
+              echo "❌ **bera-reth:nightly fails different tests than reth:nightly**" >> /tmp/report.md
               echo "" >> /tmp/report.md
               
               # Show which tests fail only in bera-reth
               BERA_ONLY=$(comm -23 /tmp/bera_reth_failed.txt /tmp/reth_failed.txt)
               if [ -n "$BERA_ONLY" ]; then
-                echo "**Tests failing only in bera-reth:**" >> /tmp/report.md
+                echo "**Tests failing only in bera-reth:nightly:**" >> /tmp/report.md
                 echo '```' >> /tmp/report.md
                 echo "$BERA_ONLY" >> /tmp/report.md
                 echo '```' >> /tmp/report.md
