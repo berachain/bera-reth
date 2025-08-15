@@ -96,17 +96,6 @@ jobs:
             echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
           fi
 
-      - name: Display comparison report
-        run: |
-          echo "=== HIVE RPC COMPATIBILITY COMPARISON ==="
-          cat /tmp/report.md
-          echo ""
-          echo "=== LOCAL TESTING COMMANDS ==="
-          echo "To test this locally, run this command from your hive directory:"
-          echo ""
-          echo "# Test both clients simultaneously:"
-          echo "hive --sim ethereum/rpc-compat --client bera-reth,reth"
-
       - name: Upload comparison report
         uses: actions/upload-artifact@v4
         with:
