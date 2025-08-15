@@ -1,5 +1,5 @@
 # Runs hive RPC compatibility tests for bera-reth
-# Runs every 6 hours and compares results to reth:nightly
+# Runs every 12 hours and compares results to reth:nightly
 
 name: hive-rpc
 
@@ -17,9 +17,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  prepare-hive:
+  hive-rpc-comparison:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -33,10 +33,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "^1.21"
-      - run: go version
-
-      - name: Create hive assets directory
-        run: mkdir -p hive_assets/
 
       - name: Build hive binary and simulators
         run: |
@@ -47,145 +43,24 @@ jobs:
           echo "Building RPC compatibility simulator"
           ./hive --sim "ethereum/rpc-compat" --sim.timelimit 1s || true
 
-      - name: Save hive assets
+      - name: Run RPC compatibility tests for both clients
         run: |
           cd hivetests
-          # Save hive binary
-          mv ./hive ../hive_assets/
-          
-          # Save simulator images
-          docker save hive/simulators/ethereum/rpc-compat:latest -o ../hive_assets/rpc_compat.tar
-          docker save hive/hiveproxy:latest -o ../hive_assets/hiveproxy.tar
-
-      - name: Upload hive assets
-        uses: actions/upload-artifact@v4
-        with:
-          name: hive-assets
-          path: ./hive_assets/
-
-  test-bera-reth:
-    needs: [ prepare-hive ]
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download hive assets
-        uses: actions/download-artifact@v4
-        with:
-          name: hive-assets
-          path: /tmp/hive
-
-      - name: Load Docker images
-        run: |
-          # Load hive images
-          docker load -i /tmp/hive/rpc_compat.tar
-          docker load -i /tmp/hive/hiveproxy.tar
-
-      - name: Set up hive binary
-        run: |
-          mv /tmp/hive/hive /usr/local/bin/hive
-          chmod +x /usr/local/bin/hive
-
-      - name: Checkout hive tests
-        uses: actions/checkout@v4
-        with:
-          repository: berachain/hive
-          ref: master
-          path: hivetests
-
-      # bera-reth client config is already in berachain/hive fork
-      # No need to copy configuration
-
-      - name: Run RPC compatibility tests for bera-reth
-        run: |
-          cd hivetests
-          echo "Running RPC compatibility tests for bera-reth"
-          # Hive will automatically pull ghcr.io/berachain/bera-reth:nightly
-          hive --sim ethereum/rpc-compat --client bera-reth
+          echo "Running RPC compatibility tests for bera-reth and reth:nightly"
+          # Test both clients in a single run for direct comparison
+          ./hive --sim ethereum/rpc-compat --client bera-reth,reth
         continue-on-error: true
 
-      - name: Save bera-reth test results
+      - name: Save test results
         run: |
           mkdir -p /tmp/results
-          cp -r hivetests/workspace/logs /tmp/results/bera-reth-logs
+          cp -r hivetests/workspace/logs /tmp/results/hive-logs
 
-      - name: Upload bera-reth results
+      - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
-          name: bera-reth-results
-          path: /tmp/results/bera-reth-logs
-
-  test-reth-nightly:
-    needs: [ prepare-hive ]
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download hive assets
-        uses: actions/download-artifact@v4
-        with:
-          name: hive-assets
-          path: /tmp/hive
-
-      - name: Load Docker images
-        run: |
-          # Load hive images
-          docker load -i /tmp/hive/rpc_compat.tar
-          docker load -i /tmp/hive/hiveproxy.tar
-
-      - name: Set up hive binary
-        run: |
-          mv /tmp/hive/hive /usr/local/bin/hive
-          chmod +x /usr/local/bin/hive
-
-      - name: Checkout hive tests
-        uses: actions/checkout@v4
-        with:
-          repository: berachain/hive
-          ref: master
-          path: hivetests
-
-      - name: Run RPC compatibility tests for reth
-        run: |
-          cd hivetests
-          echo "Running RPC compatibility tests for reth:nightly"
-          # Hive will automatically pull ghcr.io/paradigmxyz/reth:nightly
-          hive --sim ethereum/rpc-compat --client reth
-        continue-on-error: true
-
-      - name: Save reth test results
-        run: |
-          mkdir -p /tmp/results
-          cp -r hivetests/workspace/logs /tmp/results/reth-logs
-
-      - name: Upload reth results
-        uses: actions/upload-artifact@v4
-        with:
-          name: reth-results
-          path: /tmp/results/reth-logs
-
-  compare-results:
-    needs: [ test-bera-reth, test-reth-nightly ]
-    runs-on: ubuntu-latest
-    if: always() && !cancelled()
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download bera-reth results
-        uses: actions/download-artifact@v4
-        with:
-          name: bera-reth-results
-          path: /tmp/bera-reth-results
-        continue-on-error: true
-
-      - name: Download reth results
-        uses: actions/download-artifact@v4
-        with:
-          name: reth-results
-          path: /tmp/reth-results
-        continue-on-error: true
+          name: hive-results
+          path: /tmp/results/hive-logs
 
       - name: Generate comparison report
         run: |
@@ -194,71 +69,70 @@ jobs:
           echo "**Run Date:** $(date -u)" >> /tmp/report.md
           echo "" >> /tmp/report.md
           
-          # Check if both result sets exist
-          BERA_RETH_JSON=$(find /tmp/bera-reth-results -name "*.json" ! -name "hive.json" 2>/dev/null | head -1)
-          RETH_JSON=$(find /tmp/reth-results -name "*.json" ! -name "hive.json" 2>/dev/null | head -1)
+          # Find the combined results JSON file
+          RESULTS_JSON=$(find /tmp/results/hive-logs -name "*.json" ! -name "hive.json" 2>/dev/null | head -1)
           
-          if [ -f "$BERA_RETH_JSON" ] && [ -f "$RETH_JSON" ]; then
+          if [ -f "$RESULTS_JSON" ]; then
             echo "### Test Summary" >> /tmp/report.md
             echo "" >> /tmp/report.md
           
-            # Extract test counts and failed test lists from JSON files
-              BERA_RETH_PASSED=$(jq '[.testCases[] | select(.summaryResult.pass == true)] | length' "$BERA_RETH_JSON")
-              BERA_RETH_TOTAL=$(jq '.testCases | length' "$BERA_RETH_JSON")
-              BERA_RETH_FAILED=$((BERA_RETH_TOTAL - BERA_RETH_PASSED))
+            # Extract test counts for each client
+            BERA_RETH_PASSED=$(jq '[.testCases[] | select(.name | contains("(bera-reth)")) | select(.summaryResult.pass == true)] | length' "$RESULTS_JSON")
+            BERA_RETH_TOTAL=$(jq '[.testCases[] | select(.name | contains("(bera-reth)"))] | length' "$RESULTS_JSON")
+            BERA_RETH_FAILED=$((BERA_RETH_TOTAL - BERA_RETH_PASSED))
           
-              RETH_PASSED=$(jq '[.testCases[] | select(.summaryResult.pass == true)] | length' "$RETH_JSON")
-              RETH_TOTAL=$(jq '.testCases | length' "$RETH_JSON")
-              RETH_FAILED=$((RETH_TOTAL - RETH_PASSED))
+            RETH_PASSED=$(jq '[.testCases[] | select(.name | contains("(reth)")) | select(.summaryResult.pass == true)] | length' "$RESULTS_JSON")
+            RETH_TOTAL=$(jq '[.testCases[] | select(.name | contains("(reth)"))] | length' "$RESULTS_JSON")
+            RETH_FAILED=$((RETH_TOTAL - RETH_PASSED))
           
-              echo "| Client | Passed | Failed | Total |" >> /tmp/report.md
-              echo "|--------|--------|--------|-------|" >> /tmp/report.md
-              echo "| bera-reth | $BERA_RETH_PASSED | $BERA_RETH_FAILED | $BERA_RETH_TOTAL |" >> /tmp/report.md
-              echo "| reth:nightly | $RETH_PASSED | $RETH_FAILED | $RETH_TOTAL |" >> /tmp/report.md
+            echo "| Client | Passed | Failed | Total |" >> /tmp/report.md
+            echo "|--------|--------|--------|-------|" >> /tmp/report.md
+            echo "| bera-reth | $BERA_RETH_PASSED | $BERA_RETH_FAILED | $BERA_RETH_TOTAL |" >> /tmp/report.md
+            echo "| reth:nightly | $RETH_PASSED | $RETH_FAILED | $RETH_TOTAL |" >> /tmp/report.md
+            echo "" >> /tmp/report.md
+          
+            # Extract lists of failed test names (strip client suffix)
+            jq -r '.testCases[] | select(.name | contains("(bera-reth)")) | select(.summaryResult.pass == false) | .name' "$RESULTS_JSON" | sed 's/ (bera-reth)$//' | sort > /tmp/bera_reth_failed.txt
+            jq -r '.testCases[] | select(.name | contains("(reth)")) | select(.summaryResult.pass == false) | .name' "$RESULTS_JSON" | sed 's/ (reth)$//' | sort > /tmp/reth_failed.txt
+            
+            # Compare the lists of failed tests
+            if cmp -s /tmp/bera_reth_failed.txt /tmp/reth_failed.txt; then
+              echo "✅ **bera-reth fails the exact same tests as reth:nightly**" >> /tmp/report.md
+              echo "COMPARISON_STATUS=success" >> $GITHUB_ENV
+            else
+              echo "❌ **bera-reth fails different tests than reth:nightly**" >> /tmp/report.md
               echo "" >> /tmp/report.md
-          
-              # Extract lists of failed test names (strip client suffix)
-              jq -r '.testCases[] | select(.summaryResult.pass == false) | .name' "$BERA_RETH_JSON" | sed 's/ (bera-reth)$//' | sort > /tmp/bera_reth_failed.txt
-              jq -r '.testCases[] | select(.summaryResult.pass == false) | .name' "$RETH_JSON" | sed 's/ (reth)$//' | sort > /tmp/reth_failed.txt
               
-              # Compare the lists of failed tests
-              if cmp -s /tmp/bera_reth_failed.txt /tmp/reth_failed.txt; then
-                echo "✅ **bera-reth fails the exact same tests as reth:nightly**" >> /tmp/report.md
-                echo "COMPARISON_STATUS=success" >> $GITHUB_ENV
-              else
-                echo "❌ **bera-reth fails different tests than reth:nightly**" >> /tmp/report.md
+              # Show which tests fail only in bera-reth
+              BERA_ONLY=$(comm -23 /tmp/bera_reth_failed.txt /tmp/reth_failed.txt)
+              if [ -n "$BERA_ONLY" ]; then
+                echo "**Tests failing only in bera-reth:**" >> /tmp/report.md
+                echo '```' >> /tmp/report.md
+                echo "$BERA_ONLY" >> /tmp/report.md
+                echo '```' >> /tmp/report.md
                 echo "" >> /tmp/report.md
-                
-                # Show which tests fail only in bera-reth
-                BERA_ONLY=$(comm -23 /tmp/bera_reth_failed.txt /tmp/reth_failed.txt)
-                if [ -n "$BERA_ONLY" ]; then
-                  echo "**Tests failing only in bera-reth:**" >> /tmp/report.md
-                  echo '```' >> /tmp/report.md
-                  echo "$BERA_ONLY" >> /tmp/report.md
-                  echo '```' >> /tmp/report.md
-                  echo "" >> /tmp/report.md
-                fi
-                
-                # Show which tests fail only in reth
-                RETH_ONLY=$(comm -13 /tmp/bera_reth_failed.txt /tmp/reth_failed.txt)
-                if [ -n "$RETH_ONLY" ]; then
-                  echo "**Tests failing only in reth:nightly:**" >> /tmp/report.md
-                  echo '```' >> /tmp/report.md
-                  echo "$RETH_ONLY" >> /tmp/report.md
-                  echo '```' >> /tmp/report.md
-                  echo "" >> /tmp/report.md
-                fi
-                
-                echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
               fi
+              
+              # Show which tests fail only in reth
+              RETH_ONLY=$(comm -13 /tmp/bera_reth_failed.txt /tmp/reth_failed.txt)
+              if [ -n "$RETH_ONLY" ]; then
+                echo "**Tests failing only in reth:nightly:**" >> /tmp/report.md
+                echo '```' >> /tmp/report.md
+                echo "$RETH_ONLY" >> /tmp/report.md
+                echo '```' >> /tmp/report.md
+                echo "" >> /tmp/report.md
+              fi
+              
+              echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
+            fi
           else
             echo "❌ Test results missing - check job failures above" >> /tmp/report.md
+            echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
           fi
           
           echo "" >> /tmp/report.md
           echo "### Artifacts" >> /tmp/report.md
-          echo "- bera-reth test logs: Available as 'bera-reth-results' artifact" >> /tmp/report.md
-          echo "- reth:nightly test logs: Available as 'reth-results' artifact" >> /tmp/report.md
+          echo "- Combined test logs: Available as 'hive-results' artifact" >> /tmp/report.md
           echo "" >> /tmp/report.md
           echo "### Workflow Run" >> /tmp/report.md
           echo "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> /tmp/report.md
@@ -269,13 +143,10 @@ jobs:
           cat /tmp/report.md
           echo ""
           echo "=== LOCAL TESTING COMMANDS ==="
-          echo "To test this locally, run these commands from your hive directory:"
+          echo "To test this locally, run this command from your hive directory:"
           echo ""
-          echo "# Test bera-reth:"
-          echo "hive --sim ethereum/rpc-compat --client bera-reth"
-          echo ""
-          echo "# Test reth:nightly:"
-          echo "hive --sim ethereum/rpc-compat --client reth"
+          echo "# Test both clients simultaneously:"
+          echo "hive --sim ethereum/rpc-compat --client bera-reth,reth"
 
       - name: Upload comparison report
         uses: actions/upload-artifact@v4
@@ -312,11 +183,8 @@ jobs:
             ### Test Commands
             To reproduce locally:
             \`\`\`bash
-            # Test bera-reth:
-            hive --sim ethereum/rpc-compat --client bera-reth
-            
-            # Test reth:nightly:
-            hive --sim ethereum/rpc-compat --client reth
+            # Test both clients simultaneously:
+            hive --sim ethereum/rpc-compat --client bera-reth,reth
             \`\`\`
             
             This issue was automatically created by the hive-rpc workflow.`,
