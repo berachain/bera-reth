@@ -2,9 +2,6 @@ pub mod pol;
 pub mod rpc;
 pub mod txtype;
 
-/// Transaction type identifier for Berachain POL transactions
-pub const POL_TX_TYPE: u8 = 126; // 0x7E
-
 use alloy_consensus::{
     EthereumTxEnvelope, EthereumTypedTransaction, SignableTransaction, Signed, Transaction,
     TxEip4844, TxEip4844WithSidecar, TxEnvelope, TxType,
@@ -35,6 +32,10 @@ use reth_primitives_traits::{
 };
 use reth_rpc_convert::{SignTxRequestError, SignableTxRequest};
 use std::{hash::Hash, mem::size_of};
+
+/// Transaction type identifier for Berachain POL transactions
+pub const POL_TX_TYPE: u8 = 126; // 0x7E
+pub const POL_TX_MAX_PRIORITY_FEE_PER_GAS: u128 = 0;
 
 /// Error type for transaction conversion failures
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -80,7 +81,7 @@ impl Transaction for PoLTx {
     }
 
     fn max_priority_fee_per_gas(&self) -> Option<u128> {
-        Some(self.gas_price)
+        Some(POL_TX_MAX_PRIORITY_FEE_PER_GAS)
     }
 
     fn max_fee_per_blob_gas(&self) -> Option<u128> {
