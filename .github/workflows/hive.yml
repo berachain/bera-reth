@@ -72,8 +72,10 @@ jobs:
         scenario:
           - sim: ethereum/rpc-compat
             name: rpc-compat
+            use_comparison: true
           - sim: ethereum/sync
             name: sync
+            use_comparison: false
     name: hive ${{ matrix.scenario.name }}
     runs-on: ubuntu-latest
     steps:
@@ -109,40 +111,79 @@ jobs:
           name: hive-results-${{ matrix.scenario.name }}
           path: /tmp/results/hive-logs
 
-      - name: Compare test results using standalone script
+      - name: Analyze test results
         run: |
-          # Run our dedicated comparison script
-          set +e  # Allow script to exit with non-zero (we handle it below)
-          ./scripts/compare-hive-results.sh /tmp/results/hive-logs > /tmp/comparison_output.txt 2>&1
-          COMPARISON_EXIT_CODE=$?
-          set -e
+          RESULTS_JSON=$(find /tmp/results/hive-logs -name "*.json" ! -name "hive.json" | head -1)
           
-          # Display the comparison output
-          echo "=== HIVE ${{ matrix.scenario.name }} COMPATIBILITY COMPARISON ==="
-          cat /tmp/comparison_output.txt
+          if [[ "${{ matrix.scenario.use_comparison }}" == "true" ]]; then
+            # Use comparison script to compare failure patterns
+            set +e  # Allow script to exit with non-zero (we handle it below)
+            ./scripts/compare-hive-results.sh /tmp/results/hive-logs > /tmp/comparison_output.txt 2>&1
+            COMPARISON_EXIT_CODE=$?
+            set -e
+            
+            echo "=== HIVE ${{ matrix.scenario.name }} COMPATIBILITY COMPARISON ==="
+            cat /tmp/comparison_output.txt
+            
+            # Create markdown report from script output
+            echo "## Hive ${{ matrix.scenario.name }} Compatibility Test Results" > /tmp/report.md
+            echo "" >> /tmp/report.md
+            echo "**Run Date:** $(date -u)" >> /tmp/report.md
+            echo "**Simulator:** ${{ matrix.scenario.sim }}" >> /tmp/report.md
+            echo "" >> /tmp/report.md
+            echo '```' >> /tmp/report.md
+            cat /tmp/comparison_output.txt >> /tmp/report.md
+            echo '```' >> /tmp/report.md
+            
+            if [[ $COMPARISON_EXIT_CODE -eq 0 ]]; then
+              echo "TEST_STATUS=success" >> $GITHUB_ENV
+            else
+              echo "TEST_STATUS=failure" >> $GITHUB_ENV
+            fi
+          else
+            # Simple pass/fail based on test results
+            TOTAL_TESTS=$(jq '[.testCases[]] | length' "$RESULTS_JSON")
+            FAILED_TESTS=$(jq '[.testCases[] | select(.summaryResult.pass == false)] | length' "$RESULTS_JSON")
+            PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS))
+            
+            echo "=== HIVE ${{ matrix.scenario.name }} TEST RESULTS ==="
+            echo "Total tests: $TOTAL_TESTS"
+            echo "Passed: $PASSED_TESTS"
+            echo "Failed: $FAILED_TESTS"
+            
+            # Create markdown report
+            echo "## Hive ${{ matrix.scenario.name }} Test Results" > /tmp/report.md
+            echo "" >> /tmp/report.md
+            echo "**Run Date:** $(date -u)" >> /tmp/report.md
+            echo "**Simulator:** ${{ matrix.scenario.sim }}" >> /tmp/report.md
+            echo "" >> /tmp/report.md
+            echo "- **Total tests**: $TOTAL_TESTS" >> /tmp/report.md
+            echo "- **Passed**: $PASSED_TESTS" >> /tmp/report.md
+            echo "- **Failed**: $FAILED_TESTS" >> /tmp/report.md
+            
+            if [[ $FAILED_TESTS -eq 0 ]]; then
+              echo "TEST_STATUS=success" >> $GITHUB_ENV
+              echo "" >> /tmp/report.md
+              echo "✅ All tests passed!" >> /tmp/report.md
+            else
+              echo "TEST_STATUS=failure" >> $GITHUB_ENV
+              echo "" >> /tmp/report.md
+              echo "❌ $FAILED_TESTS tests failed" >> /tmp/report.md
+              
+              # List failed tests
+              echo "" >> /tmp/report.md
+              echo "### Failed Tests" >> /tmp/report.md
+              jq -r '.testCases[] | select(.summaryResult.pass == false) | "- " + .name' "$RESULTS_JSON" >> /tmp/report.md
+            fi
+          fi
           
-          # Create markdown report from script output
-          echo "## Hive ${{ matrix.scenario.name }} Compatibility Test Results" > /tmp/report.md
-          echo "" >> /tmp/report.md
-          echo "**Run Date:** $(date -u)" >> /tmp/report.md
-          echo "**Simulator:** ${{ matrix.scenario.sim }}" >> /tmp/report.md
-          echo "" >> /tmp/report.md
-          echo '```' >> /tmp/report.md
-          cat /tmp/comparison_output.txt >> /tmp/report.md
-          echo '```' >> /tmp/report.md
+          # Add common footer
           echo "" >> /tmp/report.md
           echo "### Artifacts" >> /tmp/report.md
           echo "- Test logs: Available as 'hive-results-${{ matrix.scenario.name }}' artifact" >> /tmp/report.md
           echo "" >> /tmp/report.md
           echo "### Workflow Run" >> /tmp/report.md
           echo "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> /tmp/report.md
-          
-          # Set environment variable based on script exit code
-          if [[ $COMPARISON_EXIT_CODE -eq 0 ]]; then
-            echo "COMPARISON_STATUS=success" >> $GITHUB_ENV
-          else
-            echo "COMPARISON_STATUS=failure" >> $GITHUB_ENV
-          fi
 
       - name: Upload comparison report
         uses: actions/upload-artifact@v4
@@ -151,7 +192,7 @@ jobs:
           path: /tmp/report.md
 
       - name: Create issue on regression
-        if: env.COMPARISON_STATUS == 'failure'
+        if: env.TEST_STATUS == 'failure'
         uses: actions/github-script@v6
         with:
           script: |
@@ -160,39 +201,69 @@ jobs:
             const simulator = '${{ matrix.scenario.sim }}';
             const name = '${{ matrix.scenario.name }}';
             
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `fix: hive ${name} regression detected - ${date}`,
-              body: `## Hive ${name} Compatibility Regression
+            const useComparison = '${{ matrix.scenario.use_comparison }}' === 'true';
+            const issueType = useComparison ? 'regression' : 'failure';
+            const issueBody = useComparison ? 
+              `## Hive ${name} Compatibility Regression
             
             **Date:** ${date}
             **Simulator:** ${simulator}
             **Workflow Run:** ${workflowUrl}
             
             ### Issue
-            Automated hive tests detected that bera-reth fails different individual ${name} tests than reth:nightly. This indicates a regression or behavioral difference that needs investigation.
+            Automated hive tests detected that bera-reth fails different individual tests than reth:nightly. This indicates a regression or behavioral difference that needs investigation.
             
             ### Next Steps
             1. Review the [workflow run details](${workflowUrl}) for specific test differences
-            2. Check which ${name} tests are failing only in bera-reth vs reth:nightly
+            2. Check which tests are failing only in bera-reth vs reth:nightly
             3. Investigate the root cause of the behavioral differences
             4. Fix the regression or update tests if the change is intentional
             
             ### Test Commands
             To reproduce locally:
             \`\`\`bash
-            # Test both clients simultaneously:
             hive --sim ${simulator} --client bera-reth,reth
             \`\`\`
             
-            This issue was automatically created by the hive workflow.`,
+            This issue was automatically created by the hive workflow.` :
+              `## Hive ${name} Test Failure
+            
+            **Date:** ${date}
+            **Simulator:** ${simulator}
+            **Workflow Run:** ${workflowUrl}
+            
+            ### Issue
+            Automated hive ${name} tests are failing. This indicates a problem with bera-reth functionality that needs investigation.
+            
+            ### Next Steps
+            1. Review the [workflow run details](${workflowUrl}) for specific test failures
+            2. Check the test logs for error details
+            3. Investigate and fix the failing functionality
+            
+            ### Test Commands
+            To reproduce locally:
+            \`\`\`bash
+            hive --sim ${simulator} --client bera-reth,reth
+            \`\`\`
+            
+            This issue was automatically created by the hive workflow.`;
+
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `fix: hive ${name} ${issueType} detected - ${date}`,
+              body: issueBody,
               labels: ['hive', 'regression']
             });
 
       - name: Fail job on regression
-        if: env.COMPARISON_STATUS == 'failure'
+        if: env.TEST_STATUS == 'failure'
         run: |
-          echo "❌ bera-reth fails different ${{ matrix.scenario.name }} tests than reth:nightly"
-          echo "GitHub issue created for tracking this regression"
+          if [[ "${{ matrix.scenario.use_comparison }}" == "true" ]]; then
+            echo "❌ bera-reth fails different ${{ matrix.scenario.name }} tests than reth:nightly"
+            echo "GitHub issue created for tracking this regression"
+          else
+            echo "❌ bera-reth ${{ matrix.scenario.name }} tests failed"
+            echo "GitHub issue created for tracking this failure"
+          fi
           exit 1
