@@ -446,8 +446,9 @@ mod tests {
     #[test]
     fn test_from_genesis() {
         let mut genesis = Genesis::default();
-        genesis.config.cancun_time = Some(0); // Required for Berachain
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -505,11 +506,11 @@ mod tests {
 
     #[test]
     fn test_base_fee_params_prague1_delayed() {
-        // Create genesis with Prague1 activating at timestamp 1000
         let mut genesis = Genesis::default();
-        genesis.config.london_block = Some(0); // Enable EIP-1559
-        genesis.config.cancun_time = Some(0); // Required for Berachain
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.london_block = Some(0);
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(500);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -571,11 +572,10 @@ mod tests {
 
     #[test]
     fn test_default_prune_delete_limit_is_20000() {
-        // Test that the default prune delete limit from ..Default::default() is 20000
-        // (MAINNET_PRUNE_DELETE_LIMIT)
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
         genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
@@ -592,16 +592,8 @@ mod tests {
 
         let chain_spec = BerachainChainSpec::from(genesis);
 
-        // Verify prune delete limit defaults to 20000 (MAINNET_PRUNE_DELETE_LIMIT)
-        assert_eq!(
-            chain_spec.prune_delete_limit(),
-            20000,
-            "Default prune delete limit should be 20000 (MAINNET_PRUNE_DELETE_LIMIT)"
-        );
-        assert_eq!(
-            chain_spec.inner.prune_delete_limit, 20000,
-            "Inner ChainSpec prune delete limit should be 20000"
-        );
+        assert_eq!(chain_spec.prune_delete_limit(), 20000);
+        assert_eq!(chain_spec.inner.prune_delete_limit, 20000);
     }
 
     #[test]
@@ -647,10 +639,10 @@ mod tests {
 
     #[test]
     fn test_prague1_hardfork_activation() {
-        // Test that Prague1 hardfork is properly registered
         let mut genesis = Genesis::default();
-        genesis.config.cancun_time = Some(0); // Required for Berachain
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(1500);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -675,11 +667,11 @@ mod tests {
     #[test]
     fn test_next_block_base_fee_with_prague1() {
         let prague1_base_fee = 10_000_000_000;
-        // Create genesis with Prague1 at timestamp 1000
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0); // Required for Berachain
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(1000);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
 
         let extra_fields_json = json!({
             "berachain": {
@@ -726,6 +718,7 @@ mod tests {
     fn test_panic_on_missing_ttd() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -854,6 +847,27 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Prague1 hardfork requires Prague hardfork to be configured")]
+    fn test_panic_on_prague1_without_prague() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
     fn test_valid_prague1_after_prague() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
@@ -882,6 +896,7 @@ mod tests {
     fn test_panic_on_non_zero_ttd() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::from(1000));
         let extra_fields_json = json!({
             "berachain": {
@@ -903,6 +918,7 @@ mod tests {
     fn test_panic_on_merge_not_at_genesis() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.merge_netsplit_block = Some(5);
         let extra_fields_json = json!({
@@ -1077,9 +1093,9 @@ mod tests {
 
     #[test]
     fn test_prague1_enabled_at_genesis_valid_config() {
-        // Prague1 enabled at genesis with valid configuration
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
