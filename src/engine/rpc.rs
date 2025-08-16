@@ -509,7 +509,7 @@ where
                 )
                 .into());
             }
-            if let Some(_) = attrs.prev_proposer_pubkey() {
+            if attrs.prev_proposer_pubkey().is_some() {
                 return Err(EngineApiError::EngineObjectValidationError(
                     EngineObjectValidationError::invalid_params(
                         BerachainExecutionError::ProposerPubkeyNotAllowed,
