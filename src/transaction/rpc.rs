@@ -100,6 +100,7 @@ impl<'de> serde::Deserialize<'de> for PoLTx {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transaction::POL_TX_MAX_PRIORITY_FEE_PER_GAS;
 
     fn create_test_pol_tx() -> PoLTx {
         PoLTx {
@@ -160,7 +161,7 @@ mod tests {
         assert_eq!(rpc.gas_price, pol_tx.gas_price);
         assert_eq!(rpc.value, U256::ZERO);
         assert_eq!(rpc.max_fee_per_gas, pol_tx.gas_price);
-        assert_eq!(rpc.max_priority_fee_per_gas, 0);
+        assert_eq!(rpc.max_priority_fee_per_gas, POL_TX_MAX_PRIORITY_FEE_PER_GAS);
         assert_eq!(rpc.v, 0);
         assert_eq!(rpc.r, U256::ZERO);
         assert_eq!(rpc.s, U256::ZERO);
