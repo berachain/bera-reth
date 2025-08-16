@@ -269,6 +269,7 @@ mod tests {
     fn create_test_chainspec(prague1_time: u64) -> Arc<BerachainChainSpec> {
         let mut genesis = alloy_genesis::Genesis::default();
         genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(alloy_primitives::U256::ZERO);
 
         let extra_fields_json = serde_json::json!({
