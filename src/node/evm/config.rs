@@ -24,6 +24,8 @@ use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
 use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
 use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 
+const BERACHAIN_BLOCK_TIME_SECONDS: u64 = 2;
+
 #[derive(Debug, Clone)]
 pub struct BerachainEvmConfig {
     /// Receipt builder.
@@ -225,7 +227,7 @@ impl ConfigureEvm for BerachainEvmConfig {
 impl BuildPendingEnv<BerachainHeader> for BerachainNextBlockEnvAttributes {
     fn build_pending_env(parent: &SealedHeader<BerachainHeader>) -> Self {
         Self {
-            timestamp: parent.timestamp().saturating_add(2),
+            timestamp: parent.timestamp().saturating_add(BERACHAIN_BLOCK_TIME_SECONDS),
             suggested_fee_recipient: parent.beneficiary(),
             prev_randao: B256::random(),
             gas_limit: parent.gas_limit(),

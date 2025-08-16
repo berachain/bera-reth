@@ -1,4 +1,5 @@
 use super::PoLTx;
+use alloy_consensus::Transaction;
 use alloy_primitives::{Address, Bytes, ChainId, U256};
 use serde::{Deserialize, Serialize};
 
@@ -36,20 +37,20 @@ pub struct PoLTxRpc {
 impl From<&PoLTx> for PoLTxRpc {
     fn from(pol_tx: &PoLTx) -> Self {
         Self {
-            chain_id: pol_tx.chain_id,
+            chain_id: pol_tx.chain_id().unwrap_or_default(),
             from: pol_tx.from,
-            to: pol_tx.to,
-            nonce: pol_tx.nonce,
-            gas_limit: pol_tx.gas_limit,
-            gas_price: pol_tx.gas_price,
-            input: pol_tx.input.clone(),
-            // RPC-required fields with appropriate defaults
-            value: U256::ZERO, // PoL transactions always have zero value
-            max_fee_per_gas: pol_tx.gas_price, // Same as gas_price for PoL
-            max_priority_fee_per_gas: pol_tx.gas_price, // Same as gas_price for PoL
-            v: 0,              // No real signature for PoL
-            r: U256::ZERO,     // No real signature for PoL
-            s: U256::ZERO,     // No real signature for PoL
+            to: pol_tx.to().unwrap_or_default(),
+            nonce: pol_tx.nonce(),
+            gas_limit: pol_tx.gas_limit(),
+            gas_price: pol_tx.gas_price().unwrap_or_default(),
+            input: pol_tx.input().clone(),
+            // RPC-required fields with appropriate values
+            value: pol_tx.value(),
+            max_fee_per_gas: pol_tx.max_fee_per_gas(),
+            max_priority_fee_per_gas: pol_tx.max_priority_fee_per_gas().unwrap_or_default(),
+            v: 0,          // No real signature for PoL
+            r: U256::ZERO, // No real signature for PoL
+            s: U256::ZERO, // No real signature for PoL
         }
     }
 }
@@ -99,6 +100,7 @@ impl<'de> serde::Deserialize<'de> for PoLTx {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transaction::POL_TX_MAX_PRIORITY_FEE_PER_GAS;
 
     fn create_test_pol_tx() -> PoLTx {
         PoLTx {
@@ -159,7 +161,7 @@ mod tests {
         assert_eq!(rpc.gas_price, pol_tx.gas_price);
         assert_eq!(rpc.value, U256::ZERO);
         assert_eq!(rpc.max_fee_per_gas, pol_tx.gas_price);
-        assert_eq!(rpc.max_priority_fee_per_gas, pol_tx.gas_price);
+        assert_eq!(rpc.max_priority_fee_per_gas, POL_TX_MAX_PRIORITY_FEE_PER_GAS);
         assert_eq!(rpc.v, 0);
         assert_eq!(rpc.r, U256::ZERO);
         assert_eq!(rpc.s, U256::ZERO);

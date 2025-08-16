@@ -76,7 +76,6 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         Evm: reth_evm::Evm,
         <Evm as reth_evm::Evm>::DB: DatabaseCommit,
     {
-        use alloy_eips::eip7002::SYSTEM_ADDRESS;
         use reth::revm::DatabaseCommit;
         use reth_evm::block::StateChangeSource;
 
@@ -101,16 +100,16 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             self.evm.block().number,
             base_fee,
         )?;
-        let (calldata, pol_distributor_address) =
+        let (caller_address, calldata, pol_distributor_address) =
             if let BerachainTxEnvelope::Berachain(pol_tx) = &pol_envelope {
-                (pol_tx.input.clone(), pol_tx.to)
+                (pol_tx.from, pol_tx.input.clone(), pol_tx.to)
             } else {
                 return Err(BerachainExecutionError::InvalidPolTransactionType.into());
             };
 
         // Execute as system call (maintains zero gas cost and unlimited gas)
         match self.evm.transact_system_call(
-            SYSTEM_ADDRESS,
+            caller_address,
             pol_distributor_address,
             calldata.clone(),
         ) {
