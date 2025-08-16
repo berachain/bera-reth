@@ -4,6 +4,7 @@ use crate::{
         payload::BerachainPayloadAttributes, validate_proposer_pubkey_prague1,
     },
     hardforks::BerachainHardforks,
+    node::evm::error::BerachainExecutionError,
     primitives::header::BlsPublicKey,
 };
 use alloy_eips::{
