@@ -170,7 +170,13 @@ impl PoLTx {
             return Err(alloy_rlp::Error::UnexpectedString);
         }
 
-        Ok(Self {
+        let remaining = buf.len();
+        // Ensure payload is not shorter than indicated length
+        if header.payload_length > remaining {
+            return Err(alloy_rlp::Error::InputTooShort);
+        }
+
+        let decoded = Self {
             chain_id: ChainId::decode(buf)?,
             from: Address::decode(buf)?,
             to: Address::decode(buf)?,
@@ -178,7 +184,13 @@ impl PoLTx {
             gas_limit: u64::decode(buf)?,
             gas_price: u128::decode(buf)?,
             input: Bytes::decode(buf)?,
-        })
+        };
+
+        // Ensure indicated length matches decoded length
+        if buf.len() + header.payload_length != remaining {
+            return Err(alloy_rlp::Error::UnexpectedLength);
+        };
+        Ok(decoded)
     }
 }
 
@@ -1245,5 +1257,105 @@ mod compact_envelope_tests {
         };
         let signed = Signed::new_unhashed(tx, create_test_signature());
         EthereumTxEnvelope::Eip7702(signed)
+    }
+}
+
+#[cfg(test)]
+mod pol_tx_rlp_tests {
+    use super::*;
+    use alloy_primitives::{Bytes, ChainId, address};
+    use alloy_rlp::Header;
+
+    fn create_test_pol_tx() -> PoLTx {
+        PoLTx {
+            chain_id: ChainId::from(80084u64),
+            from: SYSTEM_ADDRESS,
+            to: address!("4200000000000000000000000000000000000042"),
+            nonce: 42,
+            gas_limit: 21000,
+            gas_price: 1000000000u128,
+            input: Bytes::from("test data"),
+        }
+    }
+
+    #[test]
+    fn test_pol_tx_rlp_encode_decode_roundtrip() {
+        let pol_tx = create_test_pol_tx();
+
+        let mut encoded = Vec::new();
+        pol_tx.rlp_encode(&mut encoded);
+
+        let mut buf = encoded.as_slice();
+        let decoded_pol_tx = PoLTx::rlp_decode(&mut buf).expect("Failed to decode PoLTx");
+
+        assert_eq!(pol_tx, decoded_pol_tx);
+    }
+
+    #[test]
+    fn test_pol_tx_rlp_encode_length() {
+        let pol_tx = create_test_pol_tx();
+
+        let mut encoded = Vec::new();
+        pol_tx.rlp_encode(&mut encoded);
+
+        assert_eq!(encoded.len(), pol_tx.rlp_encoded_length());
+    }
+
+    #[test]
+    fn test_pol_tx_rlp_decode_invalid_header() {
+        let invalid_data = vec![0x80]; // Empty RLP string, not list
+        let mut buf = invalid_data.as_slice();
+
+        let result = PoLTx::rlp_decode(&mut buf);
+        assert!(matches!(result, Err(alloy_rlp::Error::UnexpectedString)));
+    }
+
+    #[test]
+    fn test_pol_tx_rlp_decode_with_trailing_data() {
+        // Tests valid RLP parsing with extra data after the transaction.
+        // Extra data exists outside the RLP structure and should remain in buffer.
+        let pol_tx = create_test_pol_tx();
+
+        let mut encoded = Vec::new();
+        pol_tx.rlp_encode(&mut encoded);
+        encoded.extend_from_slice(&[0x42, 0x43, 0x44, 0x45]);
+
+        let mut buf = encoded.as_slice();
+        let decoded_pol_tx = PoLTx::rlp_decode(&mut buf).expect("Should decode successfully");
+
+        assert_eq!(pol_tx, decoded_pol_tx);
+        assert_eq!(buf, &[0x42, 0x43, 0x44, 0x45]);
+    }
+
+    #[test]
+    fn test_pol_tx_rlp_decode_malformed_payload() {
+        // Tests malicious RLP with garbage data inside the payload.
+        // Header claims longer length than actual fields, embedding malicious data.
+        let pol_tx = create_test_pol_tx();
+        let mut payload = Vec::new();
+        pol_tx.chain_id.encode(&mut payload);
+        pol_tx.from.encode(&mut payload);
+        pol_tx.to.encode(&mut payload);
+        pol_tx.nonce.encode(&mut payload);
+        pol_tx.gas_limit.encode(&mut payload);
+        pol_tx.gas_price.encode(&mut payload);
+        pol_tx.input.encode(&mut payload);
+        payload.extend_from_slice(&[0xFF; 10]);
+
+        let mut malformed_rlp = Vec::new();
+        Header { list: true, payload_length: payload.len() }.encode(&mut malformed_rlp);
+        malformed_rlp.extend_from_slice(&payload);
+
+        let result = PoLTx::rlp_decode(&mut malformed_rlp.as_slice());
+        assert!(matches!(result, Err(alloy_rlp::Error::UnexpectedLength)));
+    }
+
+    #[test]
+    fn test_pol_tx_rlp_decode_insufficient_buffer() {
+        let mut malformed_rlp = Vec::new();
+        Header { list: true, payload_length: 1000 }.encode(&mut malformed_rlp);
+
+        let result = PoLTx::rlp_decode(&mut malformed_rlp.as_slice());
+        assert!(matches!(result, Err(alloy_rlp::Error::InputTooShort)));
     }
 }
