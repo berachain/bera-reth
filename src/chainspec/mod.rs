@@ -476,6 +476,7 @@ mod tests {
         genesis.config.london_block = Some(0); // Enable EIP-1559
         genesis.config.cancun_time = Some(0); // Required for Berachain
         genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.prague_time = Some(0);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -547,6 +548,7 @@ mod tests {
         genesis.config.london_block = Some(0);
         genesis.config.cancun_time = Some(0); // Required for Berachain
         genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.prague_time = Some(0);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -678,6 +680,7 @@ mod tests {
         genesis.config.london_block = Some(0);
         genesis.config.cancun_time = Some(0); // Required for Berachain
         genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -967,6 +970,7 @@ mod tests {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        genesis.config.prague_time = Some(0);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
