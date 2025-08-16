@@ -501,6 +501,23 @@ where
         fork_choice_state: ForkchoiceState,
         payload_attributes: Option<EngineT::PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
+        if let Some(attrs) = &payload_attributes {
+            if self.chain_spec.is_prague1_active_at_timestamp(attrs.timestamp()) {
+                return Err(EngineApiError::EngineObjectValidationError(
+                    EngineObjectValidationError::UnsupportedFork,
+                )
+                .into());
+            }
+            if let Some(_) = attrs.prev_proposer_pubkey() {
+                return Err(EngineApiError::EngineObjectValidationError(
+                    EngineObjectValidationError::invalid_params(
+                        BerachainExecutionError::ProposerPubkeyNotAllowed,
+                    ),
+                )
+                .into());
+            }
+        }
+
         trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV3");
         Ok(self.inner.fork_choice_updated_v3_metered(fork_choice_state, payload_attributes).await?)
     }
