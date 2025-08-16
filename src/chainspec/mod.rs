@@ -280,6 +280,9 @@ impl From<Genesis> for BerachainChainSpec {
                     "Prague1 hardfork must activate at or after Prague hardfork. Prague time: {prague_time}, Prague1 time: {prague1_time}. Check that Prague1 time is not malformed (should be a valid Unix timestamp).",
                 );
             }
+            (None, _) => {
+                panic!("Prague1 hardfork requires Prague hardfork to be configured");
+            }
             _ => {}
         }
 
