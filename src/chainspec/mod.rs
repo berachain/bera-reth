@@ -475,9 +475,9 @@ mod tests {
         // Create genesis with Prague1 active at genesis (time = 0)
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0); // Enable EIP-1559
-        genesis.config.cancun_time = Some(0); // Required for Berachain
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.cancun_time = Some(0);
         genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -547,9 +547,9 @@ mod tests {
         // Test with a custom denominator value
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0); // Required for Berachain
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.cancun_time = Some(0);
         genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -601,8 +601,8 @@ mod tests {
         // Test fallback to Ethereum behavior when berachain config is missing
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0); // Required for Berachain
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO); // Required for Berachain
+        genesis.config.cancun_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         // No berachain config in extra_fields - should fallback to Ethereum behavior
 
         let chain_spec = BerachainChainSpec::from(genesis);
@@ -871,8 +871,8 @@ mod tests {
     fn test_valid_prague1_after_prague() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.prague_time = Some(1000);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
@@ -985,8 +985,8 @@ mod tests {
     fn test_next_block_base_fee_with_none_parent() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
