@@ -12,6 +12,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  issues: write
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
@@ -113,7 +117,7 @@ jobs:
 
       - name: Analyze test results
         run: |
-          RESULTS_JSON=$(find /tmp/results/hive-logs -name "*.json" ! -name "hive.json" | head -1)
+          RESULTS_JSON=$(find /tmp/results/hive-logs -name "*-*.json" | sort | tail -1)
           
           if [[ "${{ matrix.scenario.use_comparison }}" == "true" ]]; then
             # Use comparison script to compare failure patterns
