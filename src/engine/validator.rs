@@ -10,6 +10,7 @@ use crate::{
     primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives},
     transaction::BerachainTxEnvelope,
 };
+use alloy_rpc_types::engine::PayloadError;
 use reth::chainspec::EthereumHardforks;
 use reth_engine_primitives::{EngineApiValidator, PayloadValidator};
 use reth_ethereum_payload_builder::EthereumExecutionPayloadValidator;
@@ -127,14 +128,10 @@ impl PayloadValidator<BerachainEngineTypes> for BerachainEngineValidator {
 
         // Validate block hash
         if expected_hash != sealed_block.hash() {
-            return Err(NewPayloadError::Other(
-                format!(
-                    "Block hash mismatch: expected {}, got {}",
-                    expected_hash,
-                    sealed_block.hash()
-                )
-                .into(),
-            ));
+            return Err(NewPayloadError::Eth(PayloadError::BlockHash {
+                execution: sealed_block.hash(),
+                consensus: expected_hash,
+            }));
         }
 
         // Apply standard + Berachain hardfork validations
