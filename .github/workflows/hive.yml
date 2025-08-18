@@ -23,12 +23,8 @@ concurrency:
 jobs:
   prepare-hive:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    outputs:
-      simulators: ${{ steps.build-simulators.outputs.simulators }}
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-
       - name: Checkout hive tests
         uses: actions/checkout@v5
         with:
@@ -40,8 +36,12 @@ jobs:
         with:
           go-version: "^1.21"
 
-      - name: Build hive assets
-        run: .github/assets/hive/build_simulators.sh
+      - name: Build hive binary
+        run: |
+          cd hivetests
+          go build .
+          mkdir -p ../hive_assets
+          mv ./hive ../hive_assets/
 
       - name: Upload hive assets
         uses: actions/upload-artifact@v4
@@ -63,6 +63,16 @@ jobs:
             limit: discv4
           - sim: devp2p
             limit: discv5
+          - sim: ethereum/engine
+            limit: engine-exchange-capabilities
+          - sim: ethereum/engine
+            limit: engine-withdrawals
+          - sim: ethereum/engine
+            limit: engine-auth
+          - sim: ethereum/engine
+            limit: engine-api
+          - sim: ethereum/engine
+            limit: cancun
           - sim: ethereum/rpc-compat
             include:
               - eth_blockNumber
@@ -128,9 +138,6 @@ jobs:
         with:
           name: hive_assets
           path: /tmp
-
-      - name: Load Docker images
-        run: .github/assets/hive/load_images.sh
 
       - name: Move hive binary
         run: |
