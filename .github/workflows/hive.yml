@@ -27,10 +27,10 @@ jobs:
     outputs:
       simulators: ${{ steps.build-simulators.outputs.simulators }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Checkout hive tests
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: berachain/hive
           ref: master
@@ -83,7 +83,7 @@ jobs:
     name: hive ${{ matrix.scenario.name }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download hive assets
         uses: actions/download-artifact@v4
