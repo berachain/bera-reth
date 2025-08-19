@@ -198,7 +198,12 @@ impl ChainSpecParser for BerachainChainSpecParser {
 impl BerachainChainSpec {
     /// Create a BerachainChainSpec that fallbacks to Ethereum behavior
     fn ethereum_fallback(genesis: Genesis) -> Self {
-        let inner = ChainSpec::from(genesis);
+        let mut inner = ChainSpec::from(genesis);
+        // This is added to prevent hive tests from failing as bera-reth will think it's
+        // an optimism chain and fail on startup when the ChainId is 10.
+        if inner.chain.is_optimism() {
+            inner.chain = Chain::from_id_unchecked(inner.chain.id());
+        }
         let genesis_header = BerachainHeader::from(inner.genesis_header());
         Self {
             inner,
@@ -393,7 +398,7 @@ impl From<Genesis> for BerachainChainSpec {
         };
 
         let inner = ChainSpec {
-            chain: genesis.config.chain_id.into(),
+            chain: Chain::from_id_unchecked(genesis.config.chain_id),
             genesis_header: SealedHeader::new_unhashed(make_genesis_header(&genesis, &hardforks)),
             genesis: genesis.clone(),
             hardforks,
@@ -464,10 +469,7 @@ mod tests {
         let chain_spec = BerachainChainSpec::from(genesis);
 
         // Should create a valid chain spec
-        assert_eq!(
-            *chain_spec.chain().kind(),
-            reth_chainspec::ChainKind::Named(reth_chainspec::NamedChain::Mainnet)
-        );
+        assert_eq!(*chain_spec.chain().kind(), reth_chainspec::ChainKind::Id(1));
     }
 
     #[test]
@@ -1139,5 +1141,55 @@ mod tests {
         // Prague1 should be active after timestamp 1754496000
         assert!(!chain_spec.is_prague1_active_at_timestamp(1754495999));
         assert!(chain_spec.is_prague1_active_at_timestamp(1754496000));
+    }
+
+    #[test]
+    fn test_chain_uses_id_not_named() {
+        let mut genesis = Genesis::default();
+        genesis.config.chain_id = 10;
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert_eq!(chain_spec.inner.chain.id(), 10);
+        assert!(!chain_spec.inner.chain.is_optimism());
+    }
+
+    #[test]
+    fn test_ethereum_fallback_overrides_optimism_only() {
+        let mut genesis = Genesis::default();
+        genesis.config.chain_id = 10;
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert_eq!(chain_spec.inner.chain.id(), 10);
+        assert!(!chain_spec.inner.chain.is_optimism());
+    }
+
+    #[test]
+    fn test_ethereum_fallback_preserves_non_optimism_chains() {
+        let mut genesis = Genesis::default();
+        genesis.config.chain_id = 1; // Ethereum mainnet
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert_eq!(chain_spec.inner.chain.id(), 1);
+        assert!(chain_spec.inner.chain.is_ethereum());
     }
 }
