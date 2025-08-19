@@ -521,19 +521,7 @@ impl From<EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>
     fn from(
         ethereum_tx: EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>,
     ) -> Self {
-        match ethereum_tx {
-            EthereumTxEnvelope::Legacy(tx) => Self::Ethereum(EthereumTxEnvelope::Legacy(tx)),
-            EthereumTxEnvelope::Eip2930(tx) => Self::Ethereum(EthereumTxEnvelope::Eip2930(tx)),
-            EthereumTxEnvelope::Eip1559(tx) => Self::Ethereum(EthereumTxEnvelope::Eip1559(tx)),
-            EthereumTxEnvelope::Eip4844(tx) => {
-                // Convert the EIP-4844 transaction with sidecar to consensus format
-                let (tx, sig, hash) = tx.into_parts();
-                let (base_tx, _sidecar) = tx.into_parts();
-                let consensus_tx = Signed::new_unchecked(base_tx, sig, hash);
-                Self::Ethereum(EthereumTxEnvelope::Eip4844(consensus_tx))
-            }
-            EthereumTxEnvelope::Eip7702(tx) => Self::Ethereum(EthereumTxEnvelope::Eip7702(tx)),
-        }
+        Self::Ethereum(ethereum_tx.map_eip4844(|eip4844| eip4844.into()))
     }
 }
 
@@ -1068,6 +1056,73 @@ mod compact_envelope_tests {
         };
         let signed = Signed::new_unhashed(tx, create_test_signature());
         EthereumTxEnvelope::Eip7702(signed)
+    }
+}
+
+#[cfg(test)]
+mod from_impl_tests {
+    use super::*;
+    use alloy_consensus::TxEip4844WithSidecar;
+    use alloy_eips::eip4844::{Blob, BlobTransactionSidecar, Bytes48};
+
+    #[test]
+    fn test_from_ethereum_envelope_with_sidecar() {
+        let base_tx = TxEip4844 {
+            chain_id: ChainId::from(1u64),
+            nonce: 1,
+            gas_limit: 21_000,
+            max_fee_per_gas: 20_000_000_000u128,
+            max_priority_fee_per_gas: 1_000_000_000u128,
+            to: Address::from([1u8; 20]),
+            value: U256::from(100),
+            access_list: AccessList::default(),
+            blob_versioned_hashes: vec![B256::from([1u8; 32])],
+            max_fee_per_blob_gas: 10_000_000_000u128,
+            input: Bytes::new(),
+        };
+
+        let blob = Blob::try_from([0u8; 131072].as_slice()).unwrap();
+        let sidecar = BlobTransactionSidecar {
+            blobs: vec![blob],
+            commitments: vec![Bytes48::from([0u8; 48])],
+            proofs: vec![Bytes48::from([0u8; 48])],
+        };
+
+        let tx_with_sidecar = TxEip4844WithSidecar {
+            tx: base_tx.clone(),
+            sidecar: BlobTransactionSidecarVariant::from(sidecar),
+        };
+
+        let signed_tx = Signed::new_unhashed(tx_with_sidecar, create_test_signature());
+        let ethereum_envelope: EthereumTxEnvelope<
+            TxEip4844WithSidecar<BlobTransactionSidecarVariant>,
+        > = EthereumTxEnvelope::Eip4844(signed_tx);
+
+        let berachain_envelope = BerachainTxEnvelope::from(ethereum_envelope);
+
+        match berachain_envelope {
+            BerachainTxEnvelope::Ethereum(EthereumTxEnvelope::Eip4844(converted_tx)) => {
+                assert_eq!(converted_tx.tx(), &base_tx);
+            }
+            _ => panic!("Expected EIP-4844 transaction"),
+        }
+
+        let legacy_signed =
+            Signed::new_unhashed(alloy_consensus::TxLegacy::default(), create_test_signature());
+        let ethereum_envelope: EthereumTxEnvelope<
+            TxEip4844WithSidecar<BlobTransactionSidecarVariant>,
+        > = EthereumTxEnvelope::Legacy(legacy_signed);
+
+        let berachain_envelope = BerachainTxEnvelope::from(ethereum_envelope);
+
+        match berachain_envelope {
+            BerachainTxEnvelope::Ethereum(EthereumTxEnvelope::Legacy(_)) => {}
+            _ => panic!("Expected Legacy transaction"),
+        }
+    }
+
+    fn create_test_signature() -> Signature {
+        Signature::new(U256::from(1u64), U256::from(2u64), false)
     }
 }
 
