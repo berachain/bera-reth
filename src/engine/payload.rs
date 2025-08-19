@@ -10,8 +10,8 @@ use alloy_primitives::{Address, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rpc_types::engine::{
     BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
-    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadV1, ExecutionPayloadV3,
-    PayloadId,
+    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadFieldV2,
+    ExecutionPayloadV1, ExecutionPayloadV3, PayloadId,
 };
 use reth::{
     api::PayloadAttributes,
@@ -236,14 +236,25 @@ impl BerachainBuiltPayload {
 }
 
 impl From<BerachainBuiltPayload> for ExecutionPayloadV1 {
-    fn from(_value: BerachainBuiltPayload) -> Self {
-        panic!("ExecutionPayloadV1 conversion not supported for Berachain - use V3+ for Prague1")
+    fn from(value: BerachainBuiltPayload) -> Self {
+        Self::from_block_unchecked(
+            value.block().hash(),
+            &Arc::unwrap_or_clone(value.block).into_block(),
+        )
     }
 }
 
 impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV2 {
-    fn from(_value: BerachainBuiltPayload) -> Self {
-        panic!("ExecutionPayloadV2 conversion not supported for Berachain - use V3+ for Prague1")
+    fn from(value: BerachainBuiltPayload) -> Self {
+        let BerachainBuiltPayload { block, fees, .. } = value;
+
+        Self {
+            block_value: fees,
+            execution_payload: ExecutionPayloadFieldV2::from_block_unchecked(
+                block.hash(),
+                &Arc::unwrap_or_clone(block).into_block(),
+            ),
+        }
     }
 }
 

@@ -183,6 +183,7 @@ mod tests {
     use alloy_consensus::{EMPTY_OMMER_ROOT_HASH, Signed, TxLegacy, constants::EMPTY_WITHDRAWALS};
     use alloy_eips::eip4895::Withdrawals;
     use alloy_primitives::{Address, BlockHash, TxKind, U256};
+    use reth_ethereum_primitives::TransactionSigned;
     use reth_primitives_traits::{BlockBody, SealedBlock, SealedHeader};
 
     use crate::test_utils::bepolia_chainspec;
@@ -268,8 +269,7 @@ mod tests {
 
         let signature = alloy_primitives::Signature::test_signature();
         let signed_tx = Signed::new_unhashed(tx, signature);
-        let eth_tx_envelope =
-            BerachainTxEnvelope::Ethereum(alloy_consensus::TxEnvelope::Legacy(signed_tx));
+        let eth_tx_envelope = BerachainTxEnvelope::Ethereum(TransactionSigned::Legacy(signed_tx));
 
         let transactions = vec![eth_tx_envelope];
         let block_body = BerachainBlockBody {
