@@ -16,7 +16,7 @@ check_log() {
 }
 
 attempt=0
-max_attempts=5
+max_attempts=30
 
 while [ $attempt -lt $max_attempts ]; do
     run_hive
