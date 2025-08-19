@@ -197,7 +197,7 @@ jobs:
 
       - name: Create issue on regression
         if: env.TEST_STATUS == 'failure'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const date = new Date().toISOString().split('T')[0];
