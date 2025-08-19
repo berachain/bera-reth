@@ -1,56 +1,56 @@
 # Copied from reth at commit 91730cd326f6b0f975e56d8985f08a2a6c943f89
 # tracked by https://github.com/paradigmxyz/reth/issues/13879
 rpc-compat:
-  - debug_getRawBlock/get-invalid-number (reth)
-  - debug_getRawHeader/get-invalid-number (reth)
-  - debug_getRawReceipts/get-invalid-number (reth)
-  - debug_getRawReceipts/get-block-n (reth)
-  - debug_getRawTransaction/get-invalid-hash (reth)
+  - debug_getRawBlock/get-invalid-number (bera-reth)
+  - debug_getRawHeader/get-invalid-number (bera-reth)
+  - debug_getRawReceipts/get-invalid-number (bera-reth)
+  - debug_getRawReceipts/get-block-n (bera-reth)
+  - debug_getRawTransaction/get-invalid-hash (bera-reth)
 
-  - eth_getStorageAt/get-storage-invalid-key-too-large (reth)
-  - eth_getStorageAt/get-storage-invalid-key (reth)
-  - eth_getTransactionReceipt/get-access-list (reth)
-  - eth_getTransactionReceipt/get-blob-tx (reth)
-  - eth_getTransactionReceipt/get-dynamic-fee (reth)
-  - eth_getTransactionReceipt/get-legacy-contract (reth)
-  - eth_getTransactionReceipt/get-legacy-input (reth)
-  - eth_getTransactionReceipt/get-legacy-receipt (reth)
+  - eth_getStorageAt/get-storage-invalid-key-too-large (bera-reth)
+  - eth_getStorageAt/get-storage-invalid-key (bera-reth)
+  - eth_getTransactionReceipt/get-access-list (bera-reth)
+  - eth_getTransactionReceipt/get-blob-tx (bera-reth)
+  - eth_getTransactionReceipt/get-dynamic-fee (bera-reth)
+  - eth_getTransactionReceipt/get-legacy-contract (bera-reth)
+  - eth_getTransactionReceipt/get-legacy-input (bera-reth)
+  - eth_getTransactionReceipt/get-legacy-receipt (bera-reth)
 
   # after https://github.com/paradigmxyz/reth/pull/16742 we start the node in
   # syncing mode, the test expects syncing to be false on start
-  - eth_syncing/check-syncing (reth)
+  - eth_syncing/check-syncing (bera-reth)
 
 # no fix due to https://github.com/paradigmxyz/reth/issues/8732
 engine-withdrawals:
-  - Withdrawals Fork On Genesis (Paris) (reth)
-  - Withdrawals Fork on Block 1 (Paris) (reth)
-  - Withdrawals Fork on Block 2 (Paris) (reth)
-  - Withdrawals Fork on Block 3 (Paris) (reth)
-  - Withdraw to a single account (Paris) (reth)
-  - Withdraw to two accounts (Paris) (reth)
-  - Withdraw many accounts (Paris) (reth)
-  - Withdraw zero amount (Paris) (reth)
-  - Empty Withdrawals (Paris) (reth)
-  - Corrupted Block Hash Payload (INVALID) (Paris) (reth)
-  - Withdrawals Fork on Block 1 - 8 Block Re-Org NewPayload (Paris) (reth)
-  - Withdrawals Fork on Canonical Block 8 / Side Block 7 - 10 Block Re-Org (Paris) (reth)
+  - Withdrawals Fork On Genesis (Paris) (bera-reth)
+  - Withdrawals Fork on Block 1 (Paris) (bera-reth)
+  - Withdrawals Fork on Block 2 (Paris) (bera-reth)
+  - Withdrawals Fork on Block 3 (Paris) (bera-reth)
+  - Withdraw to a single account (Paris) (bera-reth)
+  - Withdraw to two accounts (Paris) (bera-reth)
+  - Withdraw many accounts (Paris) (bera-reth)
+  - Withdraw zero amount (Paris) (bera-reth)
+  - Empty Withdrawals (Paris) (bera-reth)
+  - Corrupted Block Hash Payload (INVALID) (Paris) (bera-reth)
+  - Withdrawals Fork on Block 1 - 8 Block Re-Org NewPayload (Paris) (bera-reth)
+  - Withdrawals Fork on Canonical Block 8 / Side Block 7 - 10 Block Re-Org (Paris) (bera-reth)
 
 engine-api: []
 
 # no fix due to https://github.com/paradigmxyz/reth/issues/8732
 engine-cancun:
-  - Invalid PayloadAttributes, Missing BeaconRoot, Syncing=True (Cancun) (reth)
+  - Invalid PayloadAttributes, Missing BeaconRoot, Syncing=True (Cancun) (bera-reth)
   # the test fails with older verions of the code for which it passed before, probably related to changes
   # in hive or its dependencies
-  - Blob Transaction Ordering, Multiple Clients (Cancun) (reth)
+  - Blob Transaction Ordering, Multiple Clients (Cancun) (bera-reth)
 
 sync: []
 
 # https://github.com/ethereum/hive/issues/1277
 engine-auth:
-  - "JWT Authentication: No time drift, correct secret (Paris) (reth)"
-  - "JWT Authentication: Negative time drift, within limit, correct secret (Paris) (reth)"
-  - "JWT Authentication: Positive time drift, within limit, correct secret (Paris) (reth)"
+  - "JWT Authentication: No time drift, correct secret (Paris) (bera-reth)"
+  - "JWT Authentication: Negative time drift, within limit, correct secret (Paris) (bera-reth)"
+  - "JWT Authentication: Positive time drift, within limit, correct secret (Paris) (bera-reth)"
 
 # 7702 test - no fix: it’s too expensive to check whether the storage is empty on each creation
 # 6110 related tests - may start passing when fixtures improve
