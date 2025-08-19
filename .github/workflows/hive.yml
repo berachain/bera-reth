@@ -63,6 +63,8 @@ jobs:
             limit: discv4
           - sim: devp2p
             limit: discv5
+            include:
+              - PingLargeRequestID
           - sim: ethereum/engine
             limit: engine-exchange-capabilities
           - sim: ethereum/engine
