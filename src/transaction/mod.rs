@@ -507,8 +507,8 @@ impl FromTxWithEncoded<BerachainTxEnvelope> for TxEnv {
     }
 }
 
-impl From<reth_ethereum_primitives::TransactionSigned> for BerachainTxEnvelope {
-    fn from(tx_signed: reth_ethereum_primitives::TransactionSigned) -> Self {
+impl From<TransactionSigned> for BerachainTxEnvelope {
+    fn from(tx_signed: TransactionSigned) -> Self {
         // Convert to EthereumTxEnvelope first, then wrap in BerachainTxEnvelope
         let ethereum_tx: EthereumTxEnvelope<TxEip4844> = tx_signed;
         Self::Ethereum(ethereum_tx)
