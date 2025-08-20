@@ -24,7 +24,7 @@ jobs:
   prepare-bera-reth:
     uses: ./.github/workflows/prepare-bera-reth.yml
     with:
-      image_tag: ghcr.io/berachain/bera-reth:latest
+      image_tag: ghcr.io/berachain/bera-reth:nightly
       binary_name: bera-reth
 
   prepare-hive:
