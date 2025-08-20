@@ -1,5 +1,4 @@
 # Runs hive compatibility tests for bera-reth
-# Tests multiple simulators in parallel and compares results to reth:nightly
 
 name: hive
 
@@ -24,7 +23,7 @@ jobs:
   prepare-bera-reth:
     uses: ./.github/workflows/prepare-bera-reth.yml
     with:
-      image_tag: ghcr.io/berachain/bera-reth:nightly
+      image_tag: ghcr.io/berachain/bera-reth:latest
       binary_name: bera-reth
 
   prepare-hive:
