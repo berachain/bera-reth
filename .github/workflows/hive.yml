@@ -21,9 +21,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-bera-reth:
+    uses: ./.github/workflows/prepare-bera-reth.yml
+    with:
+      image_tag: ghcr.io/berachain/bera-reth:latest
+      binary_name: bera-reth
+
   prepare-hive:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-latest-large
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - name: Checkout hive tests
@@ -47,7 +53,9 @@ jobs:
           path: ./hive_assets
 
   test:
-    needs: prepare-hive
+    needs:
+      - prepare-bera-reth  
+      - prepare-hive
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -126,7 +134,7 @@ jobs:
           - sim: ethereum/eest/consume-rlp
             limit: .*tests/frontier.*
     name: run ${{ matrix.scenario.sim }}${{ matrix.scenario.limit && format(' - {0}', matrix.scenario.limit) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-large
     steps:
       - uses: actions/checkout@v5
 
@@ -135,6 +143,15 @@ jobs:
         with:
           name: hive_assets
           path: /tmp
+
+      - name: Download bera-reth image
+        uses: actions/download-artifact@v5
+        with:
+          name: artifacts
+          path: /tmp
+
+      - name: Load Docker images
+        run: .github/assets/hive/load_images.sh
 
       - name: Move hive binary
         run: |
@@ -181,7 +198,7 @@ jobs:
   notify-on-error:
     needs: test
     if: failure()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-large
     steps:
       - name: Slack Webhook Action
         uses: rtCamp/action-slack-notify@v2
