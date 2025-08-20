@@ -1,5 +1,3 @@
-# Adapted from reth's no_sim_build.diff
-# Original: https://github.com/paradigmxyz/reth/blob/main/.github/assets/hive/no_sim_build.diff
 diff --git a/internal/libdocker/builder.go b/internal/libdocker/builder.go
 index e4bf99b6..2023f7e2 100644
 --- a/internal/libdocker/builder.go
