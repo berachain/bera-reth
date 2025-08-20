@@ -384,14 +384,12 @@ where
     ChainSpec: EthereumHardforks + BerachainHardforks + Send + Sync + 'static,
 {
     async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
-        panic!("rez: temporary panic for testing, revert me");
         trace!(target: "rpc::engine", "Serving engine_newPayloadV1");
         let berachain_payload = BerachainExecutionData::from(payload);
         Ok(self.inner.new_payload_v1_metered(berachain_payload).await?)
     }
 
     async fn new_payload_v2(&self, payload: ExecutionPayloadInputV2) -> RpcResult<PayloadStatus> {
-        panic!("rez: temporary panic for testing, revert me");
         trace!(target: "rpc::engine", "Serving engine_newPayloadV2");
         let berachain_payload = BerachainExecutionData::from(payload);
         Ok(self.inner.new_payload_v2_metered(berachain_payload).await?)
@@ -403,7 +401,6 @@ where
         versioned_hashes: Vec<B256>,
         parent_beacon_block_root: B256,
     ) -> RpcResult<PayloadStatus> {
-        panic!("rez: temporary panic for testing, revert me");
         trace!(target: "rpc::engine", "Serving engine_newPayloadV3");
         let berachain_payload = BerachainExecutionData::new(
             payload.into(),
