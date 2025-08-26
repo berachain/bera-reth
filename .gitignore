@@ -9,3 +9,8 @@ target/llvm-cov/
 # GPG keys (for release signing)
 bera-reth-gpg-key-*.asc
 bera-reth-gpg-key-*.base64
+
+# misc files
+el-peers.txt
+eth-genesis.json
+tmp
