@@ -23,9 +23,13 @@ use crate::{
     hardforks::BerachainHardforks,
     node::evm::error::BerachainExecutionError,
     primitives::header::BlsPublicKey,
+    transaction::BerachainTxEnvelope,
 };
-use alloy_eips::eip7685::{Requests, RequestsOrHash};
-use alloy_primitives::B256;
+use alloy_eips::{
+    eip7002::SYSTEM_ADDRESS,
+    eip7685::{Requests, RequestsOrHash},
+};
+use alloy_primitives::{B256, Sealed};
 use alloy_rpc_types::engine::{
     CancunPayloadFields, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadInputV2,
@@ -36,6 +40,7 @@ use reth::{
     core::primitives::SealedBlock,
 };
 use reth_payload_primitives::ExecutionPayload as ExecutionPayloadTrait;
+use std::hash::Hash;
 
 /// Berachain engine types configuration
 ///
@@ -59,8 +64,29 @@ impl PayloadTypes for BerachainEngineTypes {
         >,
     ) -> Self::ExecutionData {
         let prev_proposer_pubkey = block.prev_proposer_pubkey;
-        let (payload, sidecar) =
-            ExecutionPayload::from_block_unchecked(block.hash(), &block.into_block());
+        let block_hash = block.hash();
+
+        let mut block_data = block.into_block();
+
+        // This mutation is required because, while using debug.etherscan, the etherscan response
+        // results in the provided block having `from` as 0x0 for the PolTx, which results in
+        // Block hash miscalculations during validation.
+        block_data.body.transactions = block_data
+            .body
+            .transactions
+            .into_iter()
+            .map(|tx| match tx {
+                BerachainTxEnvelope::Berachain(sealed_pol_tx) => {
+                    let pol_tx_hash = sealed_pol_tx.hash();
+                    let mut pol_tx = sealed_pol_tx.into_inner();
+                    pol_tx.from = SYSTEM_ADDRESS;
+                    BerachainTxEnvelope::Berachain(Sealed::new_unchecked(pol_tx, pol_tx_hash))
+                }
+                other => other,
+            })
+            .collect();
+
+        let (payload, sidecar) = ExecutionPayload::from_block_unchecked(block_hash, &block_data);
         BerachainExecutionData::new(
             payload,
             BerachainExecutionPayloadSidecar {

@@ -52,7 +52,7 @@ pub enum TxConversionError {
 #[derive(Debug, Default, Clone, Hash, Eq, PartialEq, Compact)]
 pub struct PoLTx {
     pub chain_id: ChainId,
-    pub from: Address, // system address - serde skip as from is derived from recover_signer in RPC
+    pub from: Address, // system address
     pub to: Address,
     pub nonce: u64, // MUST be block_number - 1 for POL transactions per specification
     pub gas_limit: u64,
