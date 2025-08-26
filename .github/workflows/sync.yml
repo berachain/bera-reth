@@ -15,8 +15,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    name: build bera-reth
+    runs-on: ubuntu-latest-large
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rui314/setup-mold@v1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Build bera-reth
+        run: cargo build --profile maxperf
+      - name: Upload bera-reth binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: bera-reth-binary
+          path: target/maxperf/bera-reth
+
   sync:
     name: sync (${{ matrix.network.name }})
+    needs: build
     runs-on: ubuntu-latest-large
     env:
       RUST_LOG: info,sync=error
@@ -40,17 +59,17 @@ jobs:
             max_block: 1000000
     steps:
       - uses: actions/checkout@v4
-      - uses: rui314/setup-mold@v1
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Download bera-reth binary
+        uses: actions/download-artifact@v4
         with:
-          cache-on-failure: true
+          name: bera-reth-binary
+          path: target/maxperf/
+      - name: Make bera-reth executable
+        run: chmod +x target/maxperf/bera-reth
       - name: Download genesis file and trusted peers
         run: |
           curl -o eth-genesis.json ${{ matrix.network.genesis_url }}
           curl -o el-peers.txt ${{ matrix.network.peers_url }}
-      - name: Build bera-reth
-        run: cargo build --profile maxperf
       - name: Run etherscan sync
         run: |
           TRUSTED_PEERS=$(cat el-peers.txt)
