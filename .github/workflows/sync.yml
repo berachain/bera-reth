@@ -53,8 +53,8 @@ jobs:
         run: cargo build --profile maxperf
       - name: Run etherscan sync
         run: |
-          # Convert peers file to comma-separated string
-          TRUSTED_PEERS=$(cat el-peers.txt | tr '\n' ',' | sed 's/,$//')
+          TRUSTED_PEERS=$(cat el-peers.txt)
+          echo "Using trusted peers: $TRUSTED_PEERS"
           ./target/maxperf/bera-reth node \
             --chain ./eth-genesis.json \
             --datadir ./tmp \
