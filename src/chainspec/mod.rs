@@ -55,10 +55,11 @@ impl EthChainSpec for BerachainChainSpec {
     type Header = BerachainHeader;
 
     fn chain(&self) -> Chain {
-        if self.inner.chain_id() == 80094 {
-            return Chain::from(Berachain)
+        match self.inner.chain_id() {
+            id if id == (Berachain as u64) => Chain::from(Berachain),
+            id if id == (BerachainBepolia as u64) => Chain::from(BerachainBepolia),
+            _ => self.inner.chain(),
         }
-        self.inner.chain()
     }
 
     fn base_fee_params_at_block(&self, block_number: u64) -> BaseFeeParams {
