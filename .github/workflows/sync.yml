@@ -56,7 +56,7 @@ jobs:
             genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80069/eth-genesis.json
             peers_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80069/el-peers.txt
             etherscan_url: https://api.etherscan.io/v2/api?chainid=80069
-            max_block: 1000000
+            max_block: 8600000
     steps:
       - uses: actions/checkout@v4
       - name: Download bera-reth binary
@@ -105,9 +105,9 @@ jobs:
           # Stop the node
           kill $NODE_PID || true
           
-          if [ $BLOCK_DECIMAL -gt $TARGET_BLOCK ]; then
-            echo "✅ Sync test successful - block number $BLOCK_DECIMAL > $TARGET_BLOCK"
+          if [ $BLOCK_DECIMAL -ge $TARGET_BLOCK ]; then
+            echo "✅ Sync test successful - block number $BLOCK_DECIMAL >= $TARGET_BLOCK"
           else
-            echo "❌ Sync test failed - block number $BLOCK_DECIMAL <= $TARGET_BLOCK"
+            echo "❌ Sync test failed - block number $BLOCK_DECIMAL < $TARGET_BLOCK"
             exit 1
           fi 
