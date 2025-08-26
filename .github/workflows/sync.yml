@@ -62,14 +62,30 @@ jobs:
             --debug.max-block ${{ matrix.network.max_block }} \
             --debug.terminate \
             --trusted-peers "$TRUSTED_PEERS" \
-            -vvv --http --http.api eth
+            -vvv
       - name: Verify sync progress
         run: |
+          # Start node with HTTP API enabled
+          echo "Starting node with HTTP API enabled"
+          ./target/maxperf/bera-reth node \
+            --chain ./eth-genesis.json \
+            --datadir ./tmp \
+            --http --http.addr 0.0.0.0 --http.port 8545 --http.api eth,net,debug,trace \
+            -vvv &
+          NODE_PID=$!
+          echo "NODE_PID=$NODE_PID" >> $GITHUB_ENV
+          # Wait for node to be ready
+          sleep 10
+          
           # Check if we've synced beyond the target block
           BLOCK_NUMBER_HEX=$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545 | jq -r .result)
           BLOCK_DECIMAL=$(printf "%d" $BLOCK_NUMBER_HEX)
           TARGET_BLOCK=${{ matrix.network.max_block }}
           echo "Latest block number: $BLOCK_DECIMAL (hex: $BLOCK_NUMBER_HEX)"
+          
+          # Stop the node
+          kill $NODE_PID || true
+          
           if [ $BLOCK_DECIMAL -gt $TARGET_BLOCK ]; then
             echo "✅ Sync test successful - block number $BLOCK_DECIMAL > $TARGET_BLOCK"
           else
