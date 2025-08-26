@@ -111,4 +111,16 @@ jobs:
           else
             echo "❌ Sync test failed - block number $BLOCK_DECIMAL < $TARGET_BLOCK"
             exit 1
-          fi 
+          fi
+
+  notify-on-error:
+    needs: sync
+    if: failure()
+    runs-on: ubuntu-latest-large
+    steps:
+      - name: Slack Webhook Action
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_MESSAGE: "Sync test failed: https://github.com/berachain/bera-reth/actions/runs/${{ github.run_id }}"
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }} 
