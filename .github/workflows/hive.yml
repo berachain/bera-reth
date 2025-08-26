@@ -5,8 +5,8 @@ name: hive
 on:
   workflow_dispatch:
   schedule:
-    # Run 5 hours after nightly builds (1 AM + 5 hours = 6 AM, 1 PM + 5 hours = 6 PM UTC)
-    - cron: "0 6,18 * * *"
+    # Run at 1:00 AM UTC every day (same time as nightly builds)
+    - cron: "0 1 * * *"
 
 env:
   CARGO_TERM_COLOR: always
