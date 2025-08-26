@@ -16,14 +16,14 @@ use derive_more::{Constructor, Into};
 use reth::{
     chainspec::{
         BaseFeeParams, BaseFeeParamsKind, Chain, ChainHardforks, EthereumHardfork,
-        EthereumHardforks, ForkCondition, Hardfork,
+        EthereumHardforks, ForkCondition, Hardfork, NamedChain::BerachainBepolia,
     },
     primitives::SealedHeader,
     revm::primitives::{Address, B256, U256, b256},
 };
 use reth_chainspec::{
     ChainSpec, DepositContract, EthChainSpec, Hardforks, MAINNET_PRUNE_DELETE_LIMIT,
-    make_genesis_header,
+    NamedChain::Berachain, make_genesis_header,
 };
 use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
@@ -55,6 +55,9 @@ impl EthChainSpec for BerachainChainSpec {
     type Header = BerachainHeader;
 
     fn chain(&self) -> Chain {
+        if self.inner.chain_id() == 80094 {
+            return Chain::from(Berachain)
+        }
         self.inner.chain()
     }
 
