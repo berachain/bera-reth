@@ -55,6 +55,8 @@ impl EthChainSpec for BerachainChainSpec {
     type Header = BerachainHeader;
 
     fn chain(&self) -> Chain {
+        // Required for etherscan integration (--debug.etherscan) to work correctly
+        // Maps chain IDs to their corresponding NamedChain variants
         match self.inner.chain_id() {
             id if id == (Berachain as u64) => Chain::from(Berachain),
             id if id == (BerachainBepolia as u64) => Chain::from(BerachainBepolia),
