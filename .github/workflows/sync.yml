@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     name: build bera-reth
-    runs-on: gha-runner-amd64-large
+    runs-on: ubuntu-latest-large
     steps:
       - uses: actions/checkout@v4
       - uses: rui314/setup-mold@v1
@@ -36,7 +36,7 @@ jobs:
   sync:
     name: sync (${{ matrix.network.name }})
     needs: build
-    runs-on: gha-runner-amd64-large
+    runs-on: ubuntu-latest-large
     env:
       RUST_LOG: info,sync=error
       RUST_BACKTRACE: 1
@@ -51,7 +51,7 @@ jobs:
             genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80094/eth-genesis.json
             peers_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80094/el-peers.txt
             etherscan_url: https://api.etherscan.io/v2/api?chainid=80094
-            max_block: 5000000
+            max_block: 1000000
           - name: berachain-bepolia
             chain_id: 80069
             genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80069/eth-genesis.json
@@ -116,7 +116,7 @@ jobs:
   notify-on-error:
     needs: sync
     if: failure()
-    runs-on: gha-runner-amd64-large
+    runs-on: ubuntu-latest-large
     steps:
       - name: Slack Webhook Action
         uses: rtCamp/action-slack-notify@v2
