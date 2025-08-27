@@ -43,7 +43,6 @@ jobs:
       BERASCAN_API_KEY: ${{ secrets.BERASCAN_API_KEY }}
     timeout-minutes: 2880
     strategy:
-      max-parallel: 2
       matrix:
         network:
           - name: berachain
