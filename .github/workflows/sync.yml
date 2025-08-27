@@ -51,7 +51,7 @@ jobs:
             genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80094/eth-genesis.json
             peers_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80094/el-peers.txt
             etherscan_url: https://api.etherscan.io/v2/api?chainid=80094
-            max_block: 5000000
+            max_block: 1000000
           - name: berachain-bepolia
             chain_id: 80069
             genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80069/eth-genesis.json
