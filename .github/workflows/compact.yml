@@ -1,0 +1,87 @@
+name: Compact Codec Compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  compact-codec:
+    name: Test Compact Codec Compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      # First, generate test vectors on main branch to establish baseline
+      - name: Checkout main branch
+        run: git checkout ${{ github.event.repository.default_branch }}
+
+      - name: Generate test vectors on main branch
+        run: |
+          echo "🔧 Generating test vectors on main branch..."
+          cargo run --bin compact_write
+          echo "✅ Test vectors generated"
+
+      # Switch to the current branch (PR or push)
+      - name: Checkout current branch
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git checkout ${{ github.event.pull_request.head.sha }}
+          else
+            git checkout ${{ github.sha }}
+          fi
+
+      - name: Test compact codec compatibility
+        run: |
+          echo "📖 Testing compact codec compatibility..."
+          echo "Current branch: $(git rev-parse --abbrev-ref HEAD)"
+          echo "Current commit: $(git rev-parse --short HEAD)"
+          
+          # Try to read the test vectors generated on main branch
+          # This will fail if there are breaking changes in the Compact implementation
+          cargo run --bin compact_read
+          
+          echo "✅ Compact codec compatibility verified!"
+
+      # Optional: Show diff if there are any changes to test vector files
+      - name: Show test vector changes (if any)
+        run: |
+          if ! git diff --quiet testdata/; then
+            echo "⚠️  Test vector files have changes:"
+            git diff --stat testdata/
+            echo ""
+            echo "This indicates potential changes in compact serialization format."
+            echo "Review carefully to ensure backward compatibility is maintained."
+          else
+            echo "ℹ️  No changes to test vector files"
+          fi
+        continue-on-error: true
+
+      # Archive test vectors for debugging if needed
+      - name: Archive test vectors
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-vectors-${{ github.sha }}
+          path: testdata/micro/compact/
+          retention-days: 7

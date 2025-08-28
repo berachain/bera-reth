@@ -50,6 +50,7 @@ pub enum TxConversionError {
 }
 
 #[derive(Debug, Default, Clone, Hash, Eq, PartialEq, Compact)]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 pub struct PoLTx {
     pub chain_id: ChainId,
     pub from: Address, // system address

@@ -30,6 +30,8 @@ jsonrpsee-proc-macros = "0.25.1"
 
 async-trait = "0.1.88"
 modular-bitfield = "0.11.2"
+arbitrary = { version = "1.3" }
+proptest = { version = "1.7" }
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
@@ -41,7 +43,7 @@ reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
 reth-db-api = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
 reth-engine-local = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
 reth-engine-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
-reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6", features = ["dev"] }
 reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
 reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
 reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "48941e6" }
@@ -81,6 +83,7 @@ jemalloc = ["reth/jemalloc"]
 asm-keccak = ["reth/asm-keccak"]
 min-debug-logs = ["reth/min-debug-logs"]
 client = []
+arbitrary = []
 
 [profile.maxperf]
 inherits = "release"

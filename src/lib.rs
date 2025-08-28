@@ -13,5 +13,7 @@ pub mod primitives;
 pub mod rpc;
 pub mod transaction;
 
+pub mod test_vectors;
+
 #[cfg(test)]
 pub mod test_utils;

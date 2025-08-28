@@ -15,6 +15,7 @@ pub type BlsPublicKey = FixedBytes<48>;
 
 /// Berachain block header with additional fields for consensus
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(::arbitrary::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct BerachainHeader {
     /// The Keccak 256-bit hash of the parent block's header, in its entirety.
@@ -484,6 +485,7 @@ impl BerachainHeader {
 /// The pattern is used because some field types (like B64) cannot derive Compact directly,
 /// so we create an internal struct with compatible types (u64 for nonce) and bridge between them.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Compact, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 struct CompactBerachainHeader {
     parent_hash: B256,
     ommers_hash: B256,
@@ -505,10 +507,11 @@ struct CompactBerachainHeader {
     excess_blob_gas: Option<u64>,
     parent_beacon_block_root: Option<B256>,
     extra_fields: Option<BerachainHeaderExt>,
-    extra_data: Bytes,
+    // extra_data: Bytes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Compact, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 pub(crate) struct BerachainHeaderExt {
     requests_hash: Option<B256>,
     prev_proposer_pubkey: Option<BlsPublicKey>,
@@ -559,7 +562,7 @@ impl Compact for BerachainHeader {
             excess_blob_gas: self.excess_blob_gas,
             parent_beacon_block_root: self.parent_beacon_block_root,
             extra_fields: extra_fields.into_option(),
-            extra_data: self.extra_data.clone(),
+            // extra_data: self.extra_data.clone(),
         };
         compact_header.to_compact(buf)
     }
@@ -593,7 +596,8 @@ impl Compact for BerachainHeader {
             parent_beacon_block_root: header.parent_beacon_block_root,
             requests_hash: header.extra_fields.as_ref().and_then(|h| h.requests_hash),
             prev_proposer_pubkey: header.extra_fields.as_ref().and_then(|h| h.prev_proposer_pubkey),
-            extra_data: header.extra_data,
+            extra_data: Bytes::new(),
+            // extra_data: header.extra_data,
         };
 
         (berachain_header, buf)
