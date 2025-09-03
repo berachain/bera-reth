@@ -9,9 +9,6 @@ rpc-compat:
 
   - eth_getStorageAt/get-storage-invalid-key-too-large (bera-reth)
   - eth_getStorageAt/get-storage-invalid-key (bera-reth)
-  - eth_getTransactionReceipt/get-access-list (bera-reth)
-  - eth_getTransactionReceipt/get-blob-tx (bera-reth)
-  - eth_getTransactionReceipt/get-dynamic-fee (bera-reth)
   - eth_getTransactionReceipt/get-legacy-contract (bera-reth)
   - eth_getTransactionReceipt/get-legacy-input (bera-reth)
   - eth_getTransactionReceipt/get-legacy-receipt (bera-reth)
@@ -35,7 +32,7 @@ engine-withdrawals:
   - Withdrawals Fork on Block 1 - 8 Block Re-Org NewPayload (Paris) (bera-reth)
   - Withdrawals Fork on Canonical Block 8 / Side Block 7 - 10 Block Re-Org (Paris) (bera-reth)
 
-engine-api: []
+engine-api: [ ]
 
 # no fix due to https://github.com/paradigmxyz/reth/issues/8732
 engine-cancun:
@@ -44,7 +41,7 @@ engine-cancun:
   # in hive or its dependencies
   - Blob Transaction Ordering, Multiple Clients (Cancun) (bera-reth)
 
-sync: []
+sync: [ ]
 
 # https://github.com/ethereum/hive/issues/1277
 engine-auth:
