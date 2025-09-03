@@ -20,6 +20,7 @@ echo "Building images"
 ./hive -client bera-reth --sim "smoke/genesis" -sim.timelimit 1s || true &
 ./hive -client bera-reth --sim "smoke/network" -sim.timelimit 1s || true &
 ./hive -client bera-reth --sim "ethereum/sync" -sim.timelimit 1s || true &
+./hive -client bera-reth --sim "berachain/berachain-rpc-compat" -sim.timelimit 1s || true &
 wait
 
 # Run docker save in parallel, wait and exit on error
@@ -34,6 +35,7 @@ docker save hive/simulators/ethereum/eest/consume-rlp:latest -o ../hive_assets/e
 docker save hive/simulators/smoke/genesis:latest -o ../hive_assets/smoke_genesis.tar & saving_pids+=( $! )
 docker save hive/simulators/smoke/network:latest -o ../hive_assets/smoke_network.tar & saving_pids+=( $! )
 docker save hive/simulators/ethereum/sync:latest -o ../hive_assets/ethereum_sync.tar & saving_pids+=( $! )
+docker save hive/simulators/berachain/berachain-rpc-compat:latest -o ../hive_assets/berachain_berachain_rpc_compat.tar & saving_pids+=( $! )
 for pid in "${saving_pids[@]}"; do
     wait "$pid" || exit
 done
