@@ -133,6 +133,9 @@ jobs:
             limit: .*tests/homestead.*
           - sim: ethereum/eest/consume-rlp
             limit: .*tests/frontier.*
+
+          # Berachain
+          - sim: berachain/berachain-rpc-compat
     name: run ${{ matrix.scenario.sim }}${{ matrix.scenario.limit && format(' - {0}', matrix.scenario.limit) }}
     runs-on: ubuntu-latest-large
     steps:
