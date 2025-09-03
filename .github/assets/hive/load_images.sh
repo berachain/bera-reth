@@ -15,6 +15,7 @@ IMAGES=(
     "/tmp/eest_engine.tar"
     "/tmp/eest_rlp.tar"
     "/tmp/bera-reth_image.tar"
+    "/tmp/berachain_rpc_compat.tar"
 )
 
 # Loop through the images and load them
