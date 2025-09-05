@@ -1,7 +1,8 @@
 use crate::transaction::POL_TX_TYPE;
 use alloy_primitives::{Address, Bytes, TxKind};
 use reth::revm::{
-    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext, SystemCallEvm,
+    Context, ExecuteEvm, InspectEvm, InspectSystemCallEvm, Inspector, MainBuilder, MainContext,
+    SystemCallEvm,
     context::{
         BlockEnv, CfgEnv, Evm as RevmEvm, Transaction as TxEnvTransaction, TxEnv,
         result::{EVMError, HaltReason, ResultAndState},
@@ -152,7 +153,11 @@ where
         contract: Address,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        self.inner.system_call_with_caller(caller, contract, data)
+        if self.inspect {
+            self.inner.inspect_system_call_with_caller(caller, contract, data)
+        } else {
+            self.inner.system_call_with_caller(caller, contract, data)
+        }
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
@@ -231,8 +236,10 @@ impl EvmFactory for BerachainEvmFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::address;
-    use reth::revm::database_interface::EmptyDB;
+    use alloy_primitives::{U256, address};
+    use reth::revm::{
+        database_interface::EmptyDB, handler::SYSTEM_ADDRESS, primitives::hardfork::SpecId,
+    };
 
     #[test]
     fn test_precompiles_with_correct_spec() {
@@ -282,5 +289,102 @@ mod tests {
                 "{name} precompile at {precompile_addr:?} should be available for later spec {later_spec:?}"
             );
         }
+    }
+
+    #[test]
+    fn test_pol_transaction_inspection() {
+        // This test verifies that POL transactions execute correctly with call tracing
+        // It would fail if transact_system_call doesn't handle inspection properly
+
+        use alloy_rpc_types_trace::geth::CallConfig;
+        use revm_inspectors::tracing::{TracingInspector, TracingInspectorConfig};
+
+        let cfg_env = CfgEnv::default();
+        let block_env = BlockEnv::default();
+        let evm_env = EvmEnv { cfg_env, block_env };
+        let factory = BerachainEvmFactory;
+
+        // Setup call tracer configuration
+        let call_config = CallConfig::default();
+        let inspector_config = TracingInspectorConfig::from_geth_call_config(&call_config);
+        let tracing_inspector = TracingInspector::new(inspector_config);
+
+        // Create EVM with call tracing inspection enabled
+        let mut evm_with_inspector = factory.create_evm_with_inspector(
+            EmptyDB::default(),
+            evm_env.clone(),
+            tracing_inspector,
+        );
+
+        // Create EVM without inspection
+        let mut evm_no_inspector = factory.create_evm(EmptyDB::default(), evm_env);
+
+        let recipient = TxKind::Call(address!("0x2000000000000000000000000000000000000002"));
+        // Create POL transaction
+        let pol_tx = TxEnv {
+            caller: SYSTEM_ADDRESS,
+            gas_limit: 21000,
+            gas_price: Default::default(),
+            kind: recipient,
+            value: U256::ONE,
+            data: Bytes::new(),
+            nonce: 0,
+            chain_id: Some(1),
+            access_list: Default::default(),
+            gas_priority_fee: Default::default(),
+            blob_hashes: vec![],
+            max_fee_per_blob_gas: 0,
+            authorization_list: vec![],
+            tx_type: POL_TX_TYPE,
+        };
+
+        // Execute POL transaction with tracing inspector
+        let result_with_tracer = evm_with_inspector.transact_raw(pol_tx.clone());
+
+        // Execute POL transaction without inspection
+        let result_without_tracer = evm_no_inspector.transact_raw(pol_tx.clone());
+
+        // Both should succeed
+        assert!(result_with_tracer.is_ok(), "POL transaction should execute with call tracer");
+        assert!(result_without_tracer.is_ok(), "POL transaction should execute without tracer");
+
+        // Both should have gas_used = 0 (POL gas handling)
+        if let Ok(result) = &result_with_tracer {
+            if let ExecutionResult::Success { gas_used, .. } = &result.result {
+                assert_eq!(*gas_used, 0, "POL transaction should have gas_used = 0 with tracer");
+            }
+        }
+
+        if let Ok(result) = &result_without_tracer {
+            if let ExecutionResult::Success { gas_used, .. } = &result.result {
+                assert_eq!(*gas_used, 0, "POL transaction should have gas_used = 0 without tracer");
+            }
+        }
+
+        // The key test: With proper inspection handling, the tracer should capture system call
+        // details If transact_system_call doesn't use inspect_system_call_with_caller when
+        // self.inspect=true, the tracer won't receive the system call information and the
+        // trace will be incomplete
+
+        // Extract the tracer from the EVM to check its results
+        let (_, tracer, _) = evm_with_inspector.components_mut();
+        let trace_result = tracer.clone().into_geth_builder().geth_call_traces(call_config, 0);
+
+        // The trace should contain system call information if inspection worked correctly
+        // If inspection failed, the trace would be empty or incomplete
+        assert!(
+            trace_result.from.eq(&pol_tx.caller),
+            "Call tracer should capture system call execution when inspection is enabled"
+        );
+
+        assert!(
+            trace_result.to.eq(&Some(recipient.into_to().unwrap())),
+            "Call tracer should capture system call execution when inspection is enabled"
+        );
+
+        assert!(
+            !trace_result.calls.is_empty() || trace_result.gas > 0,
+            "Call tracer should capture system call execution when inspection is enabled"
+        );
     }
 }
