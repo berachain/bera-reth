@@ -6,6 +6,7 @@ use reth::revm::{
         BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv,
         result::{EVMError, HaltReason, ResultAndState},
     },
+    context_interface::result::ExecutionResult,
     handler::{EthFrame, EthPrecompiles, PrecompileProvider, instructions::EthInstructions},
     inspector::NoOpInspector,
     interpreter::{InterpreterResult, interpreter::EthInterpreter},
@@ -121,7 +122,23 @@ where
         if tx.tx_type == POL_TX_TYPE {
             return match tx.kind {
                 TxKind::Create => Err(EVMError::Custom("pol tx cannot be create".into())),
-                TxKind::Call(to) => self.transact_system_call(tx.caller, to, tx.data),
+                TxKind::Call(to) => {
+                    let mut result = self.transact_system_call(tx.caller, to, tx.data)?;
+                    // Set gas_used to 0 for POL transactions
+                    result.result = match result.result {
+                        ExecutionResult::Success { reason, gas_refunded, logs, output, .. } => {
+                            ExecutionResult::Success {
+                                reason,
+                                gas_used: 0,
+                                gas_refunded,
+                                logs,
+                                output,
+                            }
+                        }
+                        other => other,
+                    };
+                    Ok(result)
+                }
             };
         }
         if self.inspect { self.inner.inspect_tx(tx) } else { self.inner.transact(tx) }
