@@ -8,7 +8,7 @@ pub mod executor;
 pub mod receipt;
 
 use crate::{
-    alloy_evm::factory::BerachainEvmFactory,
+    alloy_evm::BerachainEvmFactory,
     node::{BerachainNode, evm::config::BerachainEvmConfig},
 };
 use alloy_primitives::Bytes;

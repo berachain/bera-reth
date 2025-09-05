@@ -1,5 +1,5 @@
 use crate::{
-    alloy_evm::factory::BerachainEvmFactory,
+    alloy_evm::BerachainEvmFactory,
     chainspec::BerachainChainSpec,
     node::evm::{
         assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,

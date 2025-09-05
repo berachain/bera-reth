@@ -4,7 +4,7 @@
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
 use bera_reth::{
-    alloy_evm::factory::BerachainEvmFactory,
+    alloy_evm::BerachainEvmFactory,
     chainspec::{BerachainChainSpec, BerachainChainSpecParser},
     consensus::BerachainBeaconConsensus,
     node::{BerachainNode, evm::config::BerachainEvmConfig},
