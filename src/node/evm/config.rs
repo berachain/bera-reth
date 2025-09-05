@@ -1,4 +1,5 @@
 use crate::{
+    alloy_evm::factory::BerachainEvmFactory,
     chainspec::BerachainChainSpec,
     node::evm::{
         assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,
@@ -18,7 +19,7 @@ use reth::{
     },
 };
 use reth_chainspec::EthChainSpec;
-use reth_evm::{ConfigureEvm, EthEvmFactory, EvmEnv, EvmEnvFor, ExecutionCtxFor};
+use reth_evm::{ConfigureEvm, EvmEnv, EvmEnvFor, ExecutionCtxFor};
 use reth_evm_ethereum::{revm_spec, revm_spec_by_timestamp_and_block_number};
 use reth_primitives_traits::{BlockTy, HeaderTy, SealedBlock, SealedHeader};
 use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
@@ -33,7 +34,7 @@ pub struct BerachainEvmConfig {
     /// Chain specification.
     pub spec: Arc<BerachainChainSpec>,
     /// EVM factory.
-    pub evm_factory: EthEvmFactory,
+    pub evm_factory: BerachainEvmFactory,
 
     /// Ethereum block assembler.
     pub block_assembler: BerachainBlockAssembler,
@@ -43,7 +44,7 @@ impl BerachainEvmConfig {
     /// Creates a new Ethereum EVM configuration with the given chain spec and EVM factory.
     pub fn new_with_evm_factory(
         chain_spec: Arc<BerachainChainSpec>,
-        evm_factory: EthEvmFactory,
+        evm_factory: BerachainEvmFactory,
     ) -> Self {
         Self {
             receipt_builder: BerachainReceiptBuilder::default(),

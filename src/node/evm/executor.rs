@@ -1,4 +1,5 @@
 use crate::{
+    alloy_evm::factory::BerachainEvmFactory,
     chainspec::BerachainChainSpec,
     engine::validate_proposer_pubkey_prague1,
     hardforks::BerachainHardforks,
@@ -19,7 +20,7 @@ use reth::{
     },
 };
 use reth_evm::{
-    Database, EthEvmFactory, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, OnStateHook,
+    Database, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, OnStateHook,
     block::{
         BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor,
         BlockValidationError, CommitChanges, ExecutableTx, StateChangePostBlockSource,
@@ -323,7 +324,7 @@ where
 }
 
 impl BlockExecutorFactory for BerachainEvmConfig {
-    type EvmFactory = EthEvmFactory;
+    type EvmFactory = BerachainEvmFactory;
     type ExecutionCtx<'a> = BerachainBlockExecutionCtx<'a>;
     type Transaction = BerachainTxEnvelope;
     type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>;

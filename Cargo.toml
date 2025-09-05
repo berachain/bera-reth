@@ -102,10 +102,6 @@ lto = "thin"
 ignored = ["modular-bitfield"]
 
 [patch.crates-io]
-# Use patched alloy-evm with system call inspection support
-# Based on https://github.com/berachain/evm/pull/2
-alloy-evm = { git = "https://github.com/berachain/evm", rev = "4e14d80" }
-
 # Use patched revm with system call inspection support
 # Based on https://github.com/bluealloy/revm commit 9008e93
 revm = { git = "https://github.com/bluealloy/revm", rev = "9008e93" }
