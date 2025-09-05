@@ -2,10 +2,10 @@
 //!
 //! Built on Reth SDK with Ethereum compatibility plus Prague1 hardfork for minimum base fee.
 
-pub mod alloy_evm;
 pub mod chainspec;
 pub mod consensus;
 pub mod engine;
+pub mod evm;
 pub mod genesis;
 pub mod hardforks;
 pub mod node;

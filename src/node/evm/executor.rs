@@ -1,7 +1,7 @@
 use crate::{
-    alloy_evm::BerachainEvmFactory,
     chainspec::BerachainChainSpec,
     engine::validate_proposer_pubkey_prague1,
+    evm::BerachainEvmFactory,
     hardforks::BerachainHardforks,
     node::evm::{
         block_context::BerachainBlockExecutionCtx, config::BerachainEvmConfig,
@@ -77,9 +77,6 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         Evm: reth_evm::Evm,
         <Evm as reth_evm::Evm>::DB: DatabaseCommit,
     {
-        use reth::revm::DatabaseCommit;
-        use reth_evm::block::StateChangeSource;
-
         let timestamp = self.evm.block().timestamp.saturating_to();
 
         // Validate proposer pubkey presence for Prague1

@@ -1,8 +1,7 @@
 use crate::transaction::POL_TX_TYPE;
 use alloy_primitives::{Address, Bytes, TxKind};
 use reth::revm::{
-    Context, ExecuteEvm, InspectEvm, InspectSystemCallEvm, Inspector, MainBuilder, MainContext,
-    SystemCallEvm,
+    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext, SystemCallEvm,
     context::{
         BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv,
         result::{EVMError, HaltReason, ResultAndState},
@@ -93,14 +92,6 @@ impl<DB: Database, I, PRECOMPILE> DerefMut for BerachainEvm<DB, I, PRECOMPILE> {
     }
 }
 
-impl<DB, I, PRECOMPILE> BerachainEvm<DB, I, PRECOMPILE>
-where
-    DB: Database,
-    I: Inspector<EthEvmContext<DB>>,
-    PRECOMPILE: PrecompileProvider<EthEvmContext<DB>, Output = InterpreterResult>,
-{
-}
-
 impl<DB, I, PRECOMPILE> Evm for BerachainEvm<DB, I, PRECOMPILE>
 where
     DB: Database,
@@ -142,11 +133,7 @@ where
         contract: Address,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        if self.inspect {
-            self.inner.inspect_system_call_with_caller(caller, contract, data)
-        } else {
-            self.inner.system_call_with_caller(caller, contract, data)
-        }
+        self.inner.system_call_with_caller(caller, contract, data)
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {

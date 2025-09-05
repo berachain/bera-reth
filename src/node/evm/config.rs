@@ -1,6 +1,6 @@
 use crate::{
-    alloy_evm::BerachainEvmFactory,
     chainspec::BerachainChainSpec,
+    evm::BerachainEvmFactory,
     node::evm::{
         assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,
         receipt::BerachainReceiptBuilder,
