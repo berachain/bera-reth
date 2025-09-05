@@ -3,7 +3,7 @@ use alloy_primitives::{Address, Bytes, TxKind};
 use reth::revm::{
     Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext, SystemCallEvm,
     context::{
-        BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv,
+        BlockEnv, CfgEnv, Evm as RevmEvm, Transaction as TxEnvTransaction, TxEnv,
         result::{EVMError, HaltReason, ResultAndState},
     },
     context_interface::result::ExecutionResult,
@@ -119,9 +119,11 @@ where
         &mut self,
         tx: Self::Tx,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        if tx.tx_type == POL_TX_TYPE {
+        if TxEnvTransaction::tx_type(&tx) == POL_TX_TYPE {
             return match tx.kind {
-                TxKind::Create => Err(EVMError::Custom("pol tx cannot be create".into())),
+                TxKind::Create => {
+                    Err(EVMError::Custom("POL Create transactions are unsupported".into()))
+                }
                 TxKind::Call(to) => {
                     let mut result = self.transact_system_call(tx.caller, to, tx.data)?;
                     // Set gas_used to 0 for POL transactions
