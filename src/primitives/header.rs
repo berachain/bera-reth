@@ -625,7 +625,7 @@ mod tests {
         use alloy_primitives::hex::FromHex;
 
         // Test with various AlloyHeader configurations
-        let test_cases = vec![
+        let test_cases = [
             // Basic header with minimal fields
             Header {
                 parent_hash: B256::random(),
