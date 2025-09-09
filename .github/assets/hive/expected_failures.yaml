@@ -1,4 +1,4 @@
-# Copied from reth at commit 91730cd326f6b0f975e56d8985f08a2a6c943f89
+# Copied from reth at commit 9d56da53ec0ad60e229456a0c70b338501d923a5
 # tracked by https://github.com/paradigmxyz/reth/issues/13879
 rpc-compat:
   - debug_getRawBlock/get-invalid-number (bera-reth)
