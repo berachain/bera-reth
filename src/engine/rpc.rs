@@ -17,6 +17,7 @@ use alloy_rpc_types::engine::{
     ExecutionPayloadV1, ExecutionPayloadV3, ForkchoiceState, ForkchoiceUpdated, PayloadId,
     PayloadStatus,
 };
+
 use jsonrpsee_core::{RpcResult, server::RpcModule};
 use jsonrpsee_proc_macros::rpc;
 use reth::{
@@ -29,7 +30,7 @@ use reth::{
 use reth_engine_primitives::{EngineApiValidator, EngineTypes};
 use reth_node_api::{AddOnsContext, FullNodeComponents};
 use reth_node_builder::rpc::{EngineApiBuilder, PayloadValidatorBuilder};
-use reth_node_core::version::{CARGO_PKG_VERSION, CLIENT_CODE, NAME_CLIENT, VERGEN_GIT_SHA};
+use reth_node_core::version::{CLIENT_CODE, version_metadata};
 use reth_payload_primitives::{EngineObjectValidationError, PayloadAttributes, PayloadTypes};
 use reth_rpc_engine_api::{EngineApi, EngineApiError, EngineCapabilities};
 use reth_transaction_pool::TransactionPool;
@@ -73,9 +74,9 @@ where
         let engine_validator = engine_validator_builder.build(ctx).await?;
         let client = ClientVersionV1 {
             code: CLIENT_CODE,
-            name: NAME_CLIENT.to_string(),
-            version: CARGO_PKG_VERSION.to_string(),
-            commit: VERGEN_GIT_SHA.to_string(),
+            name: version_metadata().name_client.to_string(),
+            version: version_metadata().cargo_pkg_version.to_string(),
+            commit: version_metadata().vergen_git_sha.to_string(),
         };
         let inner = EngineApi::new(
             ctx.node.provider().clone(),

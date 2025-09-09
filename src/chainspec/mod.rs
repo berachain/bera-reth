@@ -64,10 +64,6 @@ impl EthChainSpec for BerachainChainSpec {
         }
     }
 
-    fn base_fee_params_at_block(&self, block_number: u64) -> BaseFeeParams {
-        self.inner.base_fee_params_at_block(block_number)
-    }
-
     fn base_fee_params_at_timestamp(&self, timestamp: u64) -> BaseFeeParams {
         // Use the inner implementation which respects our configured base_fee_params
         // This will correctly return Prague1 parameters when active

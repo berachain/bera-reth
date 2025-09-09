@@ -332,7 +332,7 @@ impl BerachainTxEnvelope {
         }
     }
 
-    pub fn with_signer<T>(self, signer: Address) -> Recovered<Self> {
+    pub fn with_signer(self, signer: Address) -> Recovered<Self> {
         Recovered::new_unchecked(self, signer)
     }
 }
