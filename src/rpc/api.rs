@@ -581,7 +581,6 @@ where
 impl<N, Rpc> EthState for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
-    EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives>,
     Self: LoadPendingBlock,
 {
