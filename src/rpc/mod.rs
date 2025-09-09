@@ -19,8 +19,8 @@ use reth::{
     revm::context::TxEnv,
     rpc::{api::eth::FromEvmError, builder::Identity, server_types::eth::EthApiError},
 };
-use reth_chainspec::{ChainSpecProvider, EthChainSpec};
-use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, TxEnvFor};
+use reth_chainspec::{ChainSpecProvider, EthChainSpec, Hardforks};
+use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, SpecFor, TxEnvFor};
 use reth_node_api::{FullNodeTypes, NodeAddOns, NodeTypes};
 use reth_node_builder::rpc::{
     BasicEngineValidatorBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
@@ -43,7 +43,10 @@ pub type BerachainEthRpcConverterFor<N> = RpcConverter<
 impl<N> EthApiBuilder<N> for BerachainEthApiBuilder
 where
     N: FullNodeComponents<
-            Types: NodeTypes<ChainSpec: EthereumHardforks, Primitives = BerachainPrimitives>,
+            Types: NodeTypes<
+                ChainSpec: EthereumHardforks + Hardforks,
+                Primitives = BerachainPrimitives,
+            >,
             Evm: ConfigureEvm<NextBlockEnvCtx: BuildPendingEnv<HeaderTy<N::Types>>>,
         >,
     BerachainEthRpcConverterFor<N>: RpcConvert<
@@ -51,6 +54,7 @@ where
             TxEnv = TxEnvFor<N::Evm>,
             Error = EthApiError,
             Network = BerachainNetwork,
+            Spec = SpecFor<N::Evm>,
         >,
     EthApiError: FromEvmError<N::Evm>,
 {

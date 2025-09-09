@@ -26,7 +26,6 @@ use reth_chainspec::EthChainSpec;
 use reth_engine_primitives::ExecutionPayload;
 use reth_evm::{
     ConfigureEngineEvm, ConfigureEvm, EvmEnv, EvmEnvFor, ExecutableTxIterator, ExecutionCtxFor,
-    eth::EthBlockExecutionCtx,
 };
 use reth_evm_ethereum::{revm_spec, revm_spec_by_timestamp_and_block_number};
 use reth_primitives_traits::{

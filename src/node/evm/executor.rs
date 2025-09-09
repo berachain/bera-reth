@@ -202,10 +202,11 @@ where
         }
 
         // Execute transaction.
-        let ResultAndState { result, state } = self
-            .evm
-            .transact(tx)
-            .map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))?;
+        // Extract needed data before transact() consumes tx
+        let tx_hash = tx.tx().trie_hash();
+        let tx_ref = tx.tx().clone();
+        let ResultAndState { result, state } =
+            self.evm.transact(tx).map_err(|err| BlockExecutionError::evm(err, tx_hash))?;
 
         if !f(&result).should_commit() {
             return Ok(None);
@@ -220,7 +221,7 @@ where
 
         // Push transaction changeset and calculate header bloom filter for receipt.
         self.receipts.push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
-            tx: tx.tx(),
+            tx: &tx_ref,
             evm: &self.evm,
             result,
             state: &state,

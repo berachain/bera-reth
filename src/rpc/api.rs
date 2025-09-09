@@ -21,7 +21,7 @@ use reth::{
     },
     transaction_pool::{PoolTransaction, TransactionPool},
 };
-use reth_evm::TxEnvFor;
+use reth_evm::{SpecFor, TxEnvFor};
 use reth_rpc::eth::DevSigner;
 use reth_rpc_convert::SignableTxRequest;
 use reth_rpc_eth_api::{
@@ -36,8 +36,8 @@ use reth_rpc_eth_api::{
     },
 };
 use reth_rpc_eth_types::{
-    EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock, error::FromEvmError,
-    utils::recover_raw_transaction,
+    EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
+    builder::config::PendingBlockKind, error::FromEvmError, utils::recover_raw_transaction,
 };
 use reth_transaction_pool::{AddedTransactionOutcome, TransactionOrigin};
 
@@ -526,7 +526,12 @@ impl<N, Rpc> EthCall for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, TxEnv = TxEnvFor<N::Evm>>,
+    Rpc: RpcConvert<
+            Primitives = N::Primitives,
+            Error = EthApiError,
+            TxEnv = TxEnvFor<N::Evm>,
+            Spec = SpecFor<N::Evm>,
+        >,
 {
 }
 
@@ -534,7 +539,12 @@ impl<N, Rpc> Call for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, TxEnv = TxEnvFor<N::Evm>>,
+    Rpc: RpcConvert<
+            Primitives = N::Primitives,
+            Error = EthApiError,
+            TxEnv = TxEnvFor<N::Evm>,
+            Spec = SpecFor<N::Evm>,
+        >,
 {
     #[inline]
     fn call_gas_limit(&self) -> u64 {
@@ -551,7 +561,12 @@ impl<N, Rpc> EstimateCall for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, TxEnv = TxEnvFor<N::Evm>>,
+    Rpc: RpcConvert<
+            Primitives = N::Primitives,
+            Error = EthApiError,
+            TxEnv = TxEnvFor<N::Evm>,
+            Spec = SpecFor<N::Evm>,
+        >,
 {
 }
 
@@ -559,14 +574,16 @@ impl<N, Rpc> EthFees for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Spec = SpecFor<N::Evm>>,
 {
 }
 
 impl<N, Rpc> EthState for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives>,
+    Self: LoadPendingBlock,
 {
     fn max_proof_window(&self) -> u64 {
         self.inner.eth_proof_window()
@@ -585,6 +602,7 @@ impl<N, Rpc> LoadState for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     Rpc: RpcConvert<Primitives = N::Primitives>,
+    Self: LoadPendingBlock,
 {
 }
 
@@ -592,7 +610,7 @@ impl<N, Rpc> LoadFee for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Spec = SpecFor<N::Evm>>,
 {
     #[inline]
     fn gas_oracle(&self) -> &GasPriceOracle<Self::Provider> {
@@ -619,5 +637,10 @@ where
     #[inline]
     fn pending_env_builder(&self) -> &dyn PendingEnvBuilder<Self::Evm> {
         self.inner.pending_env_builder()
+    }
+
+    #[inline]
+    fn pending_block_kind(&self) -> PendingBlockKind {
+        self.inner.pending_block_kind()
     }
 }
