@@ -98,7 +98,7 @@ impl Transaction for PoLTx {
     }
 
     fn is_dynamic_fee(&self) -> bool {
-        false
+        true
     }
 
     fn kind(&self) -> TxKind {
