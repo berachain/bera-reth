@@ -19,6 +19,90 @@ use reth_evm::{
 };
 use std::ops::{Deref, DerefMut};
 
+/// Helper builder to construct `BerachainEvm` instances in a unified way.
+#[derive(Debug)]
+pub struct BerachainEvmBuilder<DB: Database, I = NoOpInspector> {
+    db: DB,
+    block_env: BlockEnv,
+    cfg_env: CfgEnv,
+    inspector: I,
+    inspect: bool,
+    precompiles: Option<PrecompilesMap>,
+}
+
+impl<DB: Database> BerachainEvmBuilder<DB, NoOpInspector> {
+    /// Creates a builder from the provided `EvmEnv` and database.
+    pub fn new(db: DB, env: EvmEnv) -> Self {
+        Self {
+            db,
+            block_env: env.block_env,
+            cfg_env: env.cfg_env,
+            inspector: NoOpInspector {},
+            inspect: false,
+            precompiles: None,
+        }
+    }
+}
+
+impl<DB: Database, I> BerachainEvmBuilder<DB, I> {
+    /// Sets a custom inspector
+    pub fn inspector<J>(self, inspector: J) -> BerachainEvmBuilder<DB, J> {
+        BerachainEvmBuilder {
+            db: self.db,
+            block_env: self.block_env,
+            cfg_env: self.cfg_env,
+            inspector,
+            inspect: self.inspect,
+            precompiles: self.precompiles,
+        }
+    }
+
+    /// Sets a custom inspector and enables invoking it during transaction execution.
+    pub fn activate_inspector<J>(self, inspector: J) -> BerachainEvmBuilder<DB, J> {
+        self.inspector(inspector).inspect()
+    }
+
+    /// Sets whether to invoke the inspector during transaction execution.
+    pub fn set_inspect(mut self, inspect: bool) -> Self {
+        self.inspect = inspect;
+        self
+    }
+
+    /// Enables invoking the inspector during transaction execution.
+    pub fn inspect(self) -> Self {
+        self.set_inspect(true)
+    }
+
+    /// Overrides the precompiles map. If not provided, it will be derived from the `SpecId` in
+    /// `CfgEnv`.
+    pub fn precompiles(mut self, precompiles: PrecompilesMap) -> Self {
+        self.precompiles = Some(precompiles);
+        self
+    }
+
+    /// Builds the `BerachainEvm` instance.
+    pub fn build(self) -> BerachainEvm<DB, I, PrecompilesMap>
+    where
+        I: Inspector<EthEvmContext<DB>>,
+    {
+        let precompiles = match self.precompiles {
+            Some(p) => p,
+            None => PrecompilesMap::from_static(Precompiles::new(PrecompileSpecId::from_spec_id(
+                self.cfg_env.spec,
+            ))),
+        };
+
+        let inner = Context::mainnet()
+            .with_block(self.block_env)
+            .with_cfg(self.cfg_env)
+            .with_db(self.db)
+            .build_mainnet_with_inspector(self.inspector)
+            .with_precompiles(precompiles);
+
+        BerachainEvm { inner, inspect: self.inspect }
+    }
+}
+
 /// Berachain EVM implementation.
 ///
 /// This is a wrapper type around the `revm` ethereum evm with optional [`Inspector`] (tracing)
@@ -198,18 +282,7 @@ impl EvmFactory for BerachainEvmFactory {
     type Precompiles = PrecompilesMap;
 
     fn create_evm<DB: Database>(&self, db: DB, input: EvmEnv) -> Self::Evm<DB, NoOpInspector> {
-        let spec_id = input.cfg_env.spec;
-        BerachainEvm {
-            inner: Context::mainnet()
-                .with_block(input.block_env)
-                .with_cfg(input.cfg_env)
-                .with_db(db)
-                .build_mainnet_with_inspector(NoOpInspector {})
-                .with_precompiles(PrecompilesMap::from_static(Precompiles::new(
-                    PrecompileSpecId::from_spec_id(spec_id),
-                ))),
-            inspect: false,
-        }
+        BerachainEvmBuilder::new(db, input).build()
     }
 
     fn create_evm_with_inspector<DB: Database, I: Inspector<Self::Context<DB>>>(
@@ -218,18 +291,7 @@ impl EvmFactory for BerachainEvmFactory {
         input: EvmEnv,
         inspector: I,
     ) -> Self::Evm<DB, I> {
-        let spec_id = input.cfg_env.spec;
-        BerachainEvm {
-            inner: Context::mainnet()
-                .with_block(input.block_env)
-                .with_cfg(input.cfg_env)
-                .with_db(db)
-                .build_mainnet_with_inspector(inspector)
-                .with_precompiles(PrecompilesMap::from_static(Precompiles::new(
-                    PrecompileSpecId::from_spec_id(spec_id),
-                ))),
-            inspect: true,
-        }
+        BerachainEvmBuilder::new(db, input).activate_inspector(inspector).build()
     }
 }
 
