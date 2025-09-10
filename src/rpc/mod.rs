@@ -67,7 +67,7 @@ where
 
         let inner = ctx.eth_api_builder().with_rpc_converter(tx_resp_builder.clone()).build();
 
-        Ok(BerachainApi { inner  })
+        Ok(BerachainApi { inner })
     }
 }
 
