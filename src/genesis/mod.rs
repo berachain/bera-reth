@@ -125,21 +125,18 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                     }
                 }
 
-                // If Prague2 is configured, validate it fully
+                // If Prague2 is configured, validate it (PoL distributor address not required for
+                // Prague2)
                 if let Some(prague2_config) = cfg.prague2 {
                     if prague2_config.base_fee_change_denominator == 0 {
                         return Err(BerachainConfigError::InvalidDenominator);
                     }
-                    if prague2_config.pol_distributor_address.is_zero() {
-                        return Err(BerachainConfigError::MissingPoLDistributorAddress);
-                    }
 
                     info!(
-                        "Loaded Berachain genesis configuration: Prague2 enabled at time={}, base_fee_denominator={}, min_base_fee={} gwei, pol_distributor={}",
+                        "Loaded Berachain genesis configuration: Prague2 enabled at time={}, base_fee_denominator={}, min_base_fee={} gwei",
                         prague2_config.time,
                         prague2_config.base_fee_change_denominator,
-                        prague2_config.minimum_base_fee_wei / 1_000_000_000,
-                        prague2_config.pol_distributor_address
+                        prague2_config.minimum_base_fee_wei / 1_000_000_000
                     );
                 }
 

@@ -33,13 +33,6 @@ use std::{fmt::Display, sync::Arc};
 /// Default minimum base fee when Prague1 is not active.
 const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 
-/// Standard Ethereum base fee parameters
-const ETHEREUM_BASE_FEE_PARAMS: BaseFeeParams =
-    BaseFeeParams { max_change_denominator: 8, elasticity_multiplier: 2 };
-
-/// Standard elasticity multiplier used across all networks
-const STANDARD_ELASTICITY_MULTIPLIER: u128 = 2;
-
 /// Berachain chain specification wrapping Reth's ChainSpec with Berachain hardforks
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
 pub struct BerachainChainSpec {
@@ -431,19 +424,22 @@ impl From<Genesis> for BerachainChainSpec {
         // Create base fee parameters
         let base_fee_params = BaseFeeParamsKind::Variable(
             vec![
-                (EthereumHardfork::London.boxed(), ETHEREUM_BASE_FEE_PARAMS),
+                (
+                    EthereumHardfork::London.boxed(),
+                    BaseFeeParams { max_change_denominator: 8, elasticity_multiplier: 2 },
+                ),
                 (
                     BerachainHardfork::Prague1.boxed(),
                     BaseFeeParams {
                         max_change_denominator: prague1_config.base_fee_change_denominator,
-                        elasticity_multiplier: STANDARD_ELASTICITY_MULTIPLIER,
+                        elasticity_multiplier: 2,
                     },
                 ),
                 (
                     BerachainHardfork::Prague2.boxed(),
                     BaseFeeParams {
                         max_change_denominator: prague2_config.base_fee_change_denominator,
-                        elasticity_multiplier: STANDARD_ELASTICITY_MULTIPLIER,
+                        elasticity_multiplier: 2,
                     },
                 ),
             ]
