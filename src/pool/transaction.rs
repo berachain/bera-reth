@@ -1,7 +1,6 @@
 use crate::transaction::BerachainTxEnvelope;
 use alloy_consensus::{
-    EthereumTxEnvelope, Signed, Transaction, TxEip4844, TxEip4844WithSidecar,
-    transaction::Recovered,
+    EthereumTxEnvelope, Signed, Transaction, TxEip4844WithSidecar, transaction::Recovered,
 };
 use alloy_eips::{
     Encodable2718, Typed2718,
@@ -130,10 +129,7 @@ impl BerachainPooledTransaction {
     ///
     /// Caution: In case of blob transactions, this marks the blob sidecar as
     /// [`EthBlobTransactionSidecar::Missing`]
-    pub fn new(
-        transaction: Recovered<EthereumTxEnvelope<TxEip4844>>,
-        encoded_length: usize,
-    ) -> Self {
+    pub fn new(transaction: Recovered<TransactionSigned>, encoded_length: usize) -> Self {
         let mut blob_sidecar = EthBlobTransactionSidecar::None;
 
         let gas_cost = U256::from(transaction.max_fee_per_gas())
