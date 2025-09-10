@@ -72,52 +72,31 @@ impl BerachainChainSpec {
         prague1_config: &BerachainForkConfig,
         prague2_config: Option<&BerachainForkConfig>,
     ) -> BaseFeeParamsKind {
-        match prague2_config {
-            None => {
-                // Only Prague1 configured
-                if prague1_config.time == 0 {
-                    // Prague1 at genesis - use constant params
-                    BaseFeeParamsKind::Constant(Self::berachain_base_fee_params(
-                        prague1_config.base_fee_change_denominator,
-                    ))
-                } else {
-                    // Prague1 activates later - use variable params
-                    BaseFeeParamsKind::Variable(
-                        vec![
-                            (EthereumHardfork::London.boxed(), ETHEREUM_BASE_FEE_PARAMS),
-                            (
-                                BerachainHardfork::Prague1.boxed(),
-                                Self::berachain_base_fee_params(
-                                    prague1_config.base_fee_change_denominator,
-                                ),
-                            ),
-                        ]
-                        .into(),
-                    )
-                }
-            }
-            Some(prague2_config) => {
-                // Both Prague1 and Prague2 configured - always use variable params
-                BaseFeeParamsKind::Variable(
-                    vec![
-                        (EthereumHardfork::London.boxed(), ETHEREUM_BASE_FEE_PARAMS),
-                        (
-                            BerachainHardfork::Prague1.boxed(),
-                            Self::berachain_base_fee_params(
-                                prague1_config.base_fee_change_denominator,
-                            ),
-                        ),
-                        (
-                            BerachainHardfork::Prague2.boxed(),
-                            Self::berachain_base_fee_params(
-                                prague2_config.base_fee_change_denominator,
-                            ),
-                        ),
-                    ]
-                    .into(),
-                )
-            }
+        // Special case: Prague1 at genesis with no Prague2 can use constant params
+        if prague1_config.time == 0 && prague2_config.is_none() {
+            return BaseFeeParamsKind::Constant(Self::berachain_base_fee_params(
+                prague1_config.base_fee_change_denominator,
+            ));
         }
+
+        // Build variable params starting with London -> Prague1
+        let mut params = vec![
+            (EthereumHardfork::London.boxed(), ETHEREUM_BASE_FEE_PARAMS),
+            (
+                BerachainHardfork::Prague1.boxed(),
+                Self::berachain_base_fee_params(prague1_config.base_fee_change_denominator),
+            ),
+        ];
+
+        // Add Prague2 if configured
+        if let Some(prague2_config) = prague2_config {
+            params.push((
+                BerachainHardfork::Prague2.boxed(),
+                Self::berachain_base_fee_params(prague2_config.base_fee_change_denominator),
+            ));
+        }
+
+        BaseFeeParamsKind::Variable(params.into())
     }
 }
 
