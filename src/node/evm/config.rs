@@ -122,6 +122,10 @@ impl ConfigureEvm for BerachainEvmConfig {
             cfg_env.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
         }
 
+        if self.chain_spec().is_osaka_active_at_timestamp(header.timestamp) {
+            cfg_env.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
+        }
+
         // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
         // blobparams
         let blob_excess_gas_and_price =
@@ -161,6 +165,10 @@ impl ConfigureEvm for BerachainEvmConfig {
 
         if let Some(blob_params) = &blob_params {
             cfg.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
+        }
+
+        if self.chain_spec().is_osaka_active_at_timestamp(attributes.timestamp) {
+            cfg.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
         }
 
         // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is

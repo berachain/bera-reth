@@ -69,9 +69,9 @@ tokio = "1.46.0"
 tracing = "0.1.41"
 
 [dev-dependencies]
-alloy-provider = "1.0.17"
-alloy-rpc-client = "1.0.17"
-alloy-rpc-types-trace = "1.0.27"
+alloy-provider = "1.0.30"
+alloy-rpc-client = "1.0.30"
+alloy-rpc-types-trace = "1.0.30"
 eyre = "0.6.12"
 reth-e2e-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
