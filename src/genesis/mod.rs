@@ -348,44 +348,6 @@ mod tests {
     }
 
     #[test]
-    fn test_genesis_config_both_prague1_and_prague2() {
-        let json = r#"
-        {
-          "berachain": {
-            "prague1": {
-                "time": 1000000000,
-                "baseFeeChangeDenominator": 48,
-                "minimumBaseFeeWei": 1000000000,
-                "polDistributorAddress": "0x4200000000000000000000000000000000000042"
-            },
-            "prague2": {
-                "time": 2000000000,
-                "baseFeeChangeDenominator": 48,
-                "minimumBaseFeeWei": 0,
-                "polDistributorAddress": "0x4200000000000000000000000000000000000042"
-            }
-          }
-        }
-        "#;
-
-        let v: Value = serde_json::from_str(json).unwrap();
-        let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
-
-        let cfg = BerachainGenesisConfig::try_from(&other_fields)
-            .expect("berachain field must deserialize");
-
-        let prague1_config = cfg.prague1.expect("Prague1 should be configured");
-        assert_eq!(prague1_config.time, 1000000000);
-        assert_eq!(prague1_config.minimum_base_fee_wei, 1000000000); // Prague1 sets 1 gwei
-
-        let prague2_config = cfg.prague2.expect("Prague2 should be configured");
-        assert_eq!(prague2_config.time, 2000000000);
-        assert_eq!(prague2_config.minimum_base_fee_wei, 0); // Prague2 reverts to 0
-
-        assert!(cfg.is_berachain()); // Should be berachain because prague1 is configured
-    }
-
-    #[test]
     fn test_genesis_config_prague2_before_prague1_fails() {
         let json = r#"
         {

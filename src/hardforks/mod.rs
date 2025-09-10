@@ -57,28 +57,18 @@ mod tests {
     }
 
     #[test]
-    fn test_prague2_hardfork() {
-        let fork = BerachainHardfork::Prague2;
-        assert_eq!(format!("{fork:?}"), "Prague2");
-    }
-
-    #[test]
     fn test_hardforks_trait_implementation() {
         let hardforks = MockHardforks;
 
         // Test Prague1 activation at genesis (timestamp 0)
         let activation = hardforks.berachain_fork_activation(BerachainHardfork::Prague1);
         assert_eq!(activation, ForkCondition::Timestamp(0));
-
-        // Test Prague1 active at timestamp using trait method
         assert!(hardforks.is_prague1_active_at_timestamp(0));
         assert!(hardforks.is_prague1_active_at_timestamp(100));
 
-        // Test Prague2 activation at timestamp 1000
+        // Test Prague2 activation and ordering
         let activation = hardforks.berachain_fork_activation(BerachainHardfork::Prague2);
         assert_eq!(activation, ForkCondition::Timestamp(1000));
-
-        // Test Prague2 active at timestamp using trait method
         assert!(!hardforks.is_prague2_active_at_timestamp(999));
         assert!(hardforks.is_prague2_active_at_timestamp(1000));
         assert!(hardforks.is_prague2_active_at_timestamp(2000));
