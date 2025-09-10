@@ -1,12 +1,13 @@
 //! Berachain genesis configuration parsing and validation
 
+pub mod config;
+
 use jsonrpsee_core::__reexports::serde_json;
-use reth::{
-    revm::primitives::{Address, address},
-    rpc::types::serde_helpers::OtherFields,
-};
+use reth::{revm::primitives::address, rpc::types::serde_helpers::OtherFields};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub use config::{Prague1Config, Prague2Config};
 
 /// Errors for Berachain genesis configuration parsing
 #[derive(Debug, Error)]
@@ -24,45 +25,29 @@ pub enum BerachainConfigError {
     MissingPoLDistributorAddress,
 }
 
-/// Configuration for a Berachain hardfork activation
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BerachainForkConfig {
-    /// Unix timestamp when this hardfork activates
-    pub time: u64,
-    /// Denominator for base fee change calculations (must be > 0)
-    pub base_fee_change_denominator: u128,
-    /// Minimum base fee in wei enforced after activation
-    pub minimum_base_fee_wei: u64,
-    /// PoL distributor contract address
-    pub pol_distributor_address: Address,
-}
-
 /// Complete Berachain genesis configuration from JSON "berachain" field
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BerachainGenesisConfig {
     /// Configuration for the Prague1 hardfork, which introduces minimum base fee enforcement
-    pub prague1: Option<BerachainForkConfig>,
+    pub prague1: Option<Prague1Config>,
     /// Configuration for the Prague2 hardfork, which reverts base fee to 0
-    pub prague2: Option<BerachainForkConfig>,
+    pub prague2: Option<Prague2Config>,
 }
 
 impl Default for BerachainGenesisConfig {
     /// Default config with Prague1 and Prague2 activated
     fn default() -> Self {
         Self {
-            prague1: Some(BerachainForkConfig {
+            prague1: Some(Prague1Config {
                 time: 0,                             // Activate immediately at genesis
                 base_fee_change_denominator: 48,     // Berachain standard value
                 minimum_base_fee_wei: 1_000_000_000, // 1 gwei
                 pol_distributor_address: address!("4200000000000000000000000000000000000042"),
             }),
-            prague2: Some(BerachainForkConfig {
-                time: 1000000000,                // Activate later to revert base fee to 0
-                base_fee_change_denominator: 48, // Berachain standard value
-                minimum_base_fee_wei: 0,         // 0 wei (reverts Prague1)
-                pol_distributor_address: address!("4200000000000000000000000000000000000042"),
+            prague2: Some(Prague2Config {
+                time: 1000000000,        // Activate later to revert base fee to 0
+                minimum_base_fee_wei: 0, // 0 wei (reverts Prague1)
             }),
         }
     }
@@ -125,17 +110,11 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                     }
                 }
 
-                // If Prague2 is configured, validate it (PoL distributor address not required for
-                // Prague2)
+                // Prague2 validation - uses Prague1's base fee denominator
                 if let Some(prague2_config) = cfg.prague2 {
-                    if prague2_config.base_fee_change_denominator == 0 {
-                        return Err(BerachainConfigError::InvalidDenominator);
-                    }
-
                     info!(
-                        "Loaded Berachain genesis configuration: Prague2 enabled at time={}, base_fee_denominator={}, min_base_fee={} gwei",
+                        "Loaded Berachain genesis configuration: Prague2 enabled at time={}, min_base_fee={} gwei (uses Prague1 denominator)",
                         prague2_config.time,
-                        prague2_config.base_fee_change_denominator,
                         prague2_config.minimum_base_fee_wei / 1_000_000_000
                     );
                 }
@@ -235,11 +214,6 @@ mod tests {
         let prague2_config = cfg.prague2.expect("Prague2 should be configured");
         assert_eq!(prague2_config.time, 1720000000);
         assert_eq!(prague2_config.minimum_base_fee_wei, 0);
-        assert_eq!(prague2_config.base_fee_change_denominator, 48);
-        assert_eq!(
-            prague2_config.pol_distributor_address,
-            address!("4200000000000000000000000000000000000042")
-        );
 
         assert!(cfg.is_berachain());
     }

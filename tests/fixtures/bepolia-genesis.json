@@ -104,9 +104,7 @@
       },
       "prague2": {
         "time": 9999999999,
-        "baseFeeChangeDenominator": 48,
-        "minimumBaseFeeWei": 0,
-        "polDistributorAddress": "0xD2f19a79b026Fb636A7c300bF5947df113940761"
+        "minimumBaseFeeWei": 0
       }
     }
   },

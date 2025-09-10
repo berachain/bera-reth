@@ -1,7 +1,7 @@
 //! Berachain chain specification with Ethereum hardforks plus Prague1 minimum base fee
 
 use crate::{
-    genesis::{BerachainForkConfig, BerachainGenesisConfig},
+    genesis::BerachainGenesisConfig,
     hardforks::{BerachainHardfork, BerachainHardforks},
     primitives::{BerachainHeader, header::BlsPublicKey},
 };
@@ -438,7 +438,7 @@ impl From<Genesis> for BerachainChainSpec {
                 (
                     BerachainHardfork::Prague2.boxed(),
                     BaseFeeParams {
-                        max_change_denominator: prague2_config.base_fee_change_denominator,
+                        max_change_denominator: prague1_config.base_fee_change_denominator,
                         elasticity_multiplier: 2,
                     },
                 ),
@@ -520,9 +520,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -552,9 +550,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -591,9 +587,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 2000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -741,9 +735,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 3000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -777,9 +769,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 2000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -829,9 +819,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -856,9 +844,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -884,9 +870,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -914,9 +898,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -944,9 +926,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -971,9 +951,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 3000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -998,9 +976,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 2000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1025,9 +1001,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 4000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1056,9 +1030,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1085,9 +1057,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1115,9 +1085,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1163,9 +1131,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1277,9 +1243,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1316,9 +1280,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1347,9 +1309,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1378,9 +1338,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1409,9 +1367,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1440,9 +1396,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1489,9 +1443,7 @@ mod tests {
                 },
                 "prague2": {
                     "time": 1000000000,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 0,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
