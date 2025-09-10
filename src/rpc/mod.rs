@@ -65,22 +65,9 @@ where
             BerachainEthReceiptConverter::new(ctx.components.provider().clone().chain_spec()),
         );
 
-        let api = reth_rpc::EthApiBuilder::new_with_components(ctx.components.clone())
-            .with_rpc_converter(tx_resp_builder.clone())
-            .eth_cache(ctx.cache)
-            .task_spawner(ctx.components.task_executor().clone())
-            .gas_cap(ctx.config.rpc_gas_cap.into())
-            .max_simulate_blocks(ctx.config.rpc_max_simulate_blocks)
-            .eth_proof_window(ctx.config.eth_proof_window)
-            .fee_history_cache_config(ctx.config.fee_history_cache)
-            .proof_permits(ctx.config.proof_permits)
-            .gas_oracle_config(ctx.config.gas_oracle)
-            .max_batch_size(ctx.config.max_batch_size)
-            .pending_block_kind(ctx.config.pending_block_kind)
-            .raw_tx_forwarder(ctx.config.raw_tx_forwarder)
-            .build();
+        let inner = ctx.eth_api_builder().with_rpc_converter(tx_resp_builder.clone()).build();
 
-        Ok(BerachainApi { inner: api })
+        Ok(BerachainApi { inner  })
     }
 }
 
