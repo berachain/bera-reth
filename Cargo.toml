@@ -37,10 +37,12 @@ reth-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-codecs = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
+reth-consensus-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-engine-local = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-engine-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
+reth-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
 reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.7.0" }
