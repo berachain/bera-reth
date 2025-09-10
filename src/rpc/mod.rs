@@ -75,6 +75,9 @@ where
             .fee_history_cache_config(ctx.config.fee_history_cache)
             .proof_permits(ctx.config.proof_permits)
             .gas_oracle_config(ctx.config.gas_oracle)
+            .max_batch_size(ctx.config.max_batch_size)
+            .pending_block_kind(ctx.config.pending_block_kind)
+            .raw_tx_forwarder(ctx.config.raw_tx_forwarder)
             .build();
 
         Ok(BerachainApi { inner: api })
