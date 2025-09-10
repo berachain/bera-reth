@@ -33,7 +33,7 @@ use std::{fmt::Display, sync::Arc};
 /// Default minimum base fee when Prague1 is not active.
 const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 
-/// Berachain chain specification wrapping Reth's ChainSpec with Prague1 hardfork
+/// Berachain chain specification wrapping Reth's ChainSpec with Berachain hardforks
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
 pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
@@ -41,8 +41,10 @@ pub struct BerachainChainSpec {
     pub genesis_header: BerachainHeader,
     /// PoL contract address loaded from configuration
     pub pol_contract_address: Address,
-    /// The minimum base fee in wei
+    /// The minimum base fee in wei for Prague1
     pub prague1_minimum_base_fee: u64,
+    /// The minimum base fee in wei for Prague2
+    pub prague2_minimum_base_fee: u64,
 }
 
 impl BerachainChainSpec {
@@ -123,7 +125,7 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn next_block_base_fee(&self, parent: &Self::Header, _: u64) -> Option<u64> {
-        // Note that we use this parent block timestamp to determine whether Prague 1 is active.
+        // Note that we use this parent block timestamp to determine whether Prague2/1 is active.
         // This means that we technically start the base_fee changes the block after the fork
         // block. This is a conscious decision to minimize fork diffs across execution clients.
         let raw = calc_next_block_base_fee(
@@ -133,7 +135,10 @@ impl EthChainSpec for BerachainChainSpec {
             self.base_fee_params_at_timestamp(parent.timestamp()),
         );
 
-        let min_base_fee = if self.is_prague1_active_at_timestamp(parent.timestamp()) {
+        // Prague2 supersedes Prague1 - check Prague2 first
+        let min_base_fee = if self.is_prague2_active_at_timestamp(parent.timestamp()) {
+            self.prague2_minimum_base_fee
+        } else if self.is_prague1_active_at_timestamp(parent.timestamp()) {
             self.prague1_minimum_base_fee
         } else {
             DEFAULT_MIN_BASE_FEE_WEI
@@ -212,6 +217,7 @@ impl BerachainChainSpec {
             genesis_header,
             pol_contract_address: Address::ZERO,
             prague1_minimum_base_fee: 0,
+            prague2_minimum_base_fee: 0,
         }
     }
 }
@@ -229,9 +235,16 @@ impl From<Genesis> for BerachainChainSpec {
             return Self::ethereum_fallback(genesis);
         }
 
-        let prague1_config = berachain_genesis_config
-            .prague1
-            .expect("Prague1 should be Some since is_berachain() was true");
+        // Parse Prague1 and Prague2 configurations if present
+        let prague1_config = berachain_genesis_config.prague1;
+        let prague2_config = berachain_genesis_config.prague2;
+
+        // At least one of Prague1 or Prague2 must be configured for a Berachain genesis
+        if prague1_config.is_none() && prague2_config.is_none() {
+            panic!(
+                "Berachain networks require at least one of Prague1 or Prague2 hardforks to be configured"
+            );
+        }
 
         // Berachain networks must start with Cancun at genesis
         if genesis.config.cancun_time != Some(0) {
@@ -281,14 +294,42 @@ impl From<Genesis> for BerachainChainSpec {
         }
 
         // Validate Prague1 comes after Prague if both are configured
-        match (genesis.config.prague_time, prague1_config.time) {
-            (Some(prague_time), prague1_time) if prague1_time < prague_time => {
-                panic!(
-                    "Prague1 hardfork must activate at or after Prague hardfork. Prague time: {prague_time}, Prague1 time: {prague1_time}. Check that Prague1 time is not malformed (should be a valid Unix timestamp).",
-                );
+        if let Some(prague1_config) = prague1_config {
+            match (genesis.config.prague_time, prague1_config.time) {
+                (Some(prague_time), prague1_time) if prague1_time < prague_time => {
+                    panic!(
+                        "Prague1 hardfork must activate at or after Prague hardfork. Prague time: {prague_time}, Prague1 time: {prague1_time}. Check that Prague1 time is not malformed (should be a valid Unix timestamp).",
+                    );
+                }
+                (None, _) => {
+                    panic!("Prague1 hardfork requires Prague hardfork to be configured");
+                }
+                _ => {}
             }
-            (None, _) => {
-                panic!("Prague1 hardfork requires Prague hardfork to be configured");
+        }
+
+        // Validate Prague2 comes after Prague if both are configured
+        if let Some(prague2_config) = prague2_config {
+            match (genesis.config.prague_time, prague2_config.time) {
+                (Some(prague_time), prague2_time) if prague2_time < prague_time => {
+                    panic!(
+                        "Prague2 hardfork must activate at or after Prague hardfork. Prague time: {prague_time}, Prague2 time: {prague2_time}. Check that Prague2 time is not malformed (should be a valid Unix timestamp).",
+                    );
+                }
+                (None, _) => {
+                    panic!("Prague2 hardfork requires Prague hardfork to be configured");
+                }
+                _ => {}
+            }
+        }
+
+        // Validate Prague2 comes after Prague1 if both are configured
+        match (prague1_config, prague2_config) {
+            (Some(p1_config), Some(p2_config)) if p2_config.time <= p1_config.time => {
+                panic!(
+                    "Prague2 hardfork must activate after Prague1 hardfork. Prague1 time: {}, Prague2 time: {}. Check that Prague2 time is not malformed (should be a valid Unix timestamp).",
+                    p1_config.time, p2_config.time
+                );
             }
             _ => {}
         }
@@ -356,10 +397,21 @@ impl From<Genesis> for BerachainChainSpec {
                 .push((EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(prague_time)));
         }
 
-        hardforks.push((
-            BerachainHardfork::Prague1.boxed(),
-            ForkCondition::Timestamp(prague1_config.time),
-        ));
+        // Add Prague1 hardfork if configured
+        if let Some(prague1_config) = prague1_config {
+            hardforks.push((
+                BerachainHardfork::Prague1.boxed(),
+                ForkCondition::Timestamp(prague1_config.time),
+            ));
+        }
+
+        // Add Prague2 hardfork if configured
+        if let Some(prague2_config) = prague2_config {
+            hardforks.push((
+                BerachainHardfork::Prague2.boxed(),
+                ForkCondition::Timestamp(prague2_config.time),
+            ));
+        }
 
         if let Some(osaka_time) = genesis.config.osaka_time {
             hardforks.push((EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(osaka_time)));
@@ -386,34 +438,95 @@ impl From<Genesis> for BerachainChainSpec {
 
         let hardforks = ChainHardforks::new(hardforks);
 
-        // Create base fee parameters based on Prague1 configuration
-        let base_fee_params = if prague1_config.time == 0 {
-            // Prague1 active at genesis - use constant params with Berachain's denominator
-            BaseFeeParamsKind::Constant(BaseFeeParams {
-                max_change_denominator: prague1_config.base_fee_change_denominator,
-                elasticity_multiplier: 2, // Standard Ethereum value
-            })
-        } else {
-            // Prague1 activates later - use variable params
-            let fork_base_fee_params = vec![
-                // Pre-Prague1: standard Ethereum params
-                (
-                    EthereumHardfork::London.boxed(),
-                    BaseFeeParams {
-                        max_change_denominator: 8, // Standard Ethereum value
-                        elasticity_multiplier: 2,
-                    },
-                ),
-                // Post-Prague1: Berachain params
-                (
-                    BerachainHardfork::Prague1.boxed(),
-                    BaseFeeParams {
+        // Create base fee parameters based on Prague1/Prague2 configuration
+        let base_fee_params = match (prague1_config, prague2_config) {
+            (Some(prague1_config), None) => {
+                // Only Prague1 configured
+                if prague1_config.time == 0 {
+                    // Prague1 active at genesis - use constant params with Berachain's denominator
+                    BaseFeeParamsKind::Constant(BaseFeeParams {
                         max_change_denominator: prague1_config.base_fee_change_denominator,
+                        elasticity_multiplier: 2, // Standard Ethereum value
+                    })
+                } else {
+                    // Prague1 activates later - use variable params
+                    let fork_base_fee_params = vec![
+                        // Pre-Prague1: standard Ethereum params
+                        (
+                            EthereumHardfork::London.boxed(),
+                            BaseFeeParams {
+                                max_change_denominator: 8, // Standard Ethereum value
+                                elasticity_multiplier: 2,
+                            },
+                        ),
+                        // Post-Prague1: Berachain params
+                        (
+                            BerachainHardfork::Prague1.boxed(),
+                            BaseFeeParams {
+                                max_change_denominator: prague1_config.base_fee_change_denominator,
+                                elasticity_multiplier: 2,
+                            },
+                        ),
+                    ];
+                    BaseFeeParamsKind::Variable(fork_base_fee_params.into())
+                }
+            }
+            (None, Some(prague2_config)) => {
+                // Only Prague2 configured
+                if prague2_config.time == 0 {
+                    // Prague2 active at genesis - use constant params with Berachain's denominator
+                    BaseFeeParamsKind::Constant(BaseFeeParams {
+                        max_change_denominator: prague2_config.base_fee_change_denominator,
                         elasticity_multiplier: 2,
-                    },
-                ),
-            ];
-            BaseFeeParamsKind::Variable(fork_base_fee_params.into())
+                    })
+                } else {
+                    // Prague2 activates later - use variable params
+                    let fork_base_fee_params = vec![
+                        // Pre-Prague2: standard Ethereum params
+                        (
+                            EthereumHardfork::London.boxed(),
+                            BaseFeeParams { max_change_denominator: 8, elasticity_multiplier: 2 },
+                        ),
+                        // Post-Prague2: Berachain params
+                        (
+                            BerachainHardfork::Prague2.boxed(),
+                            BaseFeeParams {
+                                max_change_denominator: prague2_config.base_fee_change_denominator,
+                                elasticity_multiplier: 2,
+                            },
+                        ),
+                    ];
+                    BaseFeeParamsKind::Variable(fork_base_fee_params.into())
+                }
+            }
+            (Some(prague1_config), Some(prague2_config)) => {
+                // Both Prague1 and Prague2 configured
+                let fork_base_fee_params = vec![
+                    // Pre-Prague1: standard Ethereum params
+                    (
+                        EthereumHardfork::London.boxed(),
+                        BaseFeeParams { max_change_denominator: 8, elasticity_multiplier: 2 },
+                    ),
+                    // Prague1: Berachain params
+                    (
+                        BerachainHardfork::Prague1.boxed(),
+                        BaseFeeParams {
+                            max_change_denominator: prague1_config.base_fee_change_denominator,
+                            elasticity_multiplier: 2,
+                        },
+                    ),
+                    // Prague2: Berachain params (supersedes Prague1)
+                    (
+                        BerachainHardfork::Prague2.boxed(),
+                        BaseFeeParams {
+                            max_change_denominator: prague2_config.base_fee_change_denominator,
+                            elasticity_multiplier: 2,
+                        },
+                    ),
+                ];
+                BaseFeeParamsKind::Variable(fork_base_fee_params.into())
+            }
+            (None, None) => unreachable!("Already validated at least one is configured"),
         };
 
         let inner = ChainSpec {
@@ -431,15 +544,40 @@ impl From<Genesis> for BerachainChainSpec {
         let mut genesis_header = BerachainHeader::from(inner.genesis_header());
 
         // Set prev_proposer_pubkey to zero if Prague1 is active at genesis timestamp
-        let is_prague1_at_genesis = prague1_config.time <= genesis.timestamp;
-        if is_prague1_at_genesis {
-            genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
+        if let Some(prague1_config) = prague1_config {
+            let is_prague1_at_genesis = prague1_config.time <= genesis.timestamp;
+            if is_prague1_at_genesis {
+                genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
+            }
         }
+
+        // Extract configuration values from Prague1 or Prague2 configs
+        let (pol_contract_address, prague1_min_fee, prague2_min_fee) =
+            match (prague1_config, prague2_config) {
+                (Some(p1), Some(p2)) => (
+                    p1.pol_distributor_address, // Use Prague1's PoL address as primary
+                    p1.minimum_base_fee_wei,
+                    p2.minimum_base_fee_wei,
+                ),
+                (Some(p1), None) => (
+                    p1.pol_distributor_address,
+                    p1.minimum_base_fee_wei,
+                    0, // Prague2 not configured, default to 0
+                ),
+                (None, Some(p2)) => (
+                    p2.pol_distributor_address,
+                    0, // Prague1 not configured, default to 0
+                    p2.minimum_base_fee_wei,
+                ),
+                (None, None) => unreachable!("Already validated at least one is configured"),
+            };
+
         Self {
             inner,
             genesis_header,
-            pol_contract_address: prague1_config.pol_distributor_address,
-            prague1_minimum_base_fee: prague1_config.minimum_base_fee_wei,
+            pol_contract_address,
+            prague1_minimum_base_fee: prague1_min_fee,
+            prague2_minimum_base_fee: prague2_min_fee,
         }
     }
 }

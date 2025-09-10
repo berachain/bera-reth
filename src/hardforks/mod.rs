@@ -7,6 +7,8 @@ hardfork!(
     BerachainHardfork {
         /// Prague1 hardfork: Introduces BRIP-0002 and BRIP-0004
         Prague1,
+        /// Prague2 hardfork: Reverts base fee to 0
+        Prague2,
     }
 );
 
@@ -18,6 +20,11 @@ pub trait BerachainHardforks: EthereumHardforks {
     /// Checks if Prague1 hardfork is active at given timestamp
     fn is_prague1_active_at_timestamp(&self, timestamp: u64) -> bool {
         self.berachain_fork_activation(BerachainHardfork::Prague1).active_at_timestamp(timestamp)
+    }
+
+    /// Checks if Prague2 hardfork is active at given timestamp
+    fn is_prague2_active_at_timestamp(&self, timestamp: u64) -> bool {
+        self.berachain_fork_activation(BerachainHardfork::Prague2).active_at_timestamp(timestamp)
     }
 }
 
@@ -38,6 +45,7 @@ mod tests {
         fn berachain_fork_activation(&self, fork: BerachainHardfork) -> ForkCondition {
             match fork {
                 BerachainHardfork::Prague1 => ForkCondition::Timestamp(0),
+                BerachainHardfork::Prague2 => ForkCondition::Timestamp(1000),
             }
         }
     }
@@ -46,6 +54,12 @@ mod tests {
     fn test_prague1_hardfork() {
         let fork = BerachainHardfork::Prague1;
         assert_eq!(format!("{fork:?}"), "Prague1");
+    }
+
+    #[test]
+    fn test_prague2_hardfork() {
+        let fork = BerachainHardfork::Prague2;
+        assert_eq!(format!("{fork:?}"), "Prague2");
     }
 
     #[test]
@@ -59,5 +73,14 @@ mod tests {
         // Test Prague1 active at timestamp using trait method
         assert!(hardforks.is_prague1_active_at_timestamp(0));
         assert!(hardforks.is_prague1_active_at_timestamp(100));
+
+        // Test Prague2 activation at timestamp 1000
+        let activation = hardforks.berachain_fork_activation(BerachainHardfork::Prague2);
+        assert_eq!(activation, ForkCondition::Timestamp(1000));
+
+        // Test Prague2 active at timestamp using trait method
+        assert!(!hardforks.is_prague2_active_at_timestamp(999));
+        assert!(hardforks.is_prague2_active_at_timestamp(1000));
+        assert!(hardforks.is_prague2_active_at_timestamp(2000));
     }
 }
