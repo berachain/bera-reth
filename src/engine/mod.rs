@@ -305,6 +305,12 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": prague1_time + 1000000000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 0,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 }
             }
         });

@@ -7,7 +7,7 @@ hardfork!(
     BerachainHardfork {
         /// Prague1 hardfork: Introduces BRIP-0002 and BRIP-0004
         Prague1,
-        /// Prague2 hardfork: Reverts base fee to 0
+        /// Prague2 hardfork: Changes min base fee to 0
         Prague2,
     }
 );

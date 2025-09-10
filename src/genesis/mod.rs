@@ -49,7 +49,7 @@ pub struct BerachainGenesisConfig {
 }
 
 impl Default for BerachainGenesisConfig {
-    /// Default config with Prague1 activated immediately at genesis
+    /// Default config with Prague1 and Prague2 activated
     fn default() -> Self {
         Self {
             prague1: Some(BerachainForkConfig {
@@ -58,15 +58,20 @@ impl Default for BerachainGenesisConfig {
                 minimum_base_fee_wei: 1_000_000_000, // 1 gwei
                 pol_distributor_address: address!("4200000000000000000000000000000000000042"),
             }),
-            prague2: None, // Prague2 not activated by default
+            prague2: Some(BerachainForkConfig {
+                time: 1000000000,                // Activate later to revert base fee to 0
+                base_fee_change_denominator: 48, // Berachain standard value
+                minimum_base_fee_wei: 0,         // 0 wei (reverts Prague1)
+                pol_distributor_address: address!("4200000000000000000000000000000000000042"),
+            }),
         }
     }
 }
 
 impl BerachainGenesisConfig {
-    /// Returns true if it's a berachain genesis
+    /// Returns true if it's a berachain genesis (both Prague1 and Prague2 configured)
     pub fn is_berachain(&self) -> bool {
-        self.prague1.is_some()
+        self.prague1.is_some() && self.prague2.is_some()
     }
 }
 
@@ -97,26 +102,10 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                     );
                 }
 
-                // If prague2 is configured, validate it fully and ensure prague1 is also configured
-                if let Some(prague2_config) = cfg.prague2 {
-                    if cfg.prague1.is_none() {
-                        return Err(BerachainConfigError::InvalidConfig(serde_json::Error::io(
-                            std::io::Error::new(
-                                std::io::ErrorKind::InvalidData,
-                                "Prague2 can only be configured when Prague1 is also configured",
-                            ),
-                        )));
-                    }
-
-                    if prague2_config.base_fee_change_denominator == 0 {
-                        return Err(BerachainConfigError::InvalidDenominator);
-                    }
-                    if prague2_config.pol_distributor_address.is_zero() {
-                        return Err(BerachainConfigError::MissingPoLDistributorAddress);
-                    }
-
-                    // Validate Prague2 comes after Prague1 if both are configured
-                    if let Some(prague1_config) = cfg.prague1 {
+                // Validate that both Prague1 and Prague2 are configured together
+                match (cfg.prague1, cfg.prague2) {
+                    (Some(prague1_config), Some(prague2_config)) => {
+                        // Both configured - validate Prague2 comes after Prague1
                         if prague2_config.time <= prague1_config.time {
                             return Err(BerachainConfigError::InvalidConfig(serde_json::Error::io(
                                 std::io::Error::new(
@@ -125,6 +114,24 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                                 ),
                             )));
                         }
+                    }
+                    _ => {
+                        return Err(BerachainConfigError::InvalidConfig(serde_json::Error::io(
+                            std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                "Berachain networks require both Prague1 and Prague2 hardforks to be configured",
+                            ),
+                        )));
+                    }
+                }
+
+                // If Prague2 is configured, validate it fully
+                if let Some(prague2_config) = cfg.prague2 {
+                    if prague2_config.base_fee_change_denominator == 0 {
+                        return Err(BerachainConfigError::InvalidDenominator);
+                    }
+                    if prague2_config.pol_distributor_address.is_zero() {
+                        return Err(BerachainConfigError::MissingPoLDistributorAddress);
                     }
 
                     info!(
@@ -136,12 +143,11 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                     );
                 }
 
-                if cfg.prague1.is_none() {
+                if cfg.prague1.is_none() && cfg.prague2.is_none() {
                     info!(
-                        "Loaded Berachain genesis configuration: No Prague1 configured, defaulting to Ethereum behavior"
+                        "Loaded Berachain genesis configuration: No Berachain hardforks configured, defaulting to Ethereum behavior"
                     );
                 }
-
                 Ok(cfg)
             }
             Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
@@ -203,6 +209,12 @@ mod tests {
                 "baseFeeChangeDenominator": 48,
                 "minimumBaseFeeWei": 1000000000,
                 "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+            },
+            "prague2": {
+                "time": 1720000000,
+                "baseFeeChangeDenominator": 48,
+                "minimumBaseFeeWei": 0,
+                "polDistributorAddress": "0x4200000000000000000000000000000000000042"
             }
           }
         }
@@ -222,11 +234,22 @@ mod tests {
             prague1_config.pol_distributor_address,
             address!("4200000000000000000000000000000000000042")
         );
+
+        let prague2_config = cfg.prague2.expect("Prague2 should be configured");
+        assert_eq!(prague2_config.time, 1720000000);
+        assert_eq!(prague2_config.minimum_base_fee_wei, 0);
+        assert_eq!(prague2_config.base_fee_change_denominator, 48);
+        assert_eq!(
+            prague2_config.pol_distributor_address,
+            address!("4200000000000000000000000000000000000042")
+        );
+
+        assert!(cfg.is_berachain());
     }
 
     #[test]
     fn test_genesis_config_berachain_present_no_prague1() {
-        // Berachain field present but no prague1 -> should be valid with prague1 = None
+        // Berachain field present but no prague1 -> should fail since both are required
         let json = r#"
         {
           "berachain": {}
@@ -235,12 +258,11 @@ mod tests {
         let v: Value = serde_json::from_str(json).unwrap();
         let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
 
-        let cfg = BerachainGenesisConfig::try_from(&other_fields).expect("should succeed");
-
-        // Prague1 and Prague2 should not be configured
-        assert_eq!(cfg.prague1, None);
-        assert_eq!(cfg.prague2, None);
-        assert!(!cfg.is_berachain());
+        let result = BerachainGenesisConfig::try_from(&other_fields);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "Berachain networks require both Prague1 and Prague2 hardforks to be configured"
+        ));
     }
 
     #[test]
@@ -339,12 +361,34 @@ mod tests {
 
         let result = BerachainGenesisConfig::try_from(&other_fields);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Prague2 can only be configured when Prague1 is also configured")
-        );
+        assert!(result.unwrap_err().to_string().contains(
+            "Berachain networks require both Prague1 and Prague2 hardforks to be configured"
+        ));
+    }
+
+    #[test]
+    fn test_genesis_config_prague1_without_prague2_fails() {
+        let json = r#"
+        {
+          "berachain": {
+            "prague1": {
+                "time": 1000000000,
+                "baseFeeChangeDenominator": 48,
+                "minimumBaseFeeWei": 1000000000,
+                "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+            }
+          }
+        }
+        "#;
+
+        let v: Value = serde_json::from_str(json).unwrap();
+        let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
+
+        let result = BerachainGenesisConfig::try_from(&other_fields);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "Berachain networks require both Prague1 and Prague2 hardforks to be configured"
+        ));
     }
 
     #[test]
