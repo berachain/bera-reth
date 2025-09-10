@@ -105,7 +105,18 @@ impl EthChainSpec for BerachainChainSpec {
             _ => "\nPrague1 Misconfigured".to_string(),
         };
 
-        Box::new(format!("{inner_display}{prague1_details}"))
+        let prague2_details = match self.fork(BerachainHardfork::Prague2) {
+            ForkCondition::Timestamp(time) => {
+                format!(
+                    "\nBerachain Prague2 configuration: {{time={}, min_base_fee={} gwei}}",
+                    time,
+                    self.prague2_minimum_base_fee / 1_000_000_000
+                )
+            }
+            _ => "\nPrague2 Misconfigured".to_string(),
+        };
+
+        Box::new(format!("{inner_display}{prague1_details}{prague2_details}"))
     }
 
     fn genesis_header(&self) -> &Self::Header {
@@ -242,11 +253,9 @@ impl From<Genesis> for BerachainChainSpec {
         // Both Prague1 and Prague2 are required for Berachain genesis
         let (prague1_config, prague2_config) = match (prague1_config_opt, prague2_config) {
             (Some(p1), Some(p2)) => (p1, p2),
-            (None, None) => panic!(
-                "Berachain networks require both Prague1 and Prague2 hardforks to be configured"
-            ),
-            (Some(_), None) => panic!("Prague2 hardfork is required when Prague1 is configured"),
-            (None, Some(_)) => panic!("Prague1 hardfork is required when Prague2 is configured"),
+            (_, _) => {
+                panic!("Berachain networks require Prague1 and Prague2 hardforks to be configured")
+            }
         };
 
         // Berachain networks must start with Cancun at genesis
@@ -438,6 +447,7 @@ impl From<Genesis> for BerachainChainSpec {
                 (
                     BerachainHardfork::Prague2.boxed(),
                     BaseFeeParams {
+                        // We use the prague1 base_fee_change_denominator for prague2
                         max_change_denominator: prague1_config.base_fee_change_denominator,
                         elasticity_multiplier: 2,
                     },

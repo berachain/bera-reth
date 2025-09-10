@@ -110,20 +110,6 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                     }
                 }
 
-                // Prague2 validation - uses Prague1's base fee denominator
-                if let Some(prague2_config) = cfg.prague2 {
-                    info!(
-                        "Loaded Berachain genesis configuration: Prague2 enabled at time={}, min_base_fee={} gwei (uses Prague1 denominator)",
-                        prague2_config.time,
-                        prague2_config.minimum_base_fee_wei / 1_000_000_000
-                    );
-                }
-
-                if cfg.prague1.is_none() && cfg.prague2.is_none() {
-                    info!(
-                        "Loaded Berachain genesis configuration: No Berachain hardforks configured, defaulting to Ethereum behavior"
-                    );
-                }
                 Ok(cfg)
             }
             Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
