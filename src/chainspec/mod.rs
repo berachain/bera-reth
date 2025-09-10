@@ -312,25 +312,18 @@ impl From<Genesis> for BerachainChainSpec {
 
         // Validate Prague2 ordering if configured
         if let Some(prague2_config) = prague2_config {
-            // Prague2 must come after Prague if both are configured
-            match (genesis.config.prague_time, prague2_config.time) {
-                (Some(prague_time), prague2_time) if prague2_time < prague_time => {
-                    panic!(
-                        "Prague2 hardfork must activate at or after Prague hardfork. Prague time: {prague_time}, Prague2 time: {prague2_time}. Check that Prague2 time is not malformed (should be a valid Unix timestamp).",
-                    );
-                }
-                (None, _) => {
-                    panic!("Prague2 hardfork requires Prague hardfork to be configured");
-                }
-                _ => {}
-            }
-
-            // Prague2 must come after Prague1
+            // Prague2 must come after Prague1 (transitivity: if Prague1 >= Prague and Prague2 >
+            // Prague1, then Prague2 > Prague)
             if prague2_config.time <= prague1_config.time {
                 panic!(
                     "Prague2 hardfork must activate after Prague1 hardfork. Prague1 time: {}, Prague2 time: {}. Check that Prague2 time is not malformed (should be a valid Unix timestamp).",
                     prague1_config.time, prague2_config.time
                 );
+            }
+
+            // Ensure Prague hardfork is configured (required for any Berachain hardfork)
+            if genesis.config.prague_time.is_none() {
+                panic!("Prague2 hardfork requires Prague hardfork to be configured");
             }
         }
 
