@@ -46,8 +46,8 @@ impl Default for BerachainGenesisConfig {
                 pol_distributor_address: address!("4200000000000000000000000000000000000042"),
             }),
             prague2: Some(Prague2Config {
-                time: 1000000000,        // Activate later to revert base fee to 0
-                minimum_base_fee_wei: 0, // 0 wei (reverts Prague1)
+                time: 0,                 // Activate immediately at genesis
+                minimum_base_fee_wei: 0, // 0 wei
             }),
         }
     }
