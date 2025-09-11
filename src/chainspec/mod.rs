@@ -615,15 +615,28 @@ mod tests {
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
 
-        // After Prague1, should still use Berachain params
+        // Between Prague1 and Prague2, should still use Prague1 params
+        let params = chain_spec.base_fee_params_at_timestamp(1999);
+        assert_eq!(params.max_change_denominator, 48);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // At Prague2 activation, should inherit Prague1's denominator but change minimum base fee
         let params = chain_spec.base_fee_params_at_timestamp(2000);
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
+
+        // Verify minimum base fee behavior changes across hardforks
+        assert_eq!(chain_spec.prague1_minimum_base_fee, 1000000000); // 1 gwei
+        assert_eq!(chain_spec.prague2_minimum_base_fee, 0); // 0 wei
+        assert!(!chain_spec.is_prague1_active_at_timestamp(999));
+        assert!(chain_spec.is_prague1_active_at_timestamp(1000));
+        assert!(!chain_spec.is_prague2_active_at_timestamp(1999));
+        assert!(chain_spec.is_prague2_active_at_timestamp(2000));
     }
 
     #[test]
     fn test_base_fee_params_custom_denominator() {
-        // Test with a custom denominator value
+        // Test with a custom denominator value and verify Prague2 inherits it
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
         genesis.config.cancun_time = Some(0);
@@ -632,13 +645,13 @@ mod tests {
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
-                    "time": 0,
+                    "time": 500,
                     "baseFeeChangeDenominator": 100,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 },
                 "prague2": {
-                    "time": 0,
+                    "time": 1000,
                     "minimumBaseFeeWei": 0,
                 }
             }
@@ -648,9 +661,24 @@ mod tests {
 
         let chain_spec = BerachainChainSpec::from(genesis);
 
-        let params = chain_spec.base_fee_params_at_timestamp(100);
+        // Before Prague1, should use Ethereum default (8)
+        let params = chain_spec.base_fee_params_at_timestamp(499);
+        assert_eq!(params.max_change_denominator, 8);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // At Prague1, should use custom denominator (100)
+        let params = chain_spec.base_fee_params_at_timestamp(500);
         assert_eq!(params.max_change_denominator, 100);
         assert_eq!(params.elasticity_multiplier, 2);
+
+        // At Prague2, should inherit Prague1's custom denominator (100)
+        let params = chain_spec.base_fee_params_at_timestamp(1000);
+        assert_eq!(params.max_change_denominator, 100);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // Verify Prague2 inherits Prague1's denominator but has different minimum base fee
+        assert_eq!(chain_spec.prague1_minimum_base_fee, 1000000000); // 1 gwei
+        assert_eq!(chain_spec.prague2_minimum_base_fee, 0); // 0 wei
     }
 
     #[test]
