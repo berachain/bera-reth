@@ -364,6 +364,10 @@
         "minimumBaseFeeWei": 1000000000,
         "polDistributorAddress": "0x4200000000000000000000000000000000000042",
         "time": 0
+      },
+      "prague2": {
+        "time": 0,
+        "minimumBaseFeeWei": 0
       }
     },
     "berlinBlock": 0,
