@@ -318,11 +318,11 @@ impl From<Genesis> for BerachainChainSpec {
             _ => {}
         }
 
-        // Validate Prague2 ordering (Prague2 must come after Prague1)
-        // Transitivity: if Prague1 >= Prague and Prague2 > Prague1, then Prague2 > Prague
-        if prague2_config.time <= prague1_config.time {
+        // Validate Prague2 ordering (Prague2 must come at or after Prague1)
+        // Transitivity: if Prague1 >= Prague and Prague2 >= Prague1, then Prague2 >= Prague
+        if prague2_config.time < prague1_config.time {
             panic!(
-                "Prague2 hardfork must activate after Prague1 hardfork. Prague1 time: {}, Prague2 time: {}. Check that Prague2 time is not malformed (should be a valid Unix timestamp).",
+                "Prague2 hardfork must activate at or after Prague1 hardfork. Prague1 time: {}, Prague2 time: {}. Check that Prague2 time is not malformed (should be a valid Unix timestamp).",
                 prague1_config.time, prague2_config.time
             );
         }
