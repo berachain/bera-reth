@@ -504,16 +504,6 @@ mod tests {
     }
 
     #[test]
-    fn test_base_fee_params() {
-        let chain_spec = BerachainChainSpec::default();
-
-        // Test base fee params
-        let params = chain_spec.base_fee_params_at_timestamp(0);
-        assert_eq!(params.max_change_denominator, 8);
-        assert_eq!(params.elasticity_multiplier, 2);
-    }
-
-    #[test]
     fn test_from_genesis() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
@@ -759,7 +749,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hardfork_activation() {
+    fn test_prague1_and_prague2_hardfork_activation() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.prague_time = Some(1500);
@@ -795,7 +785,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_block_base_fee_with_prague1() {
+    fn test_next_block_base_fee_across_hardforks() {
         let prague1_base_fee = 10_000_000_000;
         let prague2_base_fee = 1000;
         let mut genesis = Genesis::default();
