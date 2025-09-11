@@ -426,17 +426,21 @@ impl From<Genesis> for BerachainChainSpec {
         let hardforks = ChainHardforks::new(hardforks);
 
         // Create base fee parameters
+        let ethereum_basefee_params = BaseFeeParams::ethereum();
         let base_fee_params = BaseFeeParamsKind::Variable(
             vec![
                 (
                     EthereumHardfork::London.boxed(),
-                    BaseFeeParams { max_change_denominator: 8, elasticity_multiplier: 2 },
+                    BaseFeeParams {
+                        max_change_denominator: ethereum_basefee_params.max_change_denominator,
+                        elasticity_multiplier: ethereum_basefee_params.elasticity_multiplier,
+                    },
                 ),
                 (
                     BerachainHardfork::Prague1.boxed(),
                     BaseFeeParams {
                         max_change_denominator: prague1_config.base_fee_change_denominator,
-                        elasticity_multiplier: 2,
+                        elasticity_multiplier: ethereum_basefee_params.elasticity_multiplier,
                     },
                 ),
                 (
@@ -444,7 +448,7 @@ impl From<Genesis> for BerachainChainSpec {
                     BaseFeeParams {
                         // We use the prague1 base_fee_change_denominator for prague2
                         max_change_denominator: prague1_config.base_fee_change_denominator,
-                        elasticity_multiplier: 2,
+                        elasticity_multiplier: ethereum_basefee_params.elasticity_multiplier,
                     },
                 ),
             ]
@@ -1483,5 +1487,20 @@ mod tests {
 
         assert_eq!(chain_spec.inner.chain.id(), 1);
         assert!(chain_spec.inner.chain.is_ethereum());
+    }
+
+    #[test]
+    fn test_ethereum_base_fee_params_regression() {
+        // Regression test to ensure Ethereum base fee parameters maintain expected values
+        let ethereum_params = BaseFeeParams::ethereum();
+
+        assert_eq!(
+            ethereum_params.max_change_denominator, 8,
+            "Ethereum max_change_denominator should be 8"
+        );
+        assert_eq!(
+            ethereum_params.elasticity_multiplier, 2,
+            "Ethereum elasticity_multiplier should be 2"
+        );
     }
 }
