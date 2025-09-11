@@ -248,10 +248,10 @@ impl From<Genesis> for BerachainChainSpec {
 
         // Parse Prague1 and Prague2 configurations if present
         let prague1_config_opt = berachain_genesis_config.prague1;
-        let prague2_config = berachain_genesis_config.prague2;
+        let prague2_config_opt = berachain_genesis_config.prague2;
 
         // Both Prague1 and Prague2 are required for Berachain genesis
-        let (prague1_config, prague2_config) = match (prague1_config_opt, prague2_config) {
+        let (prague1_config, prague2_config) = match (prague1_config_opt, prague2_config_opt) {
             (Some(p1), Some(p2)) => (p1, p2),
             (_, _) => {
                 panic!("Berachain networks require Prague1 and Prague2 hardforks to be configured")
@@ -325,11 +325,6 @@ impl From<Genesis> for BerachainChainSpec {
                 "Prague2 hardfork must activate at or after Prague1 hardfork. Prague1 time: {}, Prague2 time: {}. Check that Prague2 time is not malformed (should be a valid Unix timestamp).",
                 prague1_config.time, prague2_config.time
             );
-        }
-
-        // Ensure Prague hardfork is configured (required for any Berachain hardfork)
-        if genesis.config.prague_time.is_none() {
-            panic!("Prague2 hardfork requires Prague hardfork to be configured");
         }
 
         // Berachain networks don't support proof-of-work or non-genesis merge
