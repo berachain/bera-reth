@@ -4,7 +4,7 @@ use reth_node_core::version::{RethCliVersionConsts, try_init_version_metadata};
 use std::borrow::Cow;
 
 /// Initialize Bera-Reth version metadata using build.rs generated info
-pub fn init_bera_version() -> Result<(), RethCliVersionConsts> {
+pub fn init_bera_version() -> Result<(), ()> {
     try_init_version_metadata(RethCliVersionConsts {
         name_client: Cow::Borrowed("Bera-Reth"),
         cargo_pkg_version: Cow::Borrowed(env!("CARGO_PKG_VERSION")),
@@ -30,4 +30,5 @@ pub fn init_bera_version() -> Result<(), RethCliVersionConsts> {
             std::env::consts::OS
         )),
     })
+    .map_err(|_| ())
 }
