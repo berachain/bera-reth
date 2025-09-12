@@ -14,16 +14,34 @@ use reth::CliRunner;
 use reth_cli_commands::node::NoArgs;
 use reth_ethereum_cli::Cli;
 use reth_node_builder::NodeHandle;
-use std::sync::Arc;
+use reth_node_core::version::{RethCliVersionConsts, try_init_version_metadata};
+use std::{borrow::Cow, sync::Arc};
 use tracing::info;
 
-/// Main entry point. Sets up runtime, signal handlers, and launches Berachain node.
 fn main() {
     // Install signal handler for better crash reporting
     reth_cli_util::sigsegv_handler::install();
 
+    // Initialize Bera-Reth version metadata - just the essentials
+    let _ = try_init_version_metadata(RethCliVersionConsts {
+        name_client: Cow::Borrowed("Bera-Reth"),
+        cargo_pkg_version: Cow::Borrowed(env!("CARGO_PKG_VERSION")),
+        short_version: Cow::Owned(format!("Version: {}", env!("CARGO_PKG_VERSION"))),
+        long_version: Cow::Owned(format!("Version: {}", env!("CARGO_PKG_VERSION"))),
+        p2p_client_version: Cow::Owned(format!(
+            "bera-reth/v{}/{}",
+            env!("CARGO_PKG_VERSION"),
+            std::env::consts::OS
+        )),
+        extra_data: Cow::Owned(format!(
+            "bera-reth/v{}/{}",
+            env!("CARGO_PKG_VERSION"),
+            std::env::consts::OS
+        )),
+        ..Default::default()
+    });
+
     // Enable backtraces unless a RUST_BACKTRACE value has already been explicitly provided.
-    // This helps with debugging issues during development and operation.
     if std::env::var_os("RUST_BACKTRACE").is_none() {
         unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
     }
