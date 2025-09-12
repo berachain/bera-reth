@@ -1506,6 +1506,8 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tracing",
+ "vergen",
+ "vergen-git2",
 ]
 
 [[package]]

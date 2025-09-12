@@ -79,6 +79,10 @@ revm-inspectors = "0.29.1"
 serde_json = "1.0"
 test-fuzz = "7"
 
+[build-dependencies]
+vergen = { version = "9.0.4", features = ["build", "cargo", "emit_and_set"] }
+vergen-git2 = "1.0.5"
+
 [features]
 default = ["jemalloc"]
 jemalloc = ["reth/jemalloc"]
