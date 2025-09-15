@@ -33,7 +33,7 @@ use std::{fmt::Display, sync::Arc};
 /// Default minimum base fee when Prague1 is not active.
 const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 
-/// Berachain chain specification wrapping Reth's ChainSpec with Prague1 hardfork
+/// Berachain chain specification wrapping Reth's ChainSpec with Berachain hardforks
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
 pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
@@ -41,8 +41,10 @@ pub struct BerachainChainSpec {
     pub genesis_header: BerachainHeader,
     /// PoL contract address loaded from configuration
     pub pol_contract_address: Address,
-    /// The minimum base fee in wei
+    /// The minimum base fee in wei for Prague1
     pub prague1_minimum_base_fee: u64,
+    /// The minimum base fee in wei for Prague2
+    pub prague2_minimum_base_fee: u64,
 }
 
 impl BerachainChainSpec {
@@ -103,7 +105,18 @@ impl EthChainSpec for BerachainChainSpec {
             _ => "\nPrague1 Misconfigured".to_string(),
         };
 
-        Box::new(format!("{inner_display}{prague1_details}"))
+        let prague2_details = match self.fork(BerachainHardfork::Prague2) {
+            ForkCondition::Timestamp(time) => {
+                format!(
+                    "\nBerachain Prague2 configuration: {{time={}, min_base_fee={} gwei}}",
+                    time,
+                    self.prague2_minimum_base_fee / 1_000_000_000
+                )
+            }
+            _ => "\nPrague2 Misconfigured".to_string(),
+        };
+
+        Box::new(format!("{inner_display}{prague1_details}{prague2_details}"))
     }
 
     fn genesis_header(&self) -> &Self::Header {
@@ -123,7 +136,7 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn next_block_base_fee(&self, parent: &Self::Header, _: u64) -> Option<u64> {
-        // Note that we use this parent block timestamp to determine whether Prague 1 is active.
+        // Note that we use this parent block timestamp to determine whether Prague2/1 is active.
         // This means that we technically start the base_fee changes the block after the fork
         // block. This is a conscious decision to minimize fork diffs across execution clients.
         let raw = calc_next_block_base_fee(
@@ -133,7 +146,10 @@ impl EthChainSpec for BerachainChainSpec {
             self.base_fee_params_at_timestamp(parent.timestamp()),
         );
 
-        let min_base_fee = if self.is_prague1_active_at_timestamp(parent.timestamp()) {
+        // Prague2 supersedes Prague1 - check Prague2 first
+        let min_base_fee = if self.is_prague2_active_at_timestamp(parent.timestamp()) {
+            self.prague2_minimum_base_fee
+        } else if self.is_prague1_active_at_timestamp(parent.timestamp()) {
             self.prague1_minimum_base_fee
         } else {
             DEFAULT_MIN_BASE_FEE_WEI
@@ -212,6 +228,7 @@ impl BerachainChainSpec {
             genesis_header,
             pol_contract_address: Address::ZERO,
             prague1_minimum_base_fee: 0,
+            prague2_minimum_base_fee: 0,
         }
     }
 }
@@ -229,9 +246,17 @@ impl From<Genesis> for BerachainChainSpec {
             return Self::ethereum_fallback(genesis);
         }
 
-        let prague1_config = berachain_genesis_config
-            .prague1
-            .expect("Prague1 should be Some since is_berachain() was true");
+        // Parse Prague1 and Prague2 configurations if present
+        let prague1_config_opt = berachain_genesis_config.prague1;
+        let prague2_config_opt = berachain_genesis_config.prague2;
+
+        // Both Prague1 and Prague2 are required for Berachain genesis
+        let (prague1_config, prague2_config) = match (prague1_config_opt, prague2_config_opt) {
+            (Some(p1), Some(p2)) => (p1, p2),
+            (_, _) => {
+                panic!("Berachain networks require Prague1 and Prague2 hardforks to be configured")
+            }
+        };
 
         // Berachain networks must start with Cancun at genesis
         if genesis.config.cancun_time != Some(0) {
@@ -291,6 +316,15 @@ impl From<Genesis> for BerachainChainSpec {
                 panic!("Prague1 hardfork requires Prague hardfork to be configured");
             }
             _ => {}
+        }
+
+        // Validate Prague2 ordering (Prague2 must come at or after Prague1)
+        // Transitivity: if Prague1 >= Prague and Prague2 >= Prague1, then Prague2 >= Prague
+        if prague2_config.time < prague1_config.time {
+            panic!(
+                "Prague2 hardfork must activate at or after Prague1 hardfork. Prague1 time: {}, Prague2 time: {}. Check that Prague2 time is not malformed (should be a valid Unix timestamp).",
+                prague1_config.time, prague2_config.time
+            );
         }
 
         // Berachain networks don't support proof-of-work or non-genesis merge
@@ -356,9 +390,14 @@ impl From<Genesis> for BerachainChainSpec {
                 .push((EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(prague_time)));
         }
 
+        // Add Prague1 and Prague2 hardforks (both always configured)
         hardforks.push((
             BerachainHardfork::Prague1.boxed(),
             ForkCondition::Timestamp(prague1_config.time),
+        ));
+        hardforks.push((
+            BerachainHardfork::Prague2.boxed(),
+            ForkCondition::Timestamp(prague2_config.time),
         ));
 
         if let Some(osaka_time) = genesis.config.osaka_time {
@@ -386,35 +425,35 @@ impl From<Genesis> for BerachainChainSpec {
 
         let hardforks = ChainHardforks::new(hardforks);
 
-        // Create base fee parameters based on Prague1 configuration
-        let base_fee_params = if prague1_config.time == 0 {
-            // Prague1 active at genesis - use constant params with Berachain's denominator
-            BaseFeeParamsKind::Constant(BaseFeeParams {
-                max_change_denominator: prague1_config.base_fee_change_denominator,
-                elasticity_multiplier: 2, // Standard Ethereum value
-            })
-        } else {
-            // Prague1 activates later - use variable params
-            let fork_base_fee_params = vec![
-                // Pre-Prague1: standard Ethereum params
+        // Create base fee parameters
+        let ethereum_basefee_params = BaseFeeParams::ethereum();
+        let base_fee_params = BaseFeeParamsKind::Variable(
+            vec![
                 (
                     EthereumHardfork::London.boxed(),
                     BaseFeeParams {
-                        max_change_denominator: 8, // Standard Ethereum value
-                        elasticity_multiplier: 2,
+                        max_change_denominator: ethereum_basefee_params.max_change_denominator,
+                        elasticity_multiplier: ethereum_basefee_params.elasticity_multiplier,
                     },
                 ),
-                // Post-Prague1: Berachain params
                 (
                     BerachainHardfork::Prague1.boxed(),
                     BaseFeeParams {
                         max_change_denominator: prague1_config.base_fee_change_denominator,
-                        elasticity_multiplier: 2,
+                        elasticity_multiplier: ethereum_basefee_params.elasticity_multiplier,
                     },
                 ),
-            ];
-            BaseFeeParamsKind::Variable(fork_base_fee_params.into())
-        };
+                (
+                    BerachainHardfork::Prague2.boxed(),
+                    BaseFeeParams {
+                        // We use the prague1 base_fee_change_denominator for prague2
+                        max_change_denominator: prague1_config.base_fee_change_denominator,
+                        elasticity_multiplier: ethereum_basefee_params.elasticity_multiplier,
+                    },
+                ),
+            ]
+            .into(),
+        );
 
         let inner = ChainSpec {
             chain: Chain::from_id_unchecked(genesis.config.chain_id),
@@ -435,11 +474,18 @@ impl From<Genesis> for BerachainChainSpec {
         if is_prague1_at_genesis {
             genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
         }
+
+        // Extract configuration values from Prague1 and Prague2 configs
+        let pol_contract_address = prague1_config.pol_distributor_address;
+        let prague1_minimum_base_fee = prague1_config.minimum_base_fee_wei;
+        let prague2_minimum_base_fee = prague2_config.minimum_base_fee_wei;
+
         Self {
             inner,
             genesis_header,
-            pol_contract_address: prague1_config.pol_distributor_address,
-            prague1_minimum_base_fee: prague1_config.minimum_base_fee_wei,
+            pol_contract_address,
+            prague1_minimum_base_fee,
+            prague2_minimum_base_fee,
         }
     }
 }
@@ -458,16 +504,6 @@ mod tests {
     }
 
     #[test]
-    fn test_base_fee_params() {
-        let chain_spec = BerachainChainSpec::default();
-
-        // Test base fee params
-        let params = chain_spec.base_fee_params_at_timestamp(0);
-        assert_eq!(params.max_change_denominator, 8);
-        assert_eq!(params.elasticity_multiplier, 2);
-    }
-
-    #[test]
     fn test_from_genesis() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
@@ -480,6 +516,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -506,6 +546,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -514,7 +558,7 @@ mod tests {
 
         let chain_spec = BerachainChainSpec::from(genesis);
 
-        // At genesis, should use Berachain's base fee params
+        // At genesis, should use prague1 base fee params
         let params = chain_spec.base_fee_params_at_timestamp(0);
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
@@ -539,6 +583,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 2000,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -557,15 +605,28 @@ mod tests {
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
 
-        // After Prague1, should still use Berachain params
+        // Between Prague1 and Prague2, should still use Prague1 params
+        let params = chain_spec.base_fee_params_at_timestamp(1999);
+        assert_eq!(params.max_change_denominator, 48);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // At Prague2 activation, should inherit Prague1's denominator but change minimum base fee
         let params = chain_spec.base_fee_params_at_timestamp(2000);
         assert_eq!(params.max_change_denominator, 48);
         assert_eq!(params.elasticity_multiplier, 2);
+
+        // Verify minimum base fee behavior changes across hardforks
+        assert_eq!(chain_spec.prague1_minimum_base_fee, 1000000000); // 1 gwei
+        assert_eq!(chain_spec.prague2_minimum_base_fee, 0); // 0 wei
+        assert!(!chain_spec.is_prague1_active_at_timestamp(999));
+        assert!(chain_spec.is_prague1_active_at_timestamp(1000));
+        assert!(!chain_spec.is_prague2_active_at_timestamp(1999));
+        assert!(chain_spec.is_prague2_active_at_timestamp(2000));
     }
 
     #[test]
     fn test_base_fee_params_custom_denominator() {
-        // Test with a custom denominator value
+        // Test with a custom denominator value and verify Prague2 inherits it
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
         genesis.config.cancun_time = Some(0);
@@ -574,10 +635,14 @@ mod tests {
         let extra_fields_json = json!({
             "berachain": {
                 "prague1": {
-                    "time": 0,
+                    "time": 500,
                     "baseFeeChangeDenominator": 100,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 1000,
+                    "minimumBaseFeeWei": 0,
                 }
             }
         });
@@ -586,9 +651,24 @@ mod tests {
 
         let chain_spec = BerachainChainSpec::from(genesis);
 
-        let params = chain_spec.base_fee_params_at_timestamp(0);
+        // Before Prague1, should use Ethereum default (8)
+        let params = chain_spec.base_fee_params_at_timestamp(499);
+        assert_eq!(params.max_change_denominator, 8);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // At Prague1, should use custom denominator (100)
+        let params = chain_spec.base_fee_params_at_timestamp(500);
         assert_eq!(params.max_change_denominator, 100);
         assert_eq!(params.elasticity_multiplier, 2);
+
+        // At Prague2, should inherit Prague1's custom denominator (100)
+        let params = chain_spec.base_fee_params_at_timestamp(1000);
+        assert_eq!(params.max_change_denominator, 100);
+        assert_eq!(params.elasticity_multiplier, 2);
+
+        // Verify Prague2 inherits Prague1's denominator but has different minimum base fee
+        assert_eq!(chain_spec.prague1_minimum_base_fee, 1000000000); // 1 gwei
+        assert_eq!(chain_spec.prague2_minimum_base_fee, 0); // 0 wei
     }
 
     #[test]
@@ -605,6 +685,10 @@ mod tests {
                     "baseFeeChangeDenominator": 8,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0,
                 }
             }
         });
@@ -632,7 +716,9 @@ mod tests {
         assert_eq!(chain_spec.pol_contract_address, Address::ZERO);
         assert_eq!(chain_spec.prague1_minimum_base_fee, 0);
         assert!(!chain_spec.is_prague1_active_at_timestamp(0));
+        assert!(!chain_spec.is_prague2_active_at_timestamp(0));
         assert!(!chain_spec.is_prague1_active_at_timestamp(u64::MAX));
+        assert!(!chain_spec.is_prague2_active_at_timestamp(u64::MAX));
     }
 
     #[test]
@@ -649,6 +735,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000
                     // Missing polDistributorAddress - should panic
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -659,7 +749,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prague1_hardfork_activation() {
+    fn test_prague1_and_prague2_hardfork_activation() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.prague_time = Some(1500);
@@ -671,6 +761,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 3000,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -683,11 +777,17 @@ mod tests {
         assert!(!chain_spec.is_prague1_active_at_timestamp(1499));
         assert!(chain_spec.is_prague1_active_at_timestamp(1500));
         assert!(chain_spec.is_prague1_active_at_timestamp(2000));
+
+        // Check Prague2 activation
+        assert!(!chain_spec.is_prague2_active_at_timestamp(2999));
+        assert!(chain_spec.is_prague2_active_at_timestamp(3000));
+        assert!(chain_spec.is_prague2_active_at_timestamp(3500));
     }
 
     #[test]
-    fn test_next_block_base_fee_with_prague1() {
+    fn test_next_block_base_fee_across_hardforks() {
         let prague1_base_fee = 10_000_000_000;
+        let prague2_base_fee = 1000;
         let mut genesis = Genesis::default();
         genesis.config.london_block = Some(0);
         genesis.config.cancun_time = Some(0);
@@ -701,6 +801,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 10000000000i64,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 2000,
+                    "minimumBaseFeeWei": 1000
                 }
             }
         });
@@ -717,8 +821,8 @@ mod tests {
         };
 
         // Before Prague1, base fee can go below 10 gwei
-        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
-        assert!(next_base_fee.unwrap() < prague1_base_fee);
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0).unwrap();
+        assert!(next_base_fee < prague1_base_fee);
 
         // Create a parent block at Prague1 activation
         let parent_header = BerachainHeader {
@@ -728,8 +832,22 @@ mod tests {
         };
 
         // After Prague1, base fee should be at least 10 gwei
-        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0);
-        assert_eq!(next_base_fee.unwrap(), prague1_base_fee);
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0).unwrap();
+        assert_eq!(next_base_fee, prague1_base_fee);
+
+        // Create a parent block before Prague2 activation
+        let parent_header =
+            BerachainHeader { timestamp: 1999, base_fee_per_gas: Some(0), ..Default::default() };
+
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0).unwrap();
+        assert_eq!(next_base_fee, prague1_base_fee);
+
+        // Create a parent block at Prague2 activation
+        let parent_header =
+            BerachainHeader { timestamp: 2000, base_fee_per_gas: Some(0), ..Default::default() };
+
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0).unwrap();
+        assert_eq!(next_base_fee, prague2_base_fee);
     }
 
     #[test]
@@ -747,6 +865,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -768,6 +890,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -790,6 +916,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -814,6 +944,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -838,6 +972,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -859,6 +997,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 3000,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -880,6 +1022,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 2000,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -901,6 +1047,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 4000,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -926,6 +1076,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -949,6 +1103,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -973,6 +1131,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -994,6 +1156,10 @@ mod tests {
                     "baseFeeChangeDenominator": 0,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1015,6 +1181,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1030,8 +1200,11 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(
+        expected = "Berachain networks require both Prague1 and Prague2 hardforks to be configured"
+    )]
     fn test_prague1_not_enabled_empty_berachain() {
-        // Prague1 not enabled - berachain present but empty (no prague1)
+        // Empty berachain config should now panic since both Prague1 and Prague2 are required
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.terminal_total_difficulty = Some(U256::ZERO);
@@ -1041,12 +1214,7 @@ mod tests {
         genesis.config.extra_fields =
             reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
 
-        let chain_spec = BerachainChainSpec::from(genesis);
-
-        // Should fallback to Ethereum behavior
-        assert_eq!(chain_spec.pol_contract_address, Address::ZERO);
-        assert_eq!(chain_spec.prague1_minimum_base_fee, 0);
-        assert!(!chain_spec.is_prague1_active_at_timestamp(u64::MAX));
+        let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
     #[test]
@@ -1071,6 +1239,9 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(
+        expected = "Failed to parse berachain genesis config: Invalid berachain configuration: missing field `polDistributorAddress`"
+    )]
     fn test_prague1_missing_fields_should_panic() {
         // Prague1 present but missing required fields - should panic
         let mut genesis = Genesis::default();
@@ -1083,6 +1254,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000
                     // Missing polDistributorAddress - should panic
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1090,10 +1265,7 @@ mod tests {
             reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
 
         // This should panic because prague1 is present but misconfigured
-        std::panic::catch_unwind(|| {
-            let _chain_spec = BerachainChainSpec::from(genesis);
-        })
-        .expect_err("Should panic when prague1 is misconfigured");
+        let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
     #[test]
@@ -1113,7 +1285,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prague1_enabled_at_genesis_valid_config() {
+    fn test_berachain_forks_enabled_at_genesis_valid_config() {
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.prague_time = Some(0);
@@ -1125,6 +1297,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 10000000000u64,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 1000000000,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1139,6 +1315,7 @@ mod tests {
             address!("0x4200000000000000000000000000000000000042")
         );
         assert_eq!(chain_spec.prague1_minimum_base_fee, 10000000000);
+        assert_eq!(chain_spec.prague2_minimum_base_fee, 0);
     }
 
     #[test]
@@ -1158,6 +1335,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1183,6 +1364,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1208,6 +1393,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1233,6 +1422,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1258,6 +1451,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1280,6 +1477,7 @@ mod tests {
             address!("D2f19a79b026Fb636A7c300bF5947df113940761")
         );
         assert_eq!(chain_spec.prague1_minimum_base_fee, 10_000_000_000); // 10 gwei
+        assert_eq!(chain_spec.prague2_minimum_base_fee, 0); // 0 gwei
         assert_eq!(chain_spec.inner.chain.id(), 80069); // bepolia chain id
 
         // Prague1 should be active after timestamp 1754496000
@@ -1301,6 +1499,10 @@ mod tests {
                     "baseFeeChangeDenominator": 48,
                     "minimumBaseFeeWei": 1000000000,
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
                 }
             }
         });
@@ -1335,5 +1537,20 @@ mod tests {
 
         assert_eq!(chain_spec.inner.chain.id(), 1);
         assert!(chain_spec.inner.chain.is_ethereum());
+    }
+
+    #[test]
+    fn test_ethereum_base_fee_params_regression() {
+        // Regression test to ensure Ethereum base fee parameters maintain expected values
+        let ethereum_params = BaseFeeParams::ethereum();
+
+        assert_eq!(
+            ethereum_params.max_change_denominator, 8,
+            "Ethereum max_change_denominator should be 8"
+        );
+        assert_eq!(
+            ethereum_params.elasticity_multiplier, 2,
+            "Ethereum elasticity_multiplier should be 2"
+        );
     }
 }
