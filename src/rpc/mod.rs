@@ -19,8 +19,8 @@ use reth::{
     revm::context::TxEnv,
     rpc::{api::eth::FromEvmError, builder::Identity, server_types::eth::EthApiError},
 };
-use reth_chainspec::{ChainSpecProvider, EthChainSpec};
-use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, TxEnvFor};
+use reth_chainspec::{ChainSpecProvider, EthChainSpec, Hardforks};
+use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, SpecFor, TxEnvFor};
 use reth_node_api::{FullNodeTypes, NodeAddOns, NodeTypes};
 use reth_node_builder::rpc::{
     BasicEngineValidatorBuilder, EngineApiBuilder, EngineValidatorAddOn, EngineValidatorBuilder,
@@ -43,7 +43,10 @@ pub type BerachainEthRpcConverterFor<N> = RpcConverter<
 impl<N> EthApiBuilder<N> for BerachainEthApiBuilder
 where
     N: FullNodeComponents<
-            Types: NodeTypes<ChainSpec: EthereumHardforks, Primitives = BerachainPrimitives>,
+            Types: NodeTypes<
+                ChainSpec: EthereumHardforks + Hardforks,
+                Primitives = BerachainPrimitives,
+            >,
             Evm: ConfigureEvm<NextBlockEnvCtx: BuildPendingEnv<HeaderTy<N::Types>>>,
         >,
     BerachainEthRpcConverterFor<N>: RpcConvert<
@@ -51,6 +54,7 @@ where
             TxEnv = TxEnvFor<N::Evm>,
             Error = EthApiError,
             Network = BerachainNetwork,
+            Spec = SpecFor<N::Evm>,
         >,
     EthApiError: FromEvmError<N::Evm>,
 {
@@ -61,19 +65,9 @@ where
             BerachainEthReceiptConverter::new(ctx.components.provider().clone().chain_spec()),
         );
 
-        let api = reth_rpc::EthApiBuilder::new_with_components(ctx.components.clone())
-            .with_rpc_converter(tx_resp_builder.clone())
-            .eth_cache(ctx.cache)
-            .task_spawner(ctx.components.task_executor().clone())
-            .gas_cap(ctx.config.rpc_gas_cap.into())
-            .max_simulate_blocks(ctx.config.rpc_max_simulate_blocks)
-            .eth_proof_window(ctx.config.eth_proof_window)
-            .fee_history_cache_config(ctx.config.fee_history_cache)
-            .proof_permits(ctx.config.proof_permits)
-            .gas_oracle_config(ctx.config.gas_oracle)
-            .build();
+        let inner = ctx.eth_api_builder().with_rpc_converter(tx_resp_builder.clone()).build();
 
-        Ok(BerachainApi { inner: api })
+        Ok(BerachainApi { inner })
     }
 }
 

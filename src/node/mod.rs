@@ -29,7 +29,7 @@ use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder},
 };
-use reth_node_ethereum::{EthereumNode, node::EthereumNetworkBuilder};
+use reth_node_ethereum::node::EthereumNetworkBuilder;
 use reth_payload_primitives::{PayloadAttributesBuilder, PayloadTypes};
 use std::sync::Arc;
 
@@ -42,7 +42,6 @@ pub struct BerachainNode;
 impl NodeTypes for BerachainNode {
     type Primitives = BerachainPrimitives;
     type ChainSpec = BerachainChainSpec;
-    type StateCommitment = <EthereumNode as NodeTypes>::StateCommitment;
     type Storage = EthStorage<BerachainTxEnvelope, BerachainHeader>;
     type Payload = BerachainEngineTypes;
 }

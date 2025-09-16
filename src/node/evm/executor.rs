@@ -1,6 +1,7 @@
 use crate::{
     chainspec::BerachainChainSpec,
     engine::validate_proposer_pubkey_prague1,
+    evm::BerachainEvmFactory,
     hardforks::BerachainHardforks,
     node::evm::{
         block_context::BerachainBlockExecutionCtx, config::BerachainEvmConfig,
@@ -19,7 +20,7 @@ use reth::{
     },
 };
 use reth_evm::{
-    Database, EthEvmFactory, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, OnStateHook,
+    Database, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, OnStateHook,
     block::{
         BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor,
         BlockValidationError, CommitChanges, ExecutableTx, StateChangePostBlockSource,
@@ -76,9 +77,6 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
         Evm: reth_evm::Evm,
         <Evm as reth_evm::Evm>::DB: DatabaseCommit,
     {
-        use reth::revm::DatabaseCommit;
-        use reth_evm::block::StateChangeSource;
-
         let timestamp = self.evm.block().timestamp.saturating_to();
 
         // Validate proposer pubkey presence for Prague1
@@ -206,7 +204,7 @@ where
         // Execute transaction.
         let ResultAndState { result, state } = self
             .evm
-            .transact(tx)
+            .transact(&tx)
             .map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))?;
 
         if !f(&result).should_commit() {
@@ -323,7 +321,7 @@ where
 }
 
 impl BlockExecutorFactory for BerachainEvmConfig {
-    type EvmFactory = EthEvmFactory;
+    type EvmFactory = BerachainEvmFactory;
     type ExecutionCtx<'a> = BerachainBlockExecutionCtx<'a>;
     type Transaction = BerachainTxEnvelope;
     type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>;

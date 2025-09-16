@@ -5,6 +5,7 @@
 pub mod chainspec;
 pub mod consensus;
 pub mod engine;
+pub mod evm;
 pub mod genesis;
 pub mod hardforks;
 pub mod node;

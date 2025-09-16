@@ -46,7 +46,7 @@ pub fn create_pol_transaction(
         nonce,
         gas_limit: POL_TX_GAS_LIMIT, // this is the env value used in revm for system calls
         gas_price: base_fee.into(),  /* gas price is set to the base fee for RPC
-                                      * compatability reasons */
+                                      * compatibility reasons */
     };
 
     Ok(BerachainTxEnvelope::Berachain(Sealed::new(pol_tx)))

@@ -7,9 +7,11 @@ pub mod error;
 pub mod executor;
 pub mod receipt;
 
-use crate::node::{BerachainNode, evm::config::BerachainEvmConfig};
+use crate::{
+    evm::BerachainEvmFactory,
+    node::{BerachainNode, evm::config::BerachainEvmConfig},
+};
 use alloy_primitives::Bytes;
-use reth_evm::EthEvmFactory;
 use reth_node_builder::{BuilderContext, FullNodeTypes, components::ExecutorBuilder};
 
 /// Default extra data for Berachain blocks
@@ -35,9 +37,11 @@ where
 
     /// Builds standard Ethereum EVM config with Berachain chain spec
     async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
-        let evm_config =
-            BerachainEvmConfig::new_with_evm_factory(ctx.chain_spec(), EthEvmFactory::default())
-                .with_extra_data(default_extra_data_bytes());
+        let evm_config = BerachainEvmConfig::new_with_evm_factory(
+            ctx.chain_spec(),
+            BerachainEvmFactory::default(),
+        )
+        .with_extra_data(default_extra_data_bytes());
         Ok(evm_config)
     }
 }
