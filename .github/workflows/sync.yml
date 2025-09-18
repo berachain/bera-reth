@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Download bera-reth binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: bera-reth-binary
           path: target/maxperf/
