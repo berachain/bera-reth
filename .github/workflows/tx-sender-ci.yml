@@ -21,7 +21,7 @@ concurrency:
 jobs:
   tx-sender:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # 5 minutes + 5 minutes buffer
+    timeout-minutes: 15  # 10 transactions * 30s + buffer
     steps:
       - uses: actions/checkout@v5
 
@@ -30,7 +30,7 @@ jobs:
         with:
           version: nightly
 
-      - name: Run transaction sender for 5 minutes
+      - name: Run transaction sender for 10 transactions
         env:
           CI_PRIVATE_KEY: ${{ secrets.TX_SENDER_PRIVATE_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
