@@ -35,6 +35,7 @@ jobs:
           CI_PRIVATE_KEY: ${{ secrets.TX_SENDER_PRIVATE_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           GITHUB_RUN_ID: ${{ github.run_id }}
+          FOUNDRY_DISABLE_NIGHTLY_WARNING: true
         run: |
           chmod +x ./.github/assets/eth-tx-sender-ci.sh
           ./.github/assets/eth-tx-sender-ci.sh
