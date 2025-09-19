@@ -174,8 +174,8 @@ for i in "${!RPC_URLS[@]}"; do
     rpc_url="${RPC_URLS[$i]}"
     private_key="${PRIVATE_KEYS[$i]}"
     address="${ADDRESSES[$i]}"
-    process_rpc "$rpc_url" "$private_key" "$address" &
-    pids+=($!)
+    # Run in foreground to capture failures in main process
+    process_rpc "$rpc_url" "$private_key" "$address"
 done
 
 send_slack_notification() {
