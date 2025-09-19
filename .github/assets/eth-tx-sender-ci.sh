@@ -176,7 +176,6 @@ for i in "${!RPC_URLS[@]}"; do
     pids+=($!)
 done
 
-# Run for 1 hour, then exit and report failures
 send_slack_notification() {
     if [[ -n "$SLACK_WEBHOOK" && ${#FAILED_TXS[@]} -gt 0 ]]; then
         # Create comprehensive failure summary
