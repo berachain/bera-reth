@@ -1,0 +1,50 @@
+# Transaction sender CI - monitors Berachain RPC health by sending test transactions
+
+name: tx-sender
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run every 3 hours: 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 UTC
+    - cron: "0 */3 * * *"
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  tx-sender:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # 5 minutes + 5 minutes buffer
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Run transaction sender for 5 minutes
+        env:
+          CI_PRIVATE_KEY: ${{ secrets.TX_SENDER_PRIVATE_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          chmod +x ./.github/assets/eth-tx-sender-ci.sh
+          ./.github/assets/eth-tx-sender-ci.sh
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tx-sender-logs-${{ github.run_id }}
+          path: |
+            *.log
+            /tmp/*.log
+          retention-days: 7
