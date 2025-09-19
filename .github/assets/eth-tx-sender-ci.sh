@@ -108,7 +108,7 @@ send_transaction() {
     local precalc_hash=$(cast keccak "$raw_tx")
 
     # Send raw transaction via direct RPC call
-    local response=$(curl -v -X POST -H "Content-Type: application/json" \
+    local response=$(curl -i -X POST -H "Content-Type: application/json" \
         --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_sendRawTransaction\",\"params\":[\"$raw_tx\"],\"id\":1}" \
         --connect-timeout 5 --max-time 10 \
         "$rpc_url" 2>&1)
@@ -117,11 +117,13 @@ send_transaction() {
     local host_id=$(echo "$response" | grep -o 'x-host-id: [a-zA-Z0-9-]*' | cut -d' ' -f2 || echo "unknown")
 
     # Check if response contains result (success) or error
-    if [[ "$response" == *"\"result\":"* ]]; then
+    if [[ "$response" == *"\"result\":"* && "$response" != *"\"error\":"* ]]; then
         local tx_hash=$(echo "$response" | grep -o '"result":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
         echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → SUCCESS: $tx_hash"
     else
-        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → FAILED: $response"
+        # Extract just the JSON response, not the curl verbose output
+        local json_response=$(echo "$response" | tail -1 | grep -o '{.*}')
+        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → FAILED: $json_response"
 
         # Store detailed failure for Slack notification
         local detailed_failure="🔴 **TRANSACTION FAILURE**
@@ -132,7 +134,7 @@ send_transaction() {
 🧮 **Precalc Hash**: $precalc_hash
 🖥️ **Host ID**: $host_id
 📤 **Raw TX**: \`$raw_tx\`
-📥 **Full Response**: \`$response\`
+📥 **JSON Response**: \`$json_response\`
 ---"
         FAILED_TXS+=("$detailed_failure")
     fi
