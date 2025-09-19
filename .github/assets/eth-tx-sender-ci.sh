@@ -37,12 +37,7 @@ done
 # Transaction recipient (burn address)
 TO_ADDRESS="0x0000000000000000000000000000000000000000"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# No color codes needed for CI
 
 # Interval in seconds (CI mode: faster testing)
 INTERVAL=30
@@ -81,36 +76,6 @@ get_pending_nonce() {
     fi
 }
 
-# Function to query nonces concurrently
-query_concurrent_nonces() {
-    local rpc_url=$1
-    local address=$2
-    local rpc_name=$(echo "$rpc_url" | sed 's|.*://||' | cut -d'/' -f1)
-
-    # Create temp directory for concurrent results
-    local temp_dir=$(mktemp -d)
-
-    # Launch 10 concurrent nonce queries
-    for i in {1..10}; do
-        (get_pending_nonce "$rpc_url" "$address" > "$temp_dir/$i") &
-    done
-
-    # Wait for all queries to complete
-    wait
-
-    # Collect results into single line
-    local nonces=()
-    for i in {1..10}; do
-        nonces+=($(cat "$temp_dir/$i"))
-    done
-
-    # Clean up temp directory
-    rm -rf "$temp_dir"
-
-    # Log results in single line
-    local timestamp=$(date '+%H:%M:%S')
-    echo -e "${BLUE}[$timestamp] ${rpc_name}${NC} - concurrent nonces: ${nonces[*]}"
-}
 
 # Function to send a single transaction
 send_transaction() {
@@ -135,12 +100,11 @@ send_transaction() {
         2>/dev/null)
 
     if [[ -z "$raw_tx" ]]; then
-        echo -e "${RED}[$timestamp] ${rpc_name}${NC} - nonce:$nonce addr:$address → MKTX_FAILED"
+        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$address → MKTX_FAILED"
         return 1
     fi
 
     # Pre-calculate transaction hash from raw transaction
-    echo "$raw_tx"
     local precalc_hash=$(cast keccak "$raw_tx")
 
     # Send raw transaction via direct RPC call
@@ -149,20 +113,15 @@ send_transaction() {
         --connect-timeout 5 --max-time 10 \
         "$rpc_url" 2>&1)
 
-    # echo "RPC Response: $response"
-
-    # Extract x-host-id from headers
-    local host_id=$(echo "$response" | grep -o 'x-host-id: [a-zA-Z0-9-]*' | cut -d' ' -f2)
+    # Extract x-host-id from headers (if present)
+    local host_id=$(echo "$response" | grep -o 'x-host-id: [a-zA-Z0-9-]*' | cut -d' ' -f2 || echo "unknown")
 
     # Check if response contains result (success) or error
     if [[ "$response" == *"\"result\":"* ]]; then
         local tx_hash=$(echo "$response" | grep -o '"result":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
-        echo -e "${GREEN}[$timestamp] ${rpc_name}${NC} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → SUCCESS: $tx_hash"
-        # Query nonces concurrently after successful transaction
-        query_concurrent_nonces "$rpc_url" "$address" &
+        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → SUCCESS: $tx_hash"
     else
-        local failure_msg="[$timestamp] ${rpc_name} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → FAILED: $response"
-        echo -e "${RED}$failure_msg${NC}"
+        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → FAILED: $response"
 
         # Store detailed failure for Slack notification
         local detailed_failure="🔴 **TRANSACTION FAILURE**
@@ -193,7 +152,7 @@ process_rpc() {
         local nonce=$(get_pending_nonce "$rpc_url" "$address")
 
         if [[ "$nonce" == "ERROR" ]]; then
-            echo -e "${RED}[$timestamp] ${rpc_name}${NC} - addr:$address NONCE_ERROR"
+            echo "[$timestamp] ${rpc_name} - addr:$address NONCE_ERROR"
         else
             # Send transaction in background
             send_transaction "$rpc_url" "$private_key" "$address" "$nonce" &
@@ -261,12 +220,12 @@ DURATION="${TX_SENDER_DURATION:-300}"
 echo "🤖 Running for $((DURATION / 60)) minutes..."
 
 # Set trap for cleanup and notification
-trap 'echo -e "\n${YELLOW}🛑 Run complete. Cleaning up...${NC}"; for pid in "${pids[@]}"; do kill $pid 2>/dev/null; done; send_slack_notification; exit 0' INT TERM
+trap 'echo -e "\n🛑 Run complete. Cleaning up..."; for pid in "${pids[@]}"; do kill $pid 2>/dev/null; done; send_slack_notification; exit 0' INT TERM
 
 # Run for specified duration, then cleanup and send notifications
 sleep "$DURATION"
 
-echo -e "\n${YELLOW}🛑 $((DURATION / 60)) minutes complete. Stopping transaction sender...${NC}"
+echo "🛑 $((DURATION / 60)) minutes complete. Stopping transaction sender..."
 for pid in "${pids[@]}"; do kill $pid 2>/dev/null; done
 
 # Send Slack notification if there were failures
