@@ -30,8 +30,8 @@ TO_ADDRESS="0x0000000000000000000000000000000000000000"
 
 # No color codes needed for CI
 
-# Interval in seconds (CI mode: faster testing)
-INTERVAL=30
+# Interval in seconds
+INTERVAL=15
 
 # CI flags
 FAILED_TXS=()
@@ -143,8 +143,8 @@ send_transaction_attempt() {
     fi
 }
 
-# Number of transactions to send (default 10)
-TX_COUNT="${TX_SENDER_COUNT:-10}"
+# Number of transactions to send (default 20)
+TX_COUNT="${TX_SENDER_COUNT:-20}"
 echo "🤖 Sending $TX_COUNT transactions..."
 echo
 
