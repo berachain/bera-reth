@@ -179,6 +179,7 @@ for i in "${!RPC_URLS[@]}"; do
 done
 
 send_slack_notification() {
+    echo "Debug: SLACK_WEBHOOK='$SLACK_WEBHOOK', FAILED_TXS count: ${#FAILED_TXS[@]}"
     if [[ -n "$SLACK_WEBHOOK" && ${#FAILED_TXS[@]} -gt 0 ]]; then
         # Create comprehensive failure summary
         local total_failures=${#FAILED_TXS[@]}
