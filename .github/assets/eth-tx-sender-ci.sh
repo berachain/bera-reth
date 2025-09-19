@@ -113,15 +113,15 @@ send_transaction() {
         echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$ADDRESS precalc:$precalc_hash host:$host_id → FAILED: $json_response"
 
         # Store detailed failure for Slack notification
-        local detailed_failure="🔴 **TRANSACTION FAILURE**
-📍 **RPC**: $rpc_name ($RPC_URL)
-⏰ **Time**: $timestamp
-🔢 **Nonce**: $nonce
-💳 **Address**: $ADDRESS
-🧮 **Precalc Hash**: $precalc_hash
-🖥️ **Host ID**: $host_id
-📤 **Raw TX**: \`$raw_tx\`
-📥 **JSON Response**: \`$json_response\`
+        local detailed_failure="TRANSACTION FAILURE
+RPC: $rpc_name ($RPC_URL)
+Time: $timestamp
+Nonce: $nonce
+Address: $ADDRESS
+Precalc Hash: $precalc_hash
+Host ID: $host_id
+Raw TX: $raw_tx
+JSON Response: $json_response
 ---"
         FAILED_TXS+=("$detailed_failure")
     fi
@@ -167,27 +167,25 @@ send_slack_notification() {
         local timestamp=$(date '+%Y-%m-%d %H:%M:%S UTC')
 
         # Build detailed message
-        local message="🚨 **BERACHAIN RPC TRANSACTION FAILURES DETECTED** 🚨
+        local message="BERACHAIN RPC TRANSACTION FAILURES DETECTED
 
-📊 **Summary**: $total_failures transaction(s) failed out of $TX_COUNT attempts
-🕐 **Report Time**: $timestamp
-🔗 **CI Run**: https://github.com/berachain/bera-reth/actions/runs/$GITHUB_RUN_ID
+Summary: $total_failures transaction(s) failed out of $TX_COUNT attempts
+Report Time: $timestamp
+CI Run: https://github.com/berachain/bera-reth/actions/runs/$GITHUB_RUN_ID
 
-📋 **Failure Details**:
+Failure Details:
 "
 
         # Add each failure with full details
         local failure_count=1
         for failure in "${FAILED_TXS[@]}"; do
             message+="
-**Failure #$failure_count**:
+Failure #$failure_count:
 $failure
 "
             ((failure_count++))
         done
 
-        message+="
-📈 **Monitoring**: This job runs every 3 hours to ensure RPC reliability"
 
         # Send to Slack with proper JSON escaping
         local json_message=$(echo "$message" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
