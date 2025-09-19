@@ -33,7 +33,7 @@ jobs:
       - name: Run transaction sender for 20 transactions
         env:
           CI_PRIVATE_KEY: ${{ secrets.TX_SENDER_PRIVATE_KEY }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.TX_SENDER_SLACK_WEBHOOK_URL }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           FOUNDRY_DISABLE_NIGHTLY_WARNING: true
         run: |
