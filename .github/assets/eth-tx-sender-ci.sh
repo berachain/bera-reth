@@ -156,8 +156,8 @@ process_rpc() {
         if [[ "$nonce" == "ERROR" ]]; then
             echo "[$timestamp] ${rpc_name} - addr:$address NONCE_ERROR"
         else
-            # Send transaction in background
-            send_transaction "$rpc_url" "$private_key" "$address" "$nonce" &
+            # Send transaction
+            send_transaction "$rpc_url" "$private_key" "$address" "$nonce"
         fi
 
         sleep "$INTERVAL"
