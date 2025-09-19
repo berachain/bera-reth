@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e  # Exit on any error
+set -euo pipefail  # Exit on any error, undefined variables, pipe failures
+IFS=$'\n\t'        # Safer word splitting
 
 # Load private key from environment (required for CI, optional for manual runs)
 if [[ -z "$CI_PRIVATE_KEY" ]]; then
@@ -36,9 +37,6 @@ done
 # Transaction recipient (burn address)
 TO_ADDRESS="0x0000000000000000000000000000000000000000"
 
-# Transaction value in wei
-TX_VALUE="0"
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -55,7 +53,7 @@ SLACK_WEBHOOK="${SLACK_WEBHOOK_URL:-}"
 
 echo "🚀 Transaction Sender - sending every ${INTERVAL}s (Ctrl+C to stop)..."
 echo "📋 Target: $TO_ADDRESS"
-echo "💰 Value: $TX_VALUE wei"
+echo "💰 Value: 0 wei"
 echo
 
 # Function to get nonce with pending tag via RPC
@@ -125,9 +123,6 @@ send_transaction() {
     # Extract RPC name for display
     local rpc_name=$(echo "$rpc_url" | sed 's|.*://||' | cut -d'/' -f1)
 
-    # Mask private key for logging (show first 8 chars + ...)
-    local masked_key="${private_key:0:8}..."
-
     # Build and sign transaction once
     local raw_tx=$(cast mktx "$TO_ADDRESS" \
         --value 0 \
@@ -140,7 +135,7 @@ send_transaction() {
         2>/dev/null)
 
     if [[ -z "$raw_tx" ]]; then
-        echo -e "${RED}[$timestamp] ${rpc_name}${NC} - nonce:$nonce key:$masked_key → MKTX_FAILED"
+        echo -e "${RED}[$timestamp] ${rpc_name}${NC} - nonce:$nonce addr:$address → MKTX_FAILED"
         return 1
     fi
 
@@ -162,11 +157,11 @@ send_transaction() {
     # Check if response contains result (success) or error
     if [[ "$response" == *"\"result\":"* ]]; then
         local tx_hash=$(echo "$response" | grep -o '"result":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
-        echo -e "${GREEN}[$timestamp] ${rpc_name}${NC} - nonce:$nonce key:$masked_key precalc:$precalc_hash host:$host_id → SUCCESS: $tx_hash"
+        echo -e "${GREEN}[$timestamp] ${rpc_name}${NC} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → SUCCESS: $tx_hash"
         # Query nonces concurrently after successful transaction
         query_concurrent_nonces "$rpc_url" "$address" &
     else
-        local failure_msg="[$timestamp] ${rpc_name} - nonce:$nonce key:$masked_key precalc:$precalc_hash host:$host_id → FAILED: $response"
+        local failure_msg="[$timestamp] ${rpc_name} - nonce:$nonce addr:$address precalc:$precalc_hash host:$host_id → FAILED: $response"
         echo -e "${RED}$failure_msg${NC}"
 
         # Store detailed failure for Slack notification
@@ -174,7 +169,7 @@ send_transaction() {
 📍 **RPC**: $rpc_name ($rpc_url)
 ⏰ **Time**: $timestamp
 🔢 **Nonce**: $nonce
-🔑 **Key**: $masked_key
+💳 **Address**: $address
 🧮 **Precalc Hash**: $precalc_hash
 🖥️ **Host ID**: $host_id
 📤 **Raw TX**: \`$raw_tx\`
@@ -198,7 +193,7 @@ process_rpc() {
         local nonce=$(get_pending_nonce "$rpc_url" "$address")
 
         if [[ "$nonce" == "ERROR" ]]; then
-            echo -e "${RED}[$timestamp] ${rpc_name}${NC} - NONCE_ERROR"
+            echo -e "${RED}[$timestamp] ${rpc_name}${NC} - addr:$address NONCE_ERROR"
         else
             # Send transaction in background
             send_transaction "$rpc_url" "$private_key" "$address" "$nonce" &
