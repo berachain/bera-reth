@@ -1,5 +1,4 @@
-//! Loads chain configuration. Adapted from
-//! reth/crates/rpc/rpc-eth-api/src/helpers/config.rs
+//! Berachain chain configuration handler for EIP-7910.
 
 use crate::{
     chainspec::BerachainChainSpec, node::evm::config::BerachainEvmConfig,
@@ -24,9 +23,7 @@ use reth_rpc_eth_types::EthApiError;
 
 use std::{borrow::Borrow, collections::BTreeMap};
 
-/// Handler for the `eth_config` RPC endpoint.
-///
-/// Ref: <https://eips.ethereum.org/EIPS/eip-7910>
+/// Berachain `eth_config` RPC handler implementing EIP-7910.
 #[derive(Debug, Clone)]
 pub struct BerachainConfigHandler<Provider> {
     provider: Provider,
@@ -39,13 +36,12 @@ where
         + BlockReaderIdExt<Header = BerachainHeader>
         + 'static,
 {
-    /// Creates a new [`EthConfigHandler`].
+    /// Creates a new handler.
     pub const fn new(provider: Provider, evm_config: BerachainEvmConfig) -> Self {
         Self { provider, evm_config }
     }
 
-    /// Returns fork config for specific timestamp.
-    /// Returns [`None`] if no blob params were found for this fork.
+    /// Builds fork config for timestamp, returns None if no blob params exist.
     fn build_fork_config_at(
         &self,
         timestamp: u64,
@@ -64,7 +60,6 @@ where
                 .extend(SystemContract::prague(chain_spec.deposit_contract().map(|c| c.address)));
         }
 
-        // Fork config only exists for timestamp-based hardforks.
         let fork_id = chain_spec
             .fork_id(&Head { timestamp, number: u64::MAX, ..Default::default() })
             .hash
@@ -89,7 +84,6 @@ where
             .ok_or_else(|| ProviderError::BestBlockNotFound)?
             .into_header();
 
-        // Short-circuit if Cancun is not active.
         if !chain_spec.is_cancun_active_at_timestamp(latest.timestamp()) {
             return Err(RethError::msg("cancun has not been activated"))
         }
@@ -170,7 +164,6 @@ fn evm_to_precompiles_map(
         .collect()
 }
 
-// TODO: move
 fn precompile_to_str(id: &PrecompileId) -> String {
     let str = match id {
         PrecompileId::EcRec => "ECREC",
