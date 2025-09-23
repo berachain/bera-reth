@@ -36,7 +36,7 @@ use reth_node_builder::rpc::{
     RpcHandle,
 };
 use reth_rpc_convert::{RpcConvert, RpcConverter};
-use reth_rpc_eth_api::{EthApiServer, helpers::pending_block::BuildPendingEnv};
+use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
 
 /// Builds `BerachainEthApi` for Berachain.
 #[derive(Debug, Default)]
