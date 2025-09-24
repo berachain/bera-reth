@@ -2057,8 +2057,8 @@ mod tests {
             timestamp: 1754496000, // Prague1 activation
         };
 
+        let current_fork_id = spec.fork_id(&head_prague1_active);
         let valid_node_fork_filter = spec.fork_filter(head_prague1_active);
-        let current_fork_id = valid_node_fork_filter.current();
 
         // Test cases based on EIP-2124 validation rules with concrete Berachain scenarios:
 
@@ -2092,8 +2092,7 @@ mod tests {
             total_difficulty: Default::default(),
             timestamp: 1746633600, // Prague activation time
         };
-        let past_fork_filter = spec.fork_filter(head_before_prague1);
-        let past_fork_id = past_fork_filter.current();
+        let past_fork_id = spec.fork_id(&head_before_prague1);
 
         // Remote peer correctly announces next fork
         let past_fork_correct_next = ForkId {
@@ -2126,6 +2125,14 @@ mod tests {
         };
         assert!(valid_node_fork_filter.validate(prague2_fork_id).is_ok());
 
+        // 7b) REJECT: Remote is on a future fork we DON'T know about
+        // Scenario: Remote claims "Prague3" fork not in our hardfork schedule
+        let unknown_future_fork = ForkId {
+            hash: ForkHash([0xaa, 0xbb, 0xcc, 0xdd]), // Unknown future fork hash
+            next: 0,
+        };
+        assert!(valid_node_fork_filter.validate(unknown_future_fork).is_err());
+
         // 8) ACCEPT: Syncing node scenario - local behind, remote ahead should accept
         // Scenario: New bera-reth node joining Bepolia network, connecting to established bera-geth
         // validator
@@ -2137,8 +2144,8 @@ mod tests {
             timestamp: 1700000000, // Before Prague activation (1746633600)
         };
 
+        let syncing_fork_id = spec.fork_id(&syncing_head);
         let syncing_fork_filter = spec.fork_filter(syncing_head);
-        let syncing_fork_id = syncing_fork_filter.current();
 
         // Remote node on Prague1 should accept syncing node on older fork
         assert!(
