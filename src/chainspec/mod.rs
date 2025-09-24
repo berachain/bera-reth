@@ -62,6 +62,7 @@ impl BerachainChainSpec {
         let condition = self.inner.hardforks.fork(fork);
         match condition {
             ForkCondition::Never => None,
+            // Notably, we use our implementation of fork_id
             _ => Some(self.fork_id(&self.satisfy(condition))),
         }
     }
@@ -94,7 +95,7 @@ impl BerachainChainSpec {
             })
         });
 
-        ForkFilter::new(head, self.genesis_hash(), self.genesis().timestamp, forks)
+        ForkFilter::new(head, self.genesis_hash(), self.genesis_header().timestamp, forks)
     }
 
     /// Compute the [`ForkId`] for the given [`Head`] following eip-6122 spec.
