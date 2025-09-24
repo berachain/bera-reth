@@ -8,7 +8,7 @@ use crate::{
 use alloy_consensus::BlockHeader;
 use alloy_eips::{
     calc_next_block_base_fee,
-    eip2124::{ForkFilter, ForkId, Head},
+    eip2124::{ForkFilter, ForkHash, ForkId, Head},
 };
 use alloy_genesis::Genesis;
 use alloy_primitives::Sealable;
@@ -174,7 +174,58 @@ impl Hardforks for BerachainChainSpec {
     }
 
     fn fork_id(&self, head: &Head) -> ForkId {
-        self.inner.fork_id(head)
+        let mut forkhash = ForkHash::from(self.genesis_hash()); // Use BerachainChainSpec's genesis hash
+
+        // this tracks the last applied block or timestamp fork. This is necessary for optimism,
+        // because for the optimism hardforks both the optimism and the corresponding ethereum
+        // hardfork can be configured in `ChainHardforks` if it enables ethereum equivalent
+        // functionality (e.g. additional header,body fields) This is set to 0 so that all
+        // block based hardforks are skipped in the following loop
+        let mut current_applied = 0;
+
+        // handle all block forks before handling timestamp based forks. see: https://eips.ethereum.org/EIPS/eip-6122
+        for (_, cond) in self.inner.hardforks.forks_iter() {
+            // handle block based forks and the sepolia merge netsplit block edge case (TTD
+            // ForkCondition with Some(block))
+            if let ForkCondition::Block(block) |
+            ForkCondition::TTD { fork_block: Some(block), .. } = cond
+            {
+                if head.number >= block {
+                    // skip duplicated hardforks: hardforks enabled at genesis block
+                    if block != current_applied {
+                        forkhash += block;
+                        current_applied = block;
+                    }
+                } else {
+                    // we can return here because this block fork is not active, so we set the
+                    // `next` value
+                    return ForkId { hash: forkhash, next: block }
+                }
+            }
+        }
+
+        // timestamp are ALWAYS applied after the merge.
+        //
+        // this filter ensures that no block-based forks are returned
+        for timestamp in self.inner.hardforks.forks_iter().filter_map(|(_, cond)| {
+            // ensure we only get timestamp forks activated __after__ the genesis block
+            cond.as_timestamp().filter(|time| time > &self.genesis().timestamp)
+        }) {
+            if head.timestamp >= timestamp {
+                // skip duplicated hardfork activated at the same timestamp
+                if timestamp != current_applied {
+                    forkhash += timestamp;
+                    current_applied = timestamp;
+                }
+            } else {
+                // can safely return here because we have already handled all block forks and
+                // have handled all active timestamp forks, and set the next value to the
+                // timestamp that is known but not active yet
+                return ForkId { hash: forkhash, next: timestamp }
+            }
+        }
+
+        ForkId { hash: forkhash, next: 0 }
     }
 
     fn latest_fork_id(&self) -> ForkId {
@@ -1595,14 +1646,20 @@ mod tests {
         };
 
         let fork_id1 = spec1.fork_id(&head);
-        let fork_id2 = spec2.fork_id(&head);
-        let fork_id3 = spec3.fork_id(&head);
-        let fork_id4 = spec4.fork_id(&head);
+        assert_eq!(fork_id1.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+        assert_eq!(fork_id1.next, 0, "All forks active at genesis, no next fork");
 
-        assert_eq!(fork_id1.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
-        assert_eq!(fork_id2.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        let fork_id2 = spec2.fork_id(&head);
+        assert_eq!(fork_id2.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+        assert_eq!(fork_id2.next, 1000, "Next fork should be Prague2 at time 1000");
+
+        let fork_id3 = spec3.fork_id(&head);
         assert_eq!(fork_id3.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        assert_eq!(fork_id3.next, 1000, "Next fork should be Prague1 at time 1000");
+
+        let fork_id4 = spec4.fork_id(&head);
         assert_eq!(fork_id4.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        assert_eq!(fork_id4.next, 3000, "Next fork should be Prague1 at time 3000");
     }
 
     #[test]
