@@ -8,7 +8,7 @@ use crate::{
 use alloy_consensus::BlockHeader;
 use alloy_eips::{
     calc_next_block_base_fee,
-    eip2124::{ForkFilter, ForkHash, ForkId, Head},
+    eip2124::{ForkFilter, ForkFilterKey, ForkHash, ForkId, Head},
 };
 use alloy_genesis::Genesis;
 use alloy_primitives::Sealable;
@@ -50,6 +50,175 @@ pub struct BerachainChainSpec {
 impl BerachainChainSpec {
     pub fn pol_contract(&self) -> Address {
         self.pol_contract_address
+    }
+
+    /// Get the fork id for the given hardfork.
+    /// Equivalent to hardfork_fork_id in Reth
+    ///
+    /// NOTE: This method is copied from reth's ChainSpec implementation and should be kept
+    /// identical. See: reth/crates/chainspec/src/spec.rs
+    #[inline]
+    pub fn hardfork_fork_id<H: Hardfork + Clone>(&self, fork: H) -> Option<ForkId> {
+        let condition = self.inner.hardforks.fork(fork);
+        match condition {
+            ForkCondition::Never => None,
+            _ => Some(self.fork_id(&self.satisfy(condition))),
+        }
+    }
+
+    /// Convenience method to get the latest fork id from the chainspec. Panics if chainspec has no
+    /// hardforks.
+    ///
+    /// NOTE: This method is copied from reth's ChainSpec implementation and should be kept
+    /// identical. See: reth/crates/chainspec/src/spec.rs
+    #[inline]
+    pub fn latest_fork_id(&self) -> ForkId {
+        self.hardfork_fork_id(self.inner.hardforks.last().unwrap().0).unwrap()
+    }
+
+    /// Creates a [`ForkFilter`] for the block described by [Head].
+    ///
+    /// NOTE: This method is adapted from reth's ChainSpec implementation but uses
+    /// BerachainChainSpec's genesis hash. Core logic should be kept identical to reth's
+    /// implementation except for the genesis hash source. See: reth/crates/chainspec/src/spec.
+    /// rs
+    pub fn fork_filter(&self, head: Head) -> ForkFilter {
+        let forks = self.inner.hardforks.forks_iter().filter_map(|(_, condition)| {
+            // We filter out TTD-based forks w/o a pre-known block since those do not show up in
+            // the fork filter.
+            Some(match condition {
+                ForkCondition::Block(block) |
+                ForkCondition::TTD { fork_block: Some(block), .. } => ForkFilterKey::Block(block),
+                ForkCondition::Timestamp(time) => ForkFilterKey::Time(time),
+                _ => return None,
+            })
+        });
+
+        ForkFilter::new(head, self.genesis_hash(), self.genesis().timestamp, forks)
+    }
+
+    /// Compute the [`ForkId`] for the given [`Head`] following eip-6122 spec.
+    ///
+    /// Note: In case there are multiple hardforks activated at the same block or timestamp, only
+    /// the first gets applied.
+    ///
+    /// NOTE: This method is adapted from reth's ChainSpec implementation but uses
+    /// BerachainChainSpec's genesis hash. Core logic should be kept identical to reth's
+    /// implementation except for the genesis hash source. See: reth/crates/chainspec/src/spec.
+    /// rs
+    pub fn fork_id(&self, head: &Head) -> ForkId {
+        let mut forkhash = ForkHash::from(self.genesis_hash()); // Use BerachainChainSpec's genesis hash
+
+        // this tracks the last applied block or timestamp fork. This is necessary for optimism,
+        // because for the optimism hardforks both the optimism and the corresponding ethereum
+        // hardfork can be configured in `ChainHardforks` if it enables ethereum equivalent
+        // functionality (e.g. additional header,body fields) This is set to 0 so that all
+        // block based hardforks are skipped in the following loop
+        let mut current_applied = 0;
+
+        // handle all block forks before handling timestamp based forks. see: https://eips.ethereum.org/EIPS/eip-6122
+        for (_, cond) in self.inner.hardforks.forks_iter() {
+            // handle block based forks and the sepolia merge netsplit block edge case (TTD
+            // ForkCondition with Some(block))
+            if let ForkCondition::Block(block) |
+            ForkCondition::TTD { fork_block: Some(block), .. } = cond
+            {
+                if head.number >= block {
+                    // skip duplicated hardforks: hardforks enabled at genesis block
+                    if block != current_applied {
+                        forkhash += block;
+                        current_applied = block;
+                    }
+                } else {
+                    // we can return here because this block fork is not active, so we set the
+                    // `next` value
+                    return ForkId { hash: forkhash, next: block }
+                }
+            }
+        }
+
+        // timestamp are ALWAYS applied after the merge.
+        //
+        // this filter ensures that no block-based forks are returned
+        for timestamp in self.inner.hardforks.forks_iter().filter_map(|(_, cond)| {
+            // ensure we only get timestamp forks activated __after__ the genesis block
+            cond.as_timestamp().filter(|time| time > &self.genesis().timestamp)
+        }) {
+            if head.timestamp >= timestamp {
+                // skip duplicated hardfork activated at the same timestamp
+                if timestamp != current_applied {
+                    forkhash += timestamp;
+                    current_applied = timestamp;
+                }
+            } else {
+                // can safely return here because we have already handled all block forks and
+                // have handled all active timestamp forks, and set the next value to the
+                // timestamp that is known but not active yet
+                return ForkId { hash: forkhash, next: timestamp }
+            }
+        }
+
+        ForkId { hash: forkhash, next: 0 }
+    }
+
+    /// An internal helper function that returns a head block that satisfies a given Fork condition.
+    ///
+    /// NOTE: This method is copied from reth's ChainSpec implementation and should be kept
+    /// identical. See: reth/crates/chainspec/src/spec.rs
+    pub(crate) fn satisfy(&self, cond: ForkCondition) -> Head {
+        match cond {
+            ForkCondition::Block(number) => Head { number, ..Default::default() },
+            ForkCondition::Timestamp(timestamp) => {
+                // to satisfy every timestamp ForkCondition, we find the last ForkCondition::Block
+                // if one exists, and include its block_num in the returned Head
+                Head {
+                    timestamp,
+                    number: self.last_block_fork_before_merge_or_timestamp().unwrap_or_default(),
+                    ..Default::default()
+                }
+            }
+            ForkCondition::TTD { total_difficulty, fork_block, .. } => Head {
+                total_difficulty,
+                number: fork_block.unwrap_or_default(),
+                ..Default::default()
+            },
+            ForkCondition::Never => unreachable!(),
+        }
+    }
+
+    /// This internal helper function retrieves the block number of the last block-based fork
+    /// that occurs before:
+    /// - Any existing Total Terminal Difficulty (TTD) or
+    /// - Timestamp-based forks in the current [`ChainSpec`].
+    ///
+    /// The function operates by examining the configured hard forks in the chain. It iterates
+    /// through the fork conditions and identifies the most recent block-based fork that
+    /// precedes any TTD or timestamp-based conditions.
+    ///
+    /// If there are no block-based forks found before these conditions, or if the [`ChainSpec`]
+    /// is not configured with a TTD or timestamp fork, this function will return `None`.
+    ///
+    /// NOTE: This method is copied from reth's ChainSpec implementation and should be kept
+    /// identical. See: reth/crates/chainspec/src/spec.rs
+    pub(crate) fn last_block_fork_before_merge_or_timestamp(&self) -> Option<u64> {
+        let mut hardforks_iter = self.inner.hardforks.forks_iter().peekable();
+        while let Some((_, curr_cond)) = hardforks_iter.next() {
+            if let Some((_, next_cond)) = hardforks_iter.peek() {
+                // Match against the `next_cond` to see if it represents:
+                // - A TTD (merge)
+                // - A timestamp-based fork
+                match next_cond {
+                    ForkCondition::TTD { .. } | ForkCondition::Timestamp(_) => {
+                        // If the current condition is block-based, return its block number
+                        if let ForkCondition::Block(block_num) = curr_cond {
+                            return Some(block_num);
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+        }
+        None
     }
 }
 
@@ -174,66 +343,15 @@ impl Hardforks for BerachainChainSpec {
     }
 
     fn fork_id(&self, head: &Head) -> ForkId {
-        let mut forkhash = ForkHash::from(self.genesis_hash()); // Use BerachainChainSpec's genesis hash
-
-        // this tracks the last applied block or timestamp fork. This is necessary for optimism,
-        // because for the optimism hardforks both the optimism and the corresponding ethereum
-        // hardfork can be configured in `ChainHardforks` if it enables ethereum equivalent
-        // functionality (e.g. additional header,body fields) This is set to 0 so that all
-        // block based hardforks are skipped in the following loop
-        let mut current_applied = 0;
-
-        // handle all block forks before handling timestamp based forks. see: https://eips.ethereum.org/EIPS/eip-6122
-        for (_, cond) in self.inner.hardforks.forks_iter() {
-            // handle block based forks and the sepolia merge netsplit block edge case (TTD
-            // ForkCondition with Some(block))
-            if let ForkCondition::Block(block) |
-            ForkCondition::TTD { fork_block: Some(block), .. } = cond
-            {
-                if head.number >= block {
-                    // skip duplicated hardforks: hardforks enabled at genesis block
-                    if block != current_applied {
-                        forkhash += block;
-                        current_applied = block;
-                    }
-                } else {
-                    // we can return here because this block fork is not active, so we set the
-                    // `next` value
-                    return ForkId { hash: forkhash, next: block }
-                }
-            }
-        }
-
-        // timestamp are ALWAYS applied after the merge.
-        //
-        // this filter ensures that no block-based forks are returned
-        for timestamp in self.inner.hardforks.forks_iter().filter_map(|(_, cond)| {
-            // ensure we only get timestamp forks activated __after__ the genesis block
-            cond.as_timestamp().filter(|time| time > &self.genesis().timestamp)
-        }) {
-            if head.timestamp >= timestamp {
-                // skip duplicated hardfork activated at the same timestamp
-                if timestamp != current_applied {
-                    forkhash += timestamp;
-                    current_applied = timestamp;
-                }
-            } else {
-                // can safely return here because we have already handled all block forks and
-                // have handled all active timestamp forks, and set the next value to the
-                // timestamp that is known but not active yet
-                return ForkId { hash: forkhash, next: timestamp }
-            }
-        }
-
-        ForkId { hash: forkhash, next: 0 }
+        self.fork_id(head)
     }
 
     fn latest_fork_id(&self) -> ForkId {
-        self.inner.latest_fork_id()
+        self.latest_fork_id()
     }
 
     fn fork_filter(&self, head: Head) -> ForkFilter {
-        self.inner.fork_filter(head)
+        self.fork_filter(head)
     }
 }
 
