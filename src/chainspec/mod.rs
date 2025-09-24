@@ -496,6 +496,7 @@ mod tests {
     use alloy_genesis::Genesis;
     use alloy_primitives::address;
     use jsonrpsee_core::__reexports::serde_json::json;
+    use reth_chainspec::ForkHash;
 
     #[test]
     fn test_deposit_contract_default_regression() {
@@ -1552,5 +1553,162 @@ mod tests {
             ethereum_params.elasticity_multiplier, 2,
             "Ethereum elasticity_multiplier should be 2"
         );
+    }
+
+    #[test]
+    fn test_fork_id_varies_with_genesis_config() {
+        let create_genesis = |prague1_time: u64, prague2_time: u64| {
+            let mut genesis = Genesis::default();
+            genesis.config.cancun_time = Some(0);
+            genesis.config.prague_time = Some(0);
+            genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+            genesis.config.extra_fields =
+                reth::rpc::types::serde_helpers::OtherFields::try_from(json!({
+                    "berachain": {
+                        "prague1": {
+                            "time": prague1_time,
+                            "baseFeeChangeDenominator": 48,
+                            "minimumBaseFeeWei": 1000000000,
+                            "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                        },
+                        "prague2": {
+                            "time": prague2_time,
+                            "minimumBaseFeeWei": 0
+                        }
+                    }
+                }))
+                .unwrap();
+            genesis
+        };
+
+        let spec1 = BerachainChainSpec::from(create_genesis(0, 0));
+        let spec2 = BerachainChainSpec::from(create_genesis(0, 1000));
+        let spec3 = BerachainChainSpec::from(create_genesis(1000, 2000));
+        let spec4 = BerachainChainSpec::from(create_genesis(3000, 4000));
+
+        let head = Head {
+            number: 0,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 0,
+        };
+
+        let fork_id1 = spec1.fork_id(&head);
+        let fork_id2 = spec2.fork_id(&head);
+        let fork_id3 = spec3.fork_id(&head);
+        let fork_id4 = spec4.fork_id(&head);
+
+        assert_eq!(fork_id1.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        assert_eq!(fork_id2.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        assert_eq!(fork_id3.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        assert_eq!(fork_id4.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+    }
+
+    #[test]
+    fn test_fork_id_evolves_with_timestamp() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(999);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(json!({
+                "berachain": {
+                    "prague1": {
+                        "time": 1000,
+                        "baseFeeChangeDenominator": 48,
+                        "minimumBaseFeeWei": 1000000000,
+                        "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    },
+                    "prague2": {
+                        "time": 2000,
+                        "minimumBaseFeeWei": 0
+                    }
+                }
+            }))
+            .unwrap();
+
+        let spec = BerachainChainSpec::from(genesis);
+
+        let head_before = Head {
+            number: 10,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 500,
+        };
+        let head_during = Head {
+            number: 20,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1500,
+        };
+        let head_after = Head {
+            number: 30,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 2500,
+        };
+
+        let fork_id_before = spec.fork_id(&head_before);
+        let fork_id_during = spec.fork_id(&head_during);
+        let fork_id_after = spec.fork_id(&head_after);
+
+        assert_ne!(
+            fork_id_before.hash, fork_id_during.hash,
+            "fork_id should change after Prague1 activation"
+        );
+        assert_ne!(
+            fork_id_during.hash, fork_id_after.hash,
+            "fork_id should change after Prague2 activation"
+        );
+
+        assert_eq!(fork_id_before.next, 1000, "next fork should be Prague1");
+        assert_eq!(fork_id_during.next, 2000, "next fork should be Prague2");
+        assert_eq!(fork_id_after.next, 0, "no next fork after Prague2");
+    }
+
+    #[test]
+    fn test_latest_fork_id_matches_final_state() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(999);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(json!({
+                "berachain": {
+                    "prague1": {
+                        "time": 1000,
+                        "baseFeeChangeDenominator": 48,
+                        "minimumBaseFeeWei": 1000000000,
+                        "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                    },
+                    "prague2": {
+                        "time": 2000,
+                        "minimumBaseFeeWei": 0
+                    }
+                }
+            }))
+            .unwrap();
+
+        let spec = BerachainChainSpec::from(genesis);
+
+        let latest_fork_id = spec.latest_fork_id();
+        let head_final = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 3000,
+        };
+        let current_fork_id = spec.fork_id(&head_final);
+
+        assert_eq!(
+            latest_fork_id.hash, current_fork_id.hash,
+            "latest_fork_id should match fork_id at final state"
+        );
+        assert_eq!(latest_fork_id.next, 0, "latest fork should have no next fork");
     }
 }
