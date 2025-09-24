@@ -8,7 +8,7 @@ use crate::{
 use alloy_consensus::BlockHeader;
 use alloy_eips::{
     calc_next_block_base_fee,
-    eip2124::{ForkFilter, ForkId, Head},
+    eip2124::{ForkFilter, ForkFilterKey, ForkHash, ForkId, Head},
 };
 use alloy_genesis::Genesis;
 use alloy_primitives::Sealable;
@@ -50,6 +50,176 @@ pub struct BerachainChainSpec {
 impl BerachainChainSpec {
     pub fn pol_contract(&self) -> Address {
         self.pol_contract_address
+    }
+
+    /// Get the fork id for the given hardfork.
+    /// Equivalent to hardfork_fork_id in Reth
+    ///
+    /// NOTE: This method is copied from reth's ChainSpec implementation and should be kept
+    /// identical. See: reth/crates/chainspec/src/spec.rs
+    #[inline]
+    pub fn hardfork_fork_id<H: Hardfork + Clone>(&self, fork: H) -> Option<ForkId> {
+        let condition = self.inner.hardforks.fork(fork);
+        match condition {
+            ForkCondition::Never => None,
+            // Notably, we use our implementation of fork_id
+            _ => Some(self.fork_id(&self.satisfy(condition))),
+        }
+    }
+
+    /// Convenience method to get the latest fork id from the chainspec. Panics if chainspec has no
+    /// hardforks.
+    ///
+    /// NOTE: This method is copied from reth's ChainSpec implementation and should be kept
+    /// identical. See: reth/crates/chainspec/src/spec.rs
+    #[inline]
+    pub fn latest_fork_id(&self) -> ForkId {
+        self.hardfork_fork_id(self.inner.hardforks.last().unwrap().0).unwrap()
+    }
+
+    /// Creates a [`ForkFilter`] for the block described by [Head].
+    ///
+    /// NOTE: This method is adapted from reth's ChainSpec implementation but uses
+    /// BerachainChainSpec's genesis hash. Core logic should be kept identical to reth's
+    /// implementation except for the genesis hash source. See: reth/crates/chainspec/src/spec.
+    /// rs
+    pub fn fork_filter(&self, head: Head) -> ForkFilter {
+        let forks = self.inner.hardforks.forks_iter().filter_map(|(_, condition)| {
+            // We filter out TTD-based forks w/o a pre-known block since those do not show up in
+            // the fork filter.
+            Some(match condition {
+                ForkCondition::Block(block) |
+                ForkCondition::TTD { fork_block: Some(block), .. } => ForkFilterKey::Block(block),
+                ForkCondition::Timestamp(time) => ForkFilterKey::Time(time),
+                _ => return None,
+            })
+        });
+
+        ForkFilter::new(head, self.genesis_hash(), self.genesis_header().timestamp, forks)
+    }
+
+    /// Compute the [`ForkId`] for the given [`Head`] following eip-6122 spec.
+    ///
+    /// Note: In case there are multiple hardforks activated at the same block or timestamp, only
+    /// the first gets applied.
+    ///
+    /// NOTE: This method is adapted from reth's ChainSpec implementation but uses
+    /// BerachainChainSpec's genesis hash. Core logic should be kept identical to reth's
+    /// implementation except for the genesis hash source. See: reth/crates/chainspec/src/spec.
+    /// rs
+    pub fn fork_id(&self, head: &Head) -> ForkId {
+        let mut forkhash = ForkHash::from(self.genesis_hash()); // Use BerachainChainSpec's genesis hash
+
+        // this tracks the last applied block or timestamp fork. This is necessary for optimism,
+        // because for the optimism hardforks both the optimism and the corresponding ethereum
+        // hardfork can be configured in `ChainHardforks` if it enables ethereum equivalent
+        // functionality (e.g. additional header,body fields) This is set to 0 so that all
+        // block based hardforks are skipped in the following loop
+        let mut current_applied = 0;
+
+        // handle all block forks before handling timestamp based forks. see: https://eips.ethereum.org/EIPS/eip-6122
+        for (_, cond) in self.inner.hardforks.forks_iter() {
+            // handle block based forks and the sepolia merge netsplit block edge case (TTD
+            // ForkCondition with Some(block))
+            if let ForkCondition::Block(block) |
+            ForkCondition::TTD { fork_block: Some(block), .. } = cond
+            {
+                if head.number >= block {
+                    // skip duplicated hardforks: hardforks enabled at genesis block
+                    if block != current_applied {
+                        forkhash += block;
+                        current_applied = block;
+                    }
+                } else {
+                    // we can return here because this block fork is not active, so we set the
+                    // `next` value
+                    return ForkId { hash: forkhash, next: block }
+                }
+            }
+        }
+
+        // timestamp are ALWAYS applied after the merge.
+        //
+        // this filter ensures that no block-based forks are returned
+        for timestamp in self.inner.hardforks.forks_iter().filter_map(|(_, cond)| {
+            // ensure we only get timestamp forks activated __after__ the genesis block
+            cond.as_timestamp().filter(|time| time > &self.genesis().timestamp)
+        }) {
+            if head.timestamp >= timestamp {
+                // skip duplicated hardfork activated at the same timestamp
+                if timestamp != current_applied {
+                    forkhash += timestamp;
+                    current_applied = timestamp;
+                }
+            } else {
+                // can safely return here because we have already handled all block forks and
+                // have handled all active timestamp forks, and set the next value to the
+                // timestamp that is known but not active yet
+                return ForkId { hash: forkhash, next: timestamp }
+            }
+        }
+
+        ForkId { hash: forkhash, next: 0 }
+    }
+
+    /// An internal helper function that returns a head block that satisfies a given Fork condition.
+    ///
+    /// NOTE: This method is copied from reth's ChainSpec implementation and should be kept
+    /// identical. See: reth/crates/chainspec/src/spec.rs
+    pub(crate) fn satisfy(&self, cond: ForkCondition) -> Head {
+        match cond {
+            ForkCondition::Block(number) => Head { number, ..Default::default() },
+            ForkCondition::Timestamp(timestamp) => {
+                // to satisfy every timestamp ForkCondition, we find the last ForkCondition::Block
+                // if one exists, and include its block_num in the returned Head
+                Head {
+                    timestamp,
+                    number: self.last_block_fork_before_merge_or_timestamp().unwrap_or_default(),
+                    ..Default::default()
+                }
+            }
+            ForkCondition::TTD { total_difficulty, fork_block, .. } => Head {
+                total_difficulty,
+                number: fork_block.unwrap_or_default(),
+                ..Default::default()
+            },
+            ForkCondition::Never => unreachable!(),
+        }
+    }
+
+    /// This internal helper function retrieves the block number of the last block-based fork
+    /// that occurs before:
+    /// - Any existing Total Terminal Difficulty (TTD) or
+    /// - Timestamp-based forks in the current [`ChainSpec`].
+    ///
+    /// The function operates by examining the configured hard forks in the chain. It iterates
+    /// through the fork conditions and identifies the most recent block-based fork that
+    /// precedes any TTD or timestamp-based conditions.
+    ///
+    /// If there are no block-based forks found before these conditions, or if the [`ChainSpec`]
+    /// is not configured with a TTD or timestamp fork, this function will return `None`.
+    ///
+    /// NOTE: This method is copied from reth's ChainSpec implementation and should be kept
+    /// identical. See: reth/crates/chainspec/src/spec.rs
+    pub(crate) fn last_block_fork_before_merge_or_timestamp(&self) -> Option<u64> {
+        let mut hardforks_iter = self.inner.hardforks.forks_iter().peekable();
+        while let Some((_, curr_cond)) = hardforks_iter.next() {
+            if let Some((_, next_cond)) = hardforks_iter.peek() {
+                // Match against the `next_cond` to see if it represents:
+                // - A TTD (merge)
+                // - A timestamp-based fork
+                match next_cond {
+                    ForkCondition::TTD { .. } | ForkCondition::Timestamp(_) => {
+                        // If the current condition is block-based, return its block number
+                        if let ForkCondition::Block(block_num) = curr_cond {
+                            return Some(block_num);
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+        }
+        None
     }
 }
 
@@ -174,15 +344,15 @@ impl Hardforks for BerachainChainSpec {
     }
 
     fn fork_id(&self, head: &Head) -> ForkId {
-        self.inner.fork_id(head)
+        self.fork_id(head)
     }
 
     fn latest_fork_id(&self) -> ForkId {
-        self.inner.latest_fork_id()
+        self.latest_fork_id()
     }
 
     fn fork_filter(&self, head: Head) -> ForkFilter {
-        self.inner.fork_filter(head)
+        self.fork_filter(head)
     }
 }
 
@@ -1556,7 +1726,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fork_id_unchanged_with_genesis_config() {
+    fn test_fork_id_genesis_config() {
         let create_genesis = |prague1_time: u64, prague2_time: u64| {
             let mut genesis = Genesis::default();
             genesis.config.cancun_time = Some(0);
@@ -1595,14 +1765,20 @@ mod tests {
         };
 
         let fork_id1 = spec1.fork_id(&head);
-        let fork_id2 = spec2.fork_id(&head);
-        let fork_id3 = spec3.fork_id(&head);
-        let fork_id4 = spec4.fork_id(&head);
+        assert_eq!(fork_id1.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+        assert_eq!(fork_id1.next, 0, "All forks active at genesis, no next fork");
 
-        assert_eq!(fork_id1.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
-        assert_eq!(fork_id2.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        let fork_id2 = spec2.fork_id(&head);
+        assert_eq!(fork_id2.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+        assert_eq!(fork_id2.next, 1000, "Next fork should be Prague2 at time 1000");
+
+        let fork_id3 = spec3.fork_id(&head);
         assert_eq!(fork_id3.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        assert_eq!(fork_id3.next, 1000, "Next fork should be Prague1 at time 1000");
+
+        let fork_id4 = spec4.fork_id(&head);
         assert_eq!(fork_id4.hash, ForkHash([0xc3, 0x84, 0x31, 0xb9]));
+        assert_eq!(fork_id4.next, 3000, "Next fork should be Prague1 at time 3000");
     }
 
     #[test]
@@ -1656,6 +1832,18 @@ mod tests {
         let fork_id_prague = spec.fork_id(&head_prague_active);
         let fork_id_prague1 = spec.fork_id(&head_prague1_active);
         let fork_id_prague2 = spec.fork_id(&head_prague2_active);
+
+        // Test fork_filter at each stage
+        let fork_filter_before_prague = spec.fork_filter(head_before_prague);
+        let fork_filter_prague = spec.fork_filter(head_prague_active);
+        let fork_filter_prague1 = spec.fork_filter(head_prague1_active);
+        let fork_filter_prague2 = spec.fork_filter(head_prague2_active);
+
+        // Verify fork_filter.current() matches fork_id() at each stage
+        assert_eq!(fork_filter_before_prague.current(), fork_id_before_prague);
+        assert_eq!(fork_filter_prague.current(), fork_id_prague);
+        assert_eq!(fork_filter_prague1.current(), fork_id_prague1);
+        assert_eq!(fork_filter_prague2.current(), fork_id_prague2);
 
         // Verify next fork schedule matches Bepolia configuration
         assert_eq!(fork_id_before_prague.next, 1746633600, "next fork should be Prague");
@@ -1744,6 +1932,22 @@ mod tests {
         let fork_id_prague2 = spec.fork_id(&head_prague2_active);
         let fork_id_future = spec.fork_id(&head_far_future);
 
+        // Test fork_filter at each stage
+        let fork_filter_genesis = spec.fork_filter(head_genesis);
+        let fork_filter_before_prague = spec.fork_filter(head_before_prague);
+        let fork_filter_prague = spec.fork_filter(head_prague_active);
+        let fork_filter_prague1 = spec.fork_filter(head_prague1_active);
+        let fork_filter_prague2 = spec.fork_filter(head_prague2_active);
+        let fork_filter_future = spec.fork_filter(head_far_future);
+
+        // Verify fork_filter.current() matches fork_id() at each stage
+        assert_eq!(fork_filter_genesis.current(), fork_id_genesis);
+        assert_eq!(fork_filter_before_prague.current(), fork_id_before_prague);
+        assert_eq!(fork_filter_prague.current(), fork_id_prague);
+        assert_eq!(fork_filter_prague1.current(), fork_id_prague1);
+        assert_eq!(fork_filter_prague2.current(), fork_id_prague2);
+        assert_eq!(fork_filter_future.current(), fork_id_future);
+
         // Verify next fork schedule matches mainnet configuration
         assert_eq!(fork_id_genesis.next, 1749056400, "next fork should be Prague");
         assert_eq!(fork_id_before_prague.next, 1749056400, "next fork should be Prague");
@@ -1790,5 +1994,170 @@ mod tests {
 
         // Verify this matches the final Prague2 state from bera-geth test
         assert_eq!(latest_fork_id.hash, ForkHash([0x2e, 0xdd, 0x8d, 0x57]));
+    }
+
+    #[test]
+    fn test_latest_fork_id_matches_fork_id_at_genesis() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let spec = BerachainChainSpec::from(genesis);
+
+        let head_genesis = Head {
+            number: 0,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 0,
+        };
+
+        let latest_fork_id = spec.latest_fork_id();
+        let genesis_fork_id = spec.fork_id(&head_genesis);
+
+        assert_eq!(latest_fork_id.hash, genesis_fork_id.hash);
+        assert_eq!(genesis_fork_id.next, 0);
+        assert_eq!(latest_fork_id.next, 0);
+        assert_eq!(latest_fork_id.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+        assert_eq!(genesis_fork_id.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+    }
+
+    #[test]
+    fn test_fork_filter_validation() {
+        // Test fork filter validation logic based on EIP-2124 stale software examples
+        let bepolia_path =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bepolia-genesis.json");
+        let bepolia_json = std::fs::read_to_string(bepolia_path).unwrap();
+        let genesis: Genesis = serde_json::from_str(&bepolia_json).unwrap();
+        let spec = BerachainChainSpec::from(genesis);
+
+        // Test scenario: Prague1 is active (after 1754496000)
+        let head_prague1_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1754496000, // Prague1 activation
+        };
+
+        let current_fork_id = spec.fork_id(&head_prague1_active);
+        let valid_node_fork_filter = spec.fork_filter(head_prague1_active);
+
+        // Test cases based on EIP-2124 validation rules with concrete Berachain scenarios:
+
+        // 1) ACCEPT: Same hash, no announced next fork
+        // Scenario: Two validators both at Prague1, but one doesn't know about Prague2 yet
+        let compatible_no_next = ForkId { hash: current_fork_id.hash, next: 0 };
+        assert!(valid_node_fork_filter.validate(compatible_no_next).is_ok());
+
+        // 2) ACCEPT: Same hash, future fork announcement
+        // Scenario: Validator correctly announces Prague2 scheduled for later
+        let compatible_future_fork = ForkId {
+            hash: current_fork_id.hash,
+            next: 1758124800, // Prague2 activation timestamp
+        };
+        assert!(valid_node_fork_filter.validate(compatible_future_fork).is_ok());
+
+        // 3) REJECT: Same hash, but remote claims next fork already passed
+        // Scenario: Bad node implementation
+        let incompatible_past_fork = ForkId {
+            hash: current_fork_id.hash,
+            next: 1700000000, // Before Prague1 activation
+        };
+        assert!(valid_node_fork_filter.validate(incompatible_past_fork).is_err());
+
+        // 4) ACCEPT: Remote is on a past fork we know about
+        // Scenario: Node that hasn't upgraded yet but correctly announces Prague1
+        let head_before_prague1 = Head {
+            number: 50,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1746633600, // Prague activation time
+        };
+        let past_fork_id = spec.fork_id(&head_before_prague1);
+
+        // Remote peer correctly announces next fork
+        let past_fork_correct_next = ForkId {
+            hash: past_fork_id.hash,
+            next: 1754496000, // Prague1 activation
+        };
+        assert!(valid_node_fork_filter.validate(past_fork_correct_next).is_ok());
+
+        // 5) REJECT: Remote is on past fork with wrong next announcement
+        // Scenario: Outdated node with incorrect hardfork schedule
+        let past_fork_wrong_next = ForkId {
+            hash: past_fork_id.hash,
+            next: 9999999999, // Wrong next fork timestamp
+        };
+        assert!(valid_node_fork_filter.validate(past_fork_wrong_next).is_err());
+
+        // 6) REJECT: Completely unknown fork hash
+        // Scenario: Node from different network (mainnet vs testnet) or malicious peer
+        let unknown_fork = ForkId {
+            hash: ForkHash([0xff, 0xff, 0xff, 0xff]), // Unknown hash
+            next: 0,
+        };
+        assert!(valid_node_fork_filter.validate(unknown_fork).is_err());
+
+        // 7) ACCEPT: Remote is on a future fork we know about (Prague2)
+        // Scenario: Validator running after Prague2 activation (we're still at Prague1)
+        let prague2_fork_id = ForkId {
+            hash: ForkHash([0x2e, 0xdd, 0x8d, 0x57]), // Prague2 hash from bepolia test
+            next: 0,
+        };
+        assert!(valid_node_fork_filter.validate(prague2_fork_id).is_ok());
+
+        // 7b) REJECT: Remote is on a future fork we DON'T know about
+        // Scenario: Remote claims "Prague3" fork not in our hardfork schedule
+        let unknown_future_fork = ForkId {
+            hash: ForkHash([0xaa, 0xbb, 0xcc, 0xdd]), // Unknown future fork hash
+            next: 0,
+        };
+        assert!(valid_node_fork_filter.validate(unknown_future_fork).is_err());
+
+        // 8) ACCEPT: Syncing node scenario - local behind, remote ahead should accept
+        // Scenario: New bera-reth node joining Bepolia network, connecting to established bera-geth
+        // validator
+        let syncing_head = Head {
+            number: 10,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1700000000, // Before Prague activation (1746633600)
+        };
+
+        let syncing_fork_id = spec.fork_id(&syncing_head);
+        let syncing_fork_filter = spec.fork_filter(syncing_head);
+
+        // Remote node on Prague1 should accept syncing node on older fork
+        assert!(
+            valid_node_fork_filter.validate(syncing_fork_id).is_ok(),
+            "Remote node ahead should accept syncing node behind"
+        );
+
+        // 9) ACCEPT: Syncing node should accept ahead node
+        // Scenario: Syncing bera-reth node needs to download blocks from ahead bera-geth peers
+        assert!(
+            syncing_fork_filter.validate(current_fork_id).is_ok(),
+            "Syncing node should accept ahead node for sync"
+        );
     }
 }

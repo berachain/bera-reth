@@ -99,6 +99,7 @@ jobs:
               - eth_getTransactionReceipt
               - eth_sendRawTransaction
               - eth_syncing
+              - eth_config
               # debug_ rpc methods
               - debug_
 
