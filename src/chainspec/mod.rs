@@ -1833,6 +1833,18 @@ mod tests {
         let fork_id_prague1 = spec.fork_id(&head_prague1_active);
         let fork_id_prague2 = spec.fork_id(&head_prague2_active);
 
+        // Test fork_filter at each stage
+        let fork_filter_before_prague = spec.fork_filter(head_before_prague);
+        let fork_filter_prague = spec.fork_filter(head_prague_active);
+        let fork_filter_prague1 = spec.fork_filter(head_prague1_active);
+        let fork_filter_prague2 = spec.fork_filter(head_prague2_active);
+
+        // Verify fork_filter.current() matches fork_id() at each stage
+        assert_eq!(fork_filter_before_prague.current(), fork_id_before_prague);
+        assert_eq!(fork_filter_prague.current(), fork_id_prague);
+        assert_eq!(fork_filter_prague1.current(), fork_id_prague1);
+        assert_eq!(fork_filter_prague2.current(), fork_id_prague2);
+
         // Verify next fork schedule matches Bepolia configuration
         assert_eq!(fork_id_before_prague.next, 1746633600, "next fork should be Prague");
         assert_eq!(fork_id_prague.next, 1754496000, "next fork should be Prague1");
@@ -1920,6 +1932,22 @@ mod tests {
         let fork_id_prague2 = spec.fork_id(&head_prague2_active);
         let fork_id_future = spec.fork_id(&head_far_future);
 
+        // Test fork_filter at each stage
+        let fork_filter_genesis = spec.fork_filter(head_genesis);
+        let fork_filter_before_prague = spec.fork_filter(head_before_prague);
+        let fork_filter_prague = spec.fork_filter(head_prague_active);
+        let fork_filter_prague1 = spec.fork_filter(head_prague1_active);
+        let fork_filter_prague2 = spec.fork_filter(head_prague2_active);
+        let fork_filter_future = spec.fork_filter(head_far_future);
+
+        // Verify fork_filter.current() matches fork_id() at each stage
+        assert_eq!(fork_filter_genesis.current(), fork_id_genesis);
+        assert_eq!(fork_filter_before_prague.current(), fork_id_before_prague);
+        assert_eq!(fork_filter_prague.current(), fork_id_prague);
+        assert_eq!(fork_filter_prague1.current(), fork_id_prague1);
+        assert_eq!(fork_filter_prague2.current(), fork_id_prague2);
+        assert_eq!(fork_filter_future.current(), fork_id_future);
+
         // Verify next fork schedule matches mainnet configuration
         assert_eq!(fork_id_genesis.next, 1749056400, "next fork should be Prague");
         assert_eq!(fork_id_before_prague.next, 1749056400, "next fork should be Prague");
@@ -1970,8 +1998,6 @@ mod tests {
 
     #[test]
     fn test_latest_fork_id_matches_fork_id_at_genesis() {
-        // Create genesis with Prague1 active at genesis (time = 0)
-        // This test would have failed before the genesis hash bug fix
         let mut genesis = Genesis::default();
         genesis.config.cancun_time = Some(0);
         genesis.config.prague_time = Some(0);
@@ -1995,7 +2021,6 @@ mod tests {
 
         let spec = BerachainChainSpec::from(genesis);
 
-        // Create a head at genesis
         let head_genesis = Head {
             number: 0,
             hash: B256::ZERO,
@@ -2007,22 +2032,125 @@ mod tests {
         let latest_fork_id = spec.latest_fork_id();
         let genesis_fork_id = spec.fork_id(&head_genesis);
 
-        assert_eq!(
-            latest_fork_id.hash, genesis_fork_id.hash,
-            "latest_fork_id should match fork_id at genesis when Prague1 is active at genesis"
-        );
-
-        // Both should have next fork at timestamp 0 (Prague2)
+        assert_eq!(latest_fork_id.hash, genesis_fork_id.hash);
         assert_eq!(genesis_fork_id.next, 0);
-
-        // latest_fork_id represents the final state, so it should have no next fork
         assert_eq!(latest_fork_id.next, 0);
-
-        // Verify they use the same genesis hash by checking the hash values are identical
-        // This would have failed before the fix because:
-        // - latest_fork_id() was using inner.genesis_hash() (Ethereum genesis)
-        // - fork_id() was using self.genesis_hash() (Berachain genesis)
         assert_eq!(latest_fork_id.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
         assert_eq!(genesis_fork_id.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+    }
+
+    #[test]
+    fn test_fork_filter_validation() {
+        // Test fork filter validation logic based on EIP-2124 stale software examples
+        let bepolia_path =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bepolia-genesis.json");
+        let bepolia_json = std::fs::read_to_string(bepolia_path).unwrap();
+        let genesis: Genesis = serde_json::from_str(&bepolia_json).unwrap();
+        let spec = BerachainChainSpec::from(genesis);
+
+        // Test scenario: Prague1 is active (after 1754496000)
+        let head_prague1_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1754496000, // Prague1 activation
+        };
+
+        let valid_node_fork_filter = spec.fork_filter(head_prague1_active);
+        let current_fork_id = valid_node_fork_filter.current();
+
+        // Test cases based on EIP-2124 validation rules with concrete Berachain scenarios:
+
+        // 1) ACCEPT: Same hash, no announced next fork
+        // Scenario: Two validators both at Prague1, but one doesn't know about Prague2 yet
+        let compatible_no_next = ForkId { hash: current_fork_id.hash, next: 0 };
+        assert!(valid_node_fork_filter.validate(compatible_no_next).is_ok());
+
+        // 2) ACCEPT: Same hash, future fork announcement
+        // Scenario: Validator correctly announces Prague2 scheduled for later
+        let compatible_future_fork = ForkId {
+            hash: current_fork_id.hash,
+            next: 1758124800, // Prague2 activation timestamp
+        };
+        assert!(valid_node_fork_filter.validate(compatible_future_fork).is_ok());
+
+        // 3) REJECT: Same hash, but remote claims next fork already passed
+        // Scenario: Bad node implementation
+        let incompatible_past_fork = ForkId {
+            hash: current_fork_id.hash,
+            next: 1700000000, // Before Prague1 activation
+        };
+        assert!(valid_node_fork_filter.validate(incompatible_past_fork).is_err());
+
+        // 4) ACCEPT: Remote is on a past fork we know about
+        // Scenario: Node that hasn't upgraded yet but correctly announces Prague1
+        let head_before_prague1 = Head {
+            number: 50,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1746633600, // Prague activation time
+        };
+        let past_fork_filter = spec.fork_filter(head_before_prague1);
+        let past_fork_id = past_fork_filter.current();
+
+        // Remote peer correctly announces next fork
+        let past_fork_correct_next = ForkId {
+            hash: past_fork_id.hash,
+            next: 1754496000, // Prague1 activation
+        };
+        assert!(valid_node_fork_filter.validate(past_fork_correct_next).is_ok());
+
+        // 5) REJECT: Remote is on past fork with wrong next announcement
+        // Scenario: Outdated node with incorrect hardfork schedule
+        let past_fork_wrong_next = ForkId {
+            hash: past_fork_id.hash,
+            next: 9999999999, // Wrong next fork timestamp
+        };
+        assert!(valid_node_fork_filter.validate(past_fork_wrong_next).is_err());
+
+        // 6) REJECT: Completely unknown fork hash
+        // Scenario: Node from different network (mainnet vs testnet) or malicious peer
+        let unknown_fork = ForkId {
+            hash: ForkHash([0xff, 0xff, 0xff, 0xff]), // Unknown hash
+            next: 0,
+        };
+        assert!(valid_node_fork_filter.validate(unknown_fork).is_err());
+
+        // 7) ACCEPT: Remote is on a future fork we know about (Prague2)
+        // Scenario: Validator running after Prague2 activation (we're still at Prague1)
+        let prague2_fork_id = ForkId {
+            hash: ForkHash([0x2e, 0xdd, 0x8d, 0x57]), // Prague2 hash from bepolia test
+            next: 0,
+        };
+        assert!(valid_node_fork_filter.validate(prague2_fork_id).is_ok());
+
+        // 8) ACCEPT: Syncing node scenario - local behind, remote ahead should accept
+        // Scenario: New bera-reth node joining Bepolia network, connecting to established bera-geth
+        // validator
+        let syncing_head = Head {
+            number: 10,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1700000000, // Before Prague activation (1746633600)
+        };
+
+        let syncing_fork_filter = spec.fork_filter(syncing_head);
+        let syncing_fork_id = syncing_fork_filter.current();
+
+        // Remote node on Prague1 should accept syncing node on older fork
+        assert!(
+            valid_node_fork_filter.validate(syncing_fork_id).is_ok(),
+            "Remote node ahead should accept syncing node behind"
+        );
+
+        // 9) ACCEPT: Syncing node should accept ahead node
+        // Scenario: Syncing bera-reth node needs to download blocks from ahead bera-geth peers
+        assert!(
+            syncing_fork_filter.validate(current_fork_id).is_ok(),
+            "Syncing node should accept ahead node for sync"
+        );
     }
 }
