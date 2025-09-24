@@ -1607,7 +1607,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fork_id_unchanged_with_genesis_config() {
+    fn test_fork_id_genesis_config() {
         let create_genesis = |prague1_time: u64, prague2_time: u64| {
             let mut genesis = Genesis::default();
             genesis.config.cancun_time = Some(0);
