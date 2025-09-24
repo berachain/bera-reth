@@ -1967,4 +1967,62 @@ mod tests {
         // Verify this matches the final Prague2 state from bera-geth test
         assert_eq!(latest_fork_id.hash, ForkHash([0x2e, 0xdd, 0x8d, 0x57]));
     }
+
+    #[test]
+    fn test_latest_fork_id_matches_fork_id_at_genesis() {
+        // Create genesis with Prague1 active at genesis (time = 0)
+        // This test would have failed before the genesis hash bug fix
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let spec = BerachainChainSpec::from(genesis);
+
+        // Create a head at genesis
+        let head_genesis = Head {
+            number: 0,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 0,
+        };
+
+        let latest_fork_id = spec.latest_fork_id();
+        let genesis_fork_id = spec.fork_id(&head_genesis);
+
+        assert_eq!(
+            latest_fork_id.hash, genesis_fork_id.hash,
+            "latest_fork_id should match fork_id at genesis when Prague1 is active at genesis"
+        );
+
+        // Both should have next fork at timestamp 0 (Prague2)
+        assert_eq!(genesis_fork_id.next, 0);
+
+        // latest_fork_id represents the final state, so it should have no next fork
+        assert_eq!(latest_fork_id.next, 0);
+
+        // Verify they use the same genesis hash by checking the hash values are identical
+        // This would have failed before the fix because:
+        // - latest_fork_id() was using inner.genesis_hash() (Ethereum genesis)
+        // - fork_id() was using self.genesis_hash() (Berachain genesis)
+        assert_eq!(latest_fork_id.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+        assert_eq!(genesis_fork_id.hash, ForkHash([0x8d, 0x68, 0xd8, 0x64]));
+    }
 }
