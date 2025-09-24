@@ -1556,7 +1556,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fork_id_varies_with_genesis_config() {
+    fn test_fork_id_unchanged_with_genesis_config() {
         let create_genesis = |prague1_time: u64, prague2_time: u64| {
             let mut genesis = Genesis::default();
             genesis.config.cancun_time = Some(0);
@@ -1606,102 +1606,179 @@ mod tests {
     }
 
     #[test]
-    fn test_fork_id_evolves_with_timestamp() {
-        let mut genesis = Genesis::default();
-        genesis.config.cancun_time = Some(0);
-        genesis.config.prague_time = Some(999);
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
-        genesis.config.extra_fields =
-            reth::rpc::types::serde_helpers::OtherFields::try_from(json!({
-                "berachain": {
-                    "prague1": {
-                        "time": 1000,
-                        "baseFeeChangeDenominator": 48,
-                        "minimumBaseFeeWei": 1000000000,
-                        "polDistributorAddress": "0x4200000000000000000000000000000000000042"
-                    },
-                    "prague2": {
-                        "time": 2000,
-                        "minimumBaseFeeWei": 0
-                    }
-                }
-            }))
-            .unwrap();
-
+    fn test_bepolia_fork_ids() {
+        // Load the actual Bepolia genesis configuration
+        let bepolia_path =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bepolia-genesis.json");
+        let bepolia_json = std::fs::read_to_string(bepolia_path).unwrap();
+        let genesis: Genesis = serde_json::from_str(&bepolia_json).unwrap();
         let spec = BerachainChainSpec::from(genesis);
 
-        let head_before = Head {
-            number: 10,
+        // Test fork ID evolution through different timestamps matching bera-geth test
+
+        // Before Prague fork (Bepolia has Prague at 1746633600)
+        let head_before_prague = Head {
+            number: 100,
             hash: B256::ZERO,
             difficulty: Default::default(),
             total_difficulty: Default::default(),
-            timestamp: 500,
+            timestamp: 1746633599,
         };
-        let head_during = Head {
-            number: 20,
+
+        // After Prague, before Prague1 (Bepolia has Prague1 at 1754496000)
+        let head_prague_active = Head {
+            number: 100,
             hash: B256::ZERO,
             difficulty: Default::default(),
             total_difficulty: Default::default(),
-            timestamp: 1500,
+            timestamp: 1746633600,
         };
-        let head_after = Head {
-            number: 30,
+
+        // After Prague1, before Prague2 (Bepolia has Prague2 at 1758124800)
+        let head_prague1_active = Head {
+            number: 100,
             hash: B256::ZERO,
             difficulty: Default::default(),
             total_difficulty: Default::default(),
-            timestamp: 2500,
+            timestamp: 1754496000,
         };
 
-        let fork_id_before = spec.fork_id(&head_before);
-        let fork_id_during = spec.fork_id(&head_during);
-        let fork_id_after = spec.fork_id(&head_after);
+        // After Prague2
+        let head_prague2_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1758124800,
+        };
 
-        assert_ne!(
-            fork_id_before.hash, fork_id_during.hash,
-            "fork_id should change after Prague1 activation"
-        );
-        assert_ne!(
-            fork_id_during.hash, fork_id_after.hash,
-            "fork_id should change after Prague2 activation"
-        );
+        let fork_id_before_prague = spec.fork_id(&head_before_prague);
+        let fork_id_prague = spec.fork_id(&head_prague_active);
+        let fork_id_prague1 = spec.fork_id(&head_prague1_active);
+        let fork_id_prague2 = spec.fork_id(&head_prague2_active);
 
-        assert_eq!(fork_id_before.next, 1000, "next fork should be Prague1");
-        assert_eq!(fork_id_during.next, 2000, "next fork should be Prague2");
-        assert_eq!(fork_id_after.next, 0, "no next fork after Prague2");
+        // Verify next fork schedule matches Bepolia configuration
+        assert_eq!(fork_id_before_prague.next, 1746633600, "next fork should be Prague");
+        assert_eq!(fork_id_prague.next, 1754496000, "next fork should be Prague1");
+        assert_eq!(fork_id_prague1.next, 1758124800, "next fork should be Prague2");
+        assert_eq!(fork_id_prague2.next, 0, "no next fork after Prague2");
+
+        // Expected fork hash values for Bepolia (matching bera-geth test values)
+        assert_eq!(fork_id_before_prague.hash, ForkHash([0xae, 0x79, 0x53, 0x0c]));
+        assert_eq!(fork_id_prague.hash, ForkHash([0xd0, 0x7d, 0x9f, 0x27]));
+        assert_eq!(fork_id_prague1.hash, ForkHash([0x33, 0x15, 0x3c, 0x0a]));
+        assert_eq!(fork_id_prague2.hash, ForkHash([0x2e, 0xdd, 0x8d, 0x57]));
+    }
+
+    #[test]
+    fn test_mainnet_fork_ids() {
+        // Load the actual Mainnet genesis configuration
+        let mainnet_path =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mainnet-genesis.json");
+        let mainnet_json = std::fs::read_to_string(mainnet_path).unwrap();
+        let genesis: Genesis = serde_json::from_str(&mainnet_json).unwrap();
+        let spec = BerachainChainSpec::from(genesis);
+
+        // Test cases matching bera-geth mainnet test:
+        // Prague at 1749056400, Prague1 at 1756915200, Prague2 at 1759248000
+
+        // Genesis state - all forks active except Prague/Prague1/Prague2
+        let head_genesis = Head {
+            number: 0,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 0,
+        };
+
+        // Before Prague fork
+        let head_before_prague = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1749056399,
+        };
+
+        // Prague active, before Prague1
+        let head_prague_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1749056400,
+        };
+
+        // Prague1 active, before Prague2
+        let head_prague1_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1756915200,
+        };
+
+        // Prague2 active
+        let head_prague2_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1759248000,
+        };
+
+        // Far future
+        let head_far_future = Head {
+            number: 1000,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 2000000000,
+        };
+
+        // Calculate fork IDs
+        let fork_id_genesis = spec.fork_id(&head_genesis);
+        let fork_id_before_prague = spec.fork_id(&head_before_prague);
+        let fork_id_prague = spec.fork_id(&head_prague_active);
+        let fork_id_prague1 = spec.fork_id(&head_prague1_active);
+        let fork_id_prague2 = spec.fork_id(&head_prague2_active);
+        let fork_id_future = spec.fork_id(&head_far_future);
+
+        // Verify next fork schedule matches mainnet configuration
+        assert_eq!(fork_id_genesis.next, 1749056400, "next fork should be Prague");
+        assert_eq!(fork_id_before_prague.next, 1749056400, "next fork should be Prague");
+        assert_eq!(fork_id_prague.next, 1756915200, "next fork should be Prague1");
+        assert_eq!(fork_id_prague1.next, 1759248000, "next fork should be Prague2");
+        assert_eq!(fork_id_prague2.next, 0, "no next fork after Prague2");
+        assert_eq!(fork_id_future.next, 0, "no next fork in far future");
+
+        // Expected fork hash values for mainnet (matching bera-geth test values)
+        assert_eq!(fork_id_genesis.hash, ForkHash([0xbb, 0x6c, 0x8b, 0xc0]));
+        assert_eq!(fork_id_before_prague.hash, ForkHash([0xbb, 0x6c, 0x8b, 0xc0]));
+        assert_eq!(fork_id_prague.hash, ForkHash([0x3f, 0x78, 0xb1, 0x27]));
+        assert_eq!(fork_id_prague1.hash, ForkHash([0xd2, 0xeb, 0xec, 0xac]));
+        assert_eq!(fork_id_prague2.hash, ForkHash([0xcb, 0xbf, 0x6c, 0x9f]));
+        assert_eq!(fork_id_future.hash, ForkHash([0xcb, 0xbf, 0x6c, 0x9f]));
     }
 
     #[test]
     fn test_latest_fork_id_matches_final_state() {
-        let mut genesis = Genesis::default();
-        genesis.config.cancun_time = Some(0);
-        genesis.config.prague_time = Some(999);
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
-        genesis.config.extra_fields =
-            reth::rpc::types::serde_helpers::OtherFields::try_from(json!({
-                "berachain": {
-                    "prague1": {
-                        "time": 1000,
-                        "baseFeeChangeDenominator": 48,
-                        "minimumBaseFeeWei": 1000000000,
-                        "polDistributorAddress": "0x4200000000000000000000000000000000000042"
-                    },
-                    "prague2": {
-                        "time": 2000,
-                        "minimumBaseFeeWei": 0
-                    }
-                }
-            }))
-            .unwrap();
-
+        // Load the actual Bepolia genesis configuration
+        let bepolia_path =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bepolia-genesis.json");
+        let bepolia_json = std::fs::read_to_string(bepolia_path).unwrap();
+        let genesis: Genesis = serde_json::from_str(&bepolia_json).unwrap();
         let spec = BerachainChainSpec::from(genesis);
 
         let latest_fork_id = spec.latest_fork_id();
+
+        // Create a head far in the future (after all Prague2 activation at 1758124800)
         let head_final = Head {
             number: 100,
             hash: B256::ZERO,
             difficulty: Default::default(),
             total_difficulty: Default::default(),
-            timestamp: 3000,
+            timestamp: 2000000000, // Far future
         };
         let current_fork_id = spec.fork_id(&head_final);
 
@@ -1710,5 +1787,8 @@ mod tests {
             "latest_fork_id should match fork_id at final state"
         );
         assert_eq!(latest_fork_id.next, 0, "latest fork should have no next fork");
+
+        // Verify this matches the final Prague2 state from bera-geth test
+        assert_eq!(latest_fork_id.hash, ForkHash([0x2e, 0xdd, 0x8d, 0x57]));
     }
 }
