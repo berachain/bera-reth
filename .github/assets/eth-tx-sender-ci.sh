@@ -81,7 +81,7 @@ send_transaction() {
         --private-key "$PRIVATE_KEY" \
         --nonce "$nonce" \
         --gas-limit 21000 \
-        --gas-price 1.1gwei \
+        --gas-price 100gwei \
         --priority-gas-price 1.1gwei \
         --rpc-url "$RPC_URL"
         2>/dev/null)
