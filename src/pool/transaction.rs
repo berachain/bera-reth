@@ -1,5 +1,8 @@
 use crate::transaction::BerachainTxEnvelope;
-use alloy_consensus::{Signed, Transaction, transaction::Recovered};
+use alloy_consensus::{
+    Signed, Transaction,
+    transaction::{Recovered, TxHashRef},
+};
 use alloy_eips::{
     Encodable2718, Typed2718,
     eip2930::AccessList,
@@ -203,7 +206,7 @@ impl PoolTransaction for BerachainPooledTransaction {
 
     /// Returns hash of the transaction.
     fn hash(&self) -> &TxHash {
-        self.transaction.tx_hash()
+        TxHashRef::tx_hash(&*self.transaction)
     }
 
     /// Returns the Sender of the transaction.

@@ -7,7 +7,7 @@ use alloy_consensus::{
     TxEip4844, TxEip4844WithSidecar,
     crypto::RecoveryError,
     error::ValueError,
-    transaction::{Recovered, SignerRecoverable},
+    transaction::{Recovered, SignerRecoverable, TxHashRef},
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
@@ -131,7 +131,7 @@ impl Transaction for PoLTx {
 }
 
 impl PoLTx {
-    fn tx_hash(&self) -> TxHash {
+    pub fn tx_hash(&self) -> TxHash {
         let mut buf = Vec::with_capacity(self.encode_2718_len());
         self.encode_2718(&mut buf);
         keccak256(&buf)
@@ -308,7 +308,7 @@ impl BerachainTxEnvelope {
     }
 
     pub fn hash(&self) -> &TxHash {
-        self.tx_hash()
+        TxHashRef::tx_hash(self)
     }
     /// Converts from an EIP-4844 transaction to a [`EthereumTxEnvelope<TxEip4844WithSidecar<T>>`]
     /// with the given sidecar.
@@ -419,16 +419,18 @@ impl SignerRecoverable for BerachainTxEnvelope {
     }
 }
 
-impl SignedTransaction for BerachainTxEnvelope
-where
-    Self: Clone + PartialEq + Eq + Decodable + Decodable2718 + MaybeSerde + InMemorySize,
-{
+impl TxHashRef for BerachainTxEnvelope {
     fn tx_hash(&self) -> &TxHash {
         match self {
             Self::Ethereum(tx) => tx.hash(),
             Self::Berachain(tx) => tx.hash_ref(),
         }
     }
+}
+
+impl SignedTransaction for BerachainTxEnvelope where
+    Self: Clone + PartialEq + Eq + Decodable + Decodable2718 + MaybeSerde + InMemorySize
+{
 }
 
 impl RlpBincode for BerachainTxEnvelope {}

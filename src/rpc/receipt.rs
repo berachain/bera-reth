@@ -32,19 +32,28 @@ pub enum BerachainReceiptEnvelope<T = Log> {
 }
 
 impl BerachainReceiptEnvelope {
-    pub fn from_typed<R>(tx_type: BerachainTxType, receipt: R) -> Self
-    where
-        R: Into<ReceiptWithBloom<Receipt<Log>>>,
-    {
+    pub fn from_ethereum_receipt(
+        tx_type: BerachainTxType,
+        receipt: reth_ethereum_primitives::Receipt<BerachainTxType>,
+        next_log_index: usize,
+        meta: alloy_consensus::transaction::TransactionMeta,
+    ) -> Self {
+        let rpc_receipt = receipt.into_rpc(next_log_index, meta);
+        let alloy_receipt = Receipt {
+            status: Eip658Value::Eip658(rpc_receipt.status()),
+            cumulative_gas_used: rpc_receipt.cumulative_gas_used,
+            logs: rpc_receipt.logs,
+        };
+        let receipt_with_bloom = ReceiptWithBloom::from(alloy_receipt);
         match tx_type {
             BerachainTxType::Ethereum(tx_type) => match tx_type {
-                TxType::Legacy => Self::Legacy(receipt.into()),
-                TxType::Eip2930 => Self::Eip2930(receipt.into()),
-                TxType::Eip1559 => Self::Eip1559(receipt.into()),
-                TxType::Eip4844 => Self::Eip4844(receipt.into()),
-                TxType::Eip7702 => Self::Eip7702(receipt.into()),
+                TxType::Legacy => Self::Legacy(receipt_with_bloom),
+                TxType::Eip2930 => Self::Eip2930(receipt_with_bloom),
+                TxType::Eip1559 => Self::Eip1559(receipt_with_bloom),
+                TxType::Eip4844 => Self::Eip4844(receipt_with_bloom),
+                TxType::Eip7702 => Self::Eip7702(receipt_with_bloom),
             },
-            BerachainTxType::Berachain => Self::Berachain(receipt.into()),
+            BerachainTxType::Berachain => Self::Berachain(receipt_with_bloom),
         }
     }
 }
@@ -193,8 +202,8 @@ where
         for input in inputs {
             let tx_type = input.receipt.tx_type;
             let blob_params = self.chain_spec.blob_params_at_timestamp(input.meta.timestamp);
-            receipts.push(build_receipt(&input, blob_params, |receipt_with_bloom| {
-                BerachainReceiptEnvelope::from_typed(tx_type, receipt_with_bloom)
+            receipts.push(build_receipt(input, blob_params, |receipt, log_idx, meta| {
+                BerachainReceiptEnvelope::from_ethereum_receipt(tx_type, receipt, log_idx, meta)
             }));
         }
 
