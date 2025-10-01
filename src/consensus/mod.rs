@@ -24,7 +24,7 @@ where
         Types: NodeTypes<ChainSpec = BerachainChainSpec, Primitives = BerachainPrimitives>,
     >,
 {
-    type Consensus = Arc<dyn FullConsensus<BerachainPrimitives, Error = ConsensusError>>;
+    type Consensus = Arc<BerachainBeaconConsensus>;
 
     async fn build_consensus(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::Consensus> {
         Ok(Arc::new(BerachainBeaconConsensus::new(ctx.chain_spec())))

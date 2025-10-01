@@ -8,13 +8,9 @@ use bera_reth::{
     consensus::BerachainBeaconConsensus,
     evm::BerachainEvmFactory,
     node::{BerachainNode, evm::config::BerachainEvmConfig},
-    primitives::BerachainPrimitives,
 };
 use clap::Parser;
-use reth::{
-    CliRunner,
-    consensus::{ConsensusError, FullConsensus},
-};
+use reth::CliRunner;
 use reth_cli_commands::node::NoArgs;
 use reth_ethereum_cli::Cli;
 use reth_node_builder::NodeHandle;
@@ -35,8 +31,7 @@ fn main() {
     let cli_components_builder = |spec: Arc<BerachainChainSpec>| {
         (
             BerachainEvmConfig::new_with_evm_factory(spec.clone(), BerachainEvmFactory::default()),
-            Arc::new(BerachainBeaconConsensus::new(spec))
-                as Arc<dyn FullConsensus<BerachainPrimitives, Error = ConsensusError>>,
+            Arc::new(BerachainBeaconConsensus::new(spec)),
         )
     };
 
