@@ -74,7 +74,7 @@ poll_for_receipt() {
                 # Log ephemeral RPC error but continue polling
                 echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - RPC error: $response" >&2
             # Check if result exists (not null) - we got a receipt
-            elif [[ "$response" == *"\"result\":{\"transactionHash\""* ]]; then
+            elif [[ "$response" == *"\"result\":{\"type\""* ]] || [[ "$response" == *"\"result\":{\"transactionHash\""* ]]; then
                 local block_number=$(echo "$response" | grep -o '"blockNumber":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
 
                 # Calculate latency based on available precision
