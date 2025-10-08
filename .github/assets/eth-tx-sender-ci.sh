@@ -65,7 +65,7 @@ poll_for_receipt() {
         # Get transaction receipt via RPC
         local response=$(curl -s -X POST -H "Content-Type: application/json" \
             --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionReceipt\",\"params\":[\"$tx_hash\"],\"id\":1}" \
-            --connect-timeout 2 --max-time 5 \
+            --connect-timeout 10 --max-time 30 \
             "$RPC_URL" 2>/dev/null)
 
         if [[ $? -eq 0 && -n "$response" ]]; then
@@ -150,7 +150,7 @@ send_transaction() {
     # Send raw transaction via direct RPC call
     local response=$(curl -i -X POST -H "Content-Type: application/json" \
         --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_sendRawTransaction\",\"params\":[\"$raw_tx\"],\"id\":1}" \
-        --connect-timeout 5 --max-time 10 \
+        --connect-timeout 10 --max-time 30 \
         "$RPC_URL" 2>&1)
 
     # Extract x-host-id from headers (if present)
