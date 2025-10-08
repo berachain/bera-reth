@@ -77,8 +77,12 @@ poll_for_receipt() {
 
     local deadline=$(($(date +%s) + MAX_WAIT_SEC))
     local rpc_name=$(echo "$RPC_URL" | sed 's|.*://||' | cut -d'/' -f1)
+    local poll_count=0
 
     while [ $(date +%s) -lt $deadline ]; do
+        ((poll_count++))
+        local timestamp=$(date '+%H:%M:%S')
+
         # Get transaction receipt via RPC
         local response=$(curl -s -X POST -H "Content-Type: application/json" \
             --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionReceipt\",\"params\":[\"$tx_hash\"],\"id\":1}" \
@@ -89,8 +93,7 @@ poll_for_receipt() {
             # Check for RPC errors first
             if [[ "$response" == *"\"error\":"* ]]; then
                 # Log ephemeral RPC error but continue polling
-                local timestamp=$(date '+%H:%M:%S')
-                echo "[$timestamp] ${rpc_name} - Ephemeral RPC error during polling: $response" >&2
+                echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - RPC error: $response" >&2
             # Check if result exists (not null) - we got a receipt
             elif [[ "$response" == *"\"result\":{\"transactionHash\""* ]]; then
                 local block_number=$(echo "$response" | grep -o '"blockNumber":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
@@ -107,12 +110,22 @@ poll_for_receipt() {
                 # Convert hex block number to decimal for display
                 local block_decimal=$(printf "%d" "$block_number" 2>/dev/null || echo "unknown")
 
+                echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - Receipt found in block $block_decimal" >&2
                 echo "INCLUDED|$latency|$block_decimal"
                 return 0
+            elif [[ "$response" == *"\"result\":null"* ]]; then
+                # Log null result (transaction not yet mined)
+                echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - Receipt not found yet (null)" >&2
+            else
+                # Log unexpected response format
+                echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - Unexpected response: $response" >&2
             fi
+        else
+            echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - No response or curl error" >&2
         fi
 
-        # No sleep - continuous polling for minimum latency (like Python version)
+        # Sleep 100ms between polls
+        sleep 0.1
     done
 
     # Timeout reached
