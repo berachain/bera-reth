@@ -93,8 +93,8 @@ poll_for_receipt() {
                 echo "INCLUDED|$latency|$block_decimal"
                 return 0
             elif [[ "$response" == *"\"result\":null"* ]]; then
-                # Log null result (transaction not yet mined)
-                echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - Receipt not found yet (null)" >&2
+                # Log full response when receipt not found
+                echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - Receipt not found: $response" >&2
             else
                 # Log unexpected response format
                 echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - Unexpected response: $response" >&2
