@@ -8,10 +8,7 @@ use alloy_consensus::BlockHeader;
 use alloy_eips::eip7910::{EthConfig, EthForkConfig, SystemContract};
 use alloy_primitives::Address;
 use jsonrpsee::core::RpcResult;
-use reth::{
-    providers::BlockReaderIdExt,
-    revm::{database_interface::EmptyDB, precompile::PrecompileId},
-};
+use reth::{providers::BlockReaderIdExt, revm::database_interface::EmptyDB};
 use reth_chainspec::{ChainSpecProvider, EthChainSpec, EthereumHardforks, Hardforks, Head};
 use reth_errors::{ProviderError, RethError};
 use reth_evm::{
@@ -21,7 +18,7 @@ use reth_evm::{
 use reth_rpc_eth_api::helpers::config::EthConfigApiServer;
 use reth_rpc_eth_types::EthApiError;
 
-use std::{borrow::Borrow, collections::BTreeMap};
+use std::collections::BTreeMap;
 
 /// Berachain `eth_config` RPC handler implementing EIP-7910.
 #[derive(Debug, Clone)]
@@ -88,8 +85,11 @@ where
             return Err(RethError::msg("cancun has not been activated"))
         }
 
-        let current_precompiles =
-            evm_to_precompiles_map(self.evm_config.evm_for_block(EmptyDB::default(), &latest));
+        let current_precompiles = evm_to_precompiles_map(
+            self.evm_config
+                .evm_for_block(EmptyDB::default(), &latest)
+                .expect("evm_for_block should never fail with EmptyDB"),
+        );
 
         let mut fork_timestamps =
             chain_spec.forks_iter().filter_map(|(_, cond)| cond.as_timestamp()).collect::<Vec<_>>();
@@ -118,7 +118,9 @@ where
                 header
             };
             let last_precompiles = evm_to_precompiles_map(
-                self.evm_config.evm_for_block(EmptyDB::default(), &fake_header),
+                self.evm_config
+                    .evm_for_block(EmptyDB::default(), &fake_header)
+                    .expect("evm_for_block should never fail with EmptyDB"),
             );
 
             config.last = self.build_fork_config_at(last_fork_timestamp, last_precompiles);
@@ -131,7 +133,9 @@ where
                 header
             };
             let next_precompiles = evm_to_precompiles_map(
-                self.evm_config.evm_for_block(EmptyDB::default(), &fake_header),
+                self.evm_config
+                    .evm_for_block(EmptyDB::default(), &fake_header)
+                    .expect("evm_for_block should never fail with EmptyDB"),
             );
 
             config.next = self.build_fork_config_at(next_fork_timestamp, next_precompiles);
@@ -159,32 +163,7 @@ fn evm_to_precompiles_map(
     precompiles
         .addresses()
         .filter_map(|address| {
-            Some((precompile_to_str(precompiles.get(address)?.precompile_id()), *address))
+            Some((precompiles.get(address)?.precompile_id().name().to_string(), *address))
         })
         .collect()
-}
-
-fn precompile_to_str(id: &PrecompileId) -> String {
-    let str = match id {
-        PrecompileId::EcRec => "ECREC",
-        PrecompileId::Sha256 => "SHA256",
-        PrecompileId::Ripemd160 => "RIPEMD160",
-        PrecompileId::Identity => "ID",
-        PrecompileId::ModExp => "MODEXP",
-        PrecompileId::Bn254Add => "BN254_ADD",
-        PrecompileId::Bn254Mul => "BN254_MUL",
-        PrecompileId::Bn254Pairing => "BN254_PAIRING",
-        PrecompileId::Blake2F => "BLAKE2F",
-        PrecompileId::KzgPointEvaluation => "KZG_POINT_EVALUATION",
-        PrecompileId::Bls12G1Add => "BLS12_G1ADD",
-        PrecompileId::Bls12G1Msm => "BLS12_G1MSM",
-        PrecompileId::Bls12G2Add => "BLS12_G2ADD",
-        PrecompileId::Bls12G2Msm => "BLS12_G2MSM",
-        PrecompileId::Bls12Pairing => "BLS12_PAIRING_CHECK",
-        PrecompileId::Bls12MapFpToGp1 => "BLS12_MAP_FP_TO_G1",
-        PrecompileId::Bls12MapFp2ToGp2 => "BLS12_MAP_FP2_TO_G2",
-        PrecompileId::P256Verify => "P256_VERIFY",
-        PrecompileId::Custom(custom) => custom.borrow(),
-    };
-    str.to_owned()
 }
