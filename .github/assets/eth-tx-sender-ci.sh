@@ -121,6 +121,7 @@ Address: $ADDRESS
 Precalc Hash: $precalc_hash
 Host ID: $host_id
 Raw TX: $raw_tx
+Full Response: $response
 JSON Response: $json_response
 ---"
         FAILED_TXS+=("$detailed_failure")
