@@ -35,13 +35,16 @@ INTERVAL=15
 
 # CI flags
 FAILED_TXS=()
+RECEIPT_TIMEOUTS=()
 SLACK_WEBHOOK="${SLACK_WEBHOOK_URL:-}"
+MAX_WAIT_SEC="${MAX_WAIT_SEC:-30}"
 
 echo "🚀 Transaction Sender - sending every ${INTERVAL}s"
 echo "📋 Target: $TO_ADDRESS"
 echo "💰 Value: 0 wei"
 echo "🔗 RPC: $RPC_URL"
 echo "💳 Address: $ADDRESS"
+echo "⏱️  Receipt timeout: ${MAX_WAIT_SEC}s"
 echo
 
 # Function to get nonce with pending tag via RPC
@@ -66,6 +69,56 @@ get_pending_nonce() {
     fi
 }
 
+# Function to poll for transaction receipt
+poll_for_receipt() {
+    local tx_hash=$1
+    local start_time=$2  # Passed from submission time
+    local use_precision=$3
+
+    local deadline=$(($(date +%s) + MAX_WAIT_SEC))
+    local rpc_name=$(echo "$RPC_URL" | sed 's|.*://||' | cut -d'/' -f1)
+
+    while [ $(date +%s) -lt $deadline ]; do
+        # Get transaction receipt via RPC
+        local response=$(curl -s -X POST -H "Content-Type: application/json" \
+            --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionReceipt\",\"params\":[\"$tx_hash\"],\"id\":1}" \
+            --connect-timeout 2 --max-time 5 \
+            "$RPC_URL" 2>/dev/null)
+
+        if [[ $? -eq 0 && -n "$response" ]]; then
+            # Check for RPC errors first
+            if [[ "$response" == *"\"error\":"* ]]; then
+                # Log ephemeral RPC error but continue polling
+                local timestamp=$(date '+%H:%M:%S')
+                echo "[$timestamp] ${rpc_name} - Ephemeral RPC error during polling: $response" >&2
+            # Check if result exists (not null) - we got a receipt
+            elif [[ "$response" == *"\"result\":{\"transactionHash\""* ]]; then
+                local block_number=$(echo "$response" | grep -o '"blockNumber":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
+
+                # Calculate latency based on available precision
+                if [[ $use_precision -eq 1 ]]; then
+                    local end_time=$(date +%s.%N)
+                    local latency=$(echo "scale=3; $end_time - $start_time" | bc)
+                else
+                    local end_time=$(date +%s)
+                    local latency=$((end_time - start_time))
+                fi
+
+                # Convert hex block number to decimal for display
+                local block_decimal=$(printf "%d" "$block_number" 2>/dev/null || echo "unknown")
+
+                echo "INCLUDED|$latency|$block_decimal"
+                return 0
+            fi
+        fi
+
+        # No sleep - continuous polling for minimum latency (like Python version)
+    done
+
+    # Timeout reached
+    echo "TIMEOUT|$MAX_WAIT_SEC|0"
+    return 1
+}
 
 # Function to send a single transaction
 send_transaction() {
@@ -94,6 +147,15 @@ send_transaction() {
     # Pre-calculate transaction hash from raw transaction
     local precalc_hash=$(cast keccak "$raw_tx")
 
+    # Track submission time for latency calculation
+    local use_precision=0
+    if command -v bc &>/dev/null && [[ "$(date +%N 2>/dev/null)" != "%N" ]]; then
+        local submit_time=$(date +%s.%N)
+        use_precision=1
+    else
+        local submit_time=$(date +%s)
+    fi
+
     # Send raw transaction via direct RPC call
     local response=$(curl -i -X POST -H "Content-Type: application/json" \
         --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_sendRawTransaction\",\"params\":[\"$raw_tx\"],\"id\":1}" \
@@ -106,11 +168,22 @@ send_transaction() {
     # Check if response contains result (success) or error
     if [[ "$response" == *"\"result\":"* && "$response" != *"\"error\":"* ]]; then
         local tx_hash=$(echo "$response" | grep -o '"result":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
-        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$ADDRESS precalc:$precalc_hash host:$host_id → SUCCESS: $tx_hash"
+        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$ADDRESS precalc:$precalc_hash host:$host_id → SUBMITTED: $tx_hash"
+
+        # Poll for receipt
+        local receipt_result=$(poll_for_receipt "$tx_hash" "$submit_time" "$use_precision")
+        IFS='|' read -r receipt_status receipt_latency block_number <<< "$receipt_result"
+
+        if [[ "$receipt_status" == "TIMEOUT" ]]; then
+            echo "[$timestamp] ${rpc_name} - tx:$tx_hash → RECEIPT_TIMEOUT after ${MAX_WAIT_SEC}s"
+            RECEIPT_TIMEOUTS+=("TX: $tx_hash | RPC: $rpc_name | Time: $timestamp | Host: $host_id")
+        elif [[ "$receipt_status" == "INCLUDED" ]]; then
+            echo "[$timestamp] ${rpc_name} - tx:$tx_hash → INCLUDED: block=$block_number latency=${receipt_latency}s"
+        fi
     else
-        # Extract just the JSON response, not the curl verbose output
-        local json_response=$(echo "$response" | tail -1 | grep -o '{.*}')
-        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$ADDRESS precalc:$precalc_hash host:$host_id → FAILED: $json_response"
+        # Show full response for debugging
+        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$ADDRESS precalc:$precalc_hash host:$host_id → FAILED"
+        echo "Full response: $response"
 
         # Store detailed failure for Slack notification
         local detailed_failure="TRANSACTION FAILURE
@@ -122,7 +195,6 @@ Precalc Hash: $precalc_hash
 Host ID: $host_id
 Raw TX: $raw_tx
 Full Response: $response
-JSON Response: $json_response
 ---"
         FAILED_TXS+=("$detailed_failure")
     fi
@@ -161,32 +233,53 @@ for i in $(seq 1 $TX_COUNT); do
 done
 
 send_slack_notification() {
-    echo "Debug: SLACK_WEBHOOK='$SLACK_WEBHOOK', FAILED_TXS count: ${#FAILED_TXS[@]}"
-    if [[ -n "$SLACK_WEBHOOK" && ${#FAILED_TXS[@]} -gt 0 ]]; then
+    echo "Debug: SLACK_WEBHOOK='$SLACK_WEBHOOK', FAILED_TXS count: ${#FAILED_TXS[@]}, RECEIPT_TIMEOUTS count: ${#RECEIPT_TIMEOUTS[@]}"
+    if [[ -n "$SLACK_WEBHOOK" && ( ${#FAILED_TXS[@]} -gt 0 || ${#RECEIPT_TIMEOUTS[@]} -gt 0 ) ]]; then
         # Create comprehensive failure summary
         local total_failures=${#FAILED_TXS[@]}
+        local total_timeouts=${#RECEIPT_TIMEOUTS[@]}
         local timestamp=$(date '+%Y-%m-%d %H:%M:%S UTC')
 
         # Build detailed message
-        local message="BERACHAIN RPC TRANSACTION FAILURES DETECTED
+        local message="BERACHAIN RPC TRANSACTION ISSUES DETECTED
 
-Summary: $total_failures transaction(s) failed out of $TX_COUNT attempts
+Summary:
+- Submission Failures: $total_failures
+- Receipt Timeouts: $total_timeouts
+- Total Attempts: $TX_COUNT
 Report Time: $timestamp
 CI Run: https://github.com/berachain/bera-reth/actions/runs/$GITHUB_RUN_ID
-
-Failure Details:
 "
 
-        # Add each failure with full details
-        local failure_count=1
-        for failure in "${FAILED_TXS[@]}"; do
+        # Add submission failures
+        if [[ ${#FAILED_TXS[@]} -gt 0 ]]; then
             message+="
+==== SUBMISSION FAILURES ====
+"
+            local failure_count=1
+            for failure in "${FAILED_TXS[@]}"; do
+                message+="
 Failure #$failure_count:
 $failure
 "
-            ((failure_count++))
-        done
+                ((failure_count++))
+            done
+        fi
 
+        # Add receipt timeouts
+        if [[ ${#RECEIPT_TIMEOUTS[@]} -gt 0 ]]; then
+            message+="
+==== RECEIPT TIMEOUTS ====
+"
+            local timeout_count=1
+            for timeout in "${RECEIPT_TIMEOUTS[@]}"; do
+                message+="
+Timeout #$timeout_count:
+$timeout
+"
+                ((timeout_count++))
+            done
+        fi
 
         # Send to Slack with proper JSON escaping
         local json_message=$(echo "$message" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
@@ -202,11 +295,11 @@ send_slack_notification
 
 echo "🛑 $TX_COUNT transactions complete."
 
-# Exit with error code if there were failures
-if [[ ${#FAILED_TXS[@]} -gt 0 ]]; then
-    echo "❌ Run completed with ${#FAILED_TXS[@]} failures"
+# Exit with error code if there were failures or timeouts
+if [[ ${#FAILED_TXS[@]} -gt 0 || ${#RECEIPT_TIMEOUTS[@]} -gt 0 ]]; then
+    echo "❌ Run completed with ${#FAILED_TXS[@]} failures and ${#RECEIPT_TIMEOUTS[@]} receipt timeouts"
     exit 1
 else
-    echo "✅ Run completed successfully with no failures"
+    echo "✅ Run completed successfully with no failures or timeouts"
     exit 0
 fi
