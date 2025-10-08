@@ -131,7 +131,7 @@ impl Transaction for PoLTx {
 }
 
 impl PoLTx {
-    pub fn tx_hash(&self) -> TxHash {
+    fn tx_hash(&self) -> TxHash {
         let mut buf = Vec::with_capacity(self.encode_2718_len());
         self.encode_2718(&mut buf);
         keccak256(&buf)
@@ -308,7 +308,7 @@ impl BerachainTxEnvelope {
     }
 
     pub fn hash(&self) -> &TxHash {
-        TxHashRef::tx_hash(self)
+        self.tx_hash()
     }
     /// Converts from an EIP-4844 transaction to a [`EthereumTxEnvelope<TxEip4844WithSidecar<T>>`]
     /// with the given sidecar.

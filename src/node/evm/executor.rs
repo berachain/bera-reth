@@ -182,8 +182,8 @@ where
         &mut self,
         tx: impl ExecutableTx<Self>,
     ) -> Result<ResultAndState<<Self::Evm as Evm>::HaltReason>, BlockExecutionError> {
-        // Check if this is a POL transaction - skip execution since it's already executed as
-        // a system-call in apply_pre_execution_changes.
+        // For PoL txs, we simply populate a dummy result and state as it is ultimately ignored
+        // during commit_transaction.
         if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
             return Ok(ResultAndState {
                 result: ExecutionResult::Success {
@@ -197,6 +197,8 @@ where
             });
         }
 
+        // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
+        // must be no greater than the block's gasLimit.
         let block_available_gas = self.evm.block().gas_limit - self.gas_used;
 
         if tx.tx().gas_limit() > block_available_gas {
@@ -207,6 +209,7 @@ where
             .into());
         }
 
+        // Execute transaction and return the result
         self.evm.transact(&tx).map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))
     }
 
@@ -215,7 +218,8 @@ where
         output: ResultAndState<<Self::Evm as Evm>::HaltReason>,
         tx: impl ExecutableTx<Self>,
     ) -> Result<u64, BlockExecutionError> {
-        // Skip commit for POL transactions
+        // Skip commit for POL transactions at it's already been applied in
+        // apply_pre_execution_changes
         if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
             return Ok(0);
         }
@@ -226,8 +230,10 @@ where
 
         let gas_used = result.gas_used();
 
+        // append gas used
         self.gas_used += gas_used;
 
+        // Push transaction changeset and calculate header bloom filter for receipt.
         self.receipts.push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
             tx: tx.tx(),
             evm: &self.evm,
@@ -236,6 +242,7 @@ where
             cumulative_gas_used: self.gas_used,
         }));
 
+        // Commit the state changes.
         self.evm.db_mut().commit(state);
 
         Ok(gas_used)
