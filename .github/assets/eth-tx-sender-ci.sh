@@ -47,27 +47,6 @@ echo "💳 Address: $ADDRESS"
 echo "⏱️  Receipt timeout: ${MAX_WAIT_SEC}s"
 echo
 
-# Function to get nonce with pending tag via RPC
-get_pending_nonce() {
-    # Get pending nonce via direct RPC call
-    local response=$(curl -s -X POST -H "Content-Type: application/json" \
-        --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionCount\",\"params\":[\"$ADDRESS\",\"pending\"],\"id\":1}" \
-        --connect-timeout 5 --max-time 10 \
-        "$RPC_URL" 2>/dev/null)
-
-    if [[ $? -eq 0 && -n "$response" ]]; then
-        # Extract hex nonce and convert to decimal
-        local hex_nonce=$(echo "$response" | grep -o '"result":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
-        if [[ -n "$hex_nonce" ]]; then
-            local decimal_nonce=$(printf "%d" "$hex_nonce" 2>/dev/null || echo "ERROR")
-            echo "$decimal_nonce"
-        else
-            echo "ERROR"
-        fi
-    else
-        echo "ERROR"
-    fi
-}
 
 # Function to poll for transaction receipt
 poll_for_receipt() {
@@ -135,25 +114,20 @@ poll_for_receipt() {
 
 # Function to send a single transaction
 send_transaction() {
-    local nonce=$1
     local timestamp=$(date '+%H:%M:%S')
 
     # Extract RPC name for display
     local rpc_name=$(echo "$RPC_URL" | sed 's|.*://||' | cut -d'/' -f1)
 
-    # Build and sign transaction once
+    # Build and sign transaction - let RPC determine nonce and gas (like Python)
     local raw_tx=$(cast mktx "$TO_ADDRESS" \
         --value 0 \
         --private-key "$PRIVATE_KEY" \
-        --nonce "$nonce" \
-        --gas-limit 21000 \
-        --gas-price 100gwei \
-        --priority-gas-price 1.1gwei \
-        --rpc-url "$RPC_URL"
+        --rpc-url "$RPC_URL" \
         2>/dev/null)
 
     if [[ -z "$raw_tx" ]]; then
-        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$ADDRESS → MKTX_FAILED"
+        echo "[$timestamp] ${rpc_name} - addr:$ADDRESS → MKTX_FAILED"
         return 1
     fi
 
@@ -181,7 +155,7 @@ send_transaction() {
     # Check if response contains result (success) or error
     if [[ "$response" == *"\"result\":"* && "$response" != *"\"error\":"* ]]; then
         local tx_hash=$(echo "$response" | grep -o '"result":"0x[a-fA-F0-9]*"' | cut -d'"' -f4)
-        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$ADDRESS precalc:$precalc_hash host:$host_id → SUBMITTED: $tx_hash"
+        echo "[$timestamp] ${rpc_name} - addr:$ADDRESS precalc:$precalc_hash host:$host_id → SUBMITTED: $tx_hash"
 
         # Poll for receipt
         local receipt_result=$(poll_for_receipt "$tx_hash" "$submit_time" "$use_precision")
@@ -195,14 +169,13 @@ send_transaction() {
         fi
     else
         # Show full response for debugging
-        echo "[$timestamp] ${rpc_name} - nonce:$nonce addr:$ADDRESS precalc:$precalc_hash host:$host_id → FAILED"
+        echo "[$timestamp] ${rpc_name} - addr:$ADDRESS precalc:$precalc_hash host:$host_id → FAILED"
         echo "Full response: $response"
 
         # Store detailed failure for Slack notification
         local detailed_failure="TRANSACTION FAILURE
 RPC: $rpc_name ($RPC_URL)
 Time: $timestamp
-Nonce: $nonce
 Address: $ADDRESS
 Precalc Hash: $precalc_hash
 Host ID: $host_id
@@ -215,18 +188,8 @@ Full Response: $response
 
 # Function to send a single transaction attempt
 send_transaction_attempt() {
-    local rpc_name=$(echo "$RPC_URL" | sed 's|.*://||' | cut -d'/' -f1)
-    local timestamp=$(date '+%H:%M:%S')
-
-    # Get pending nonce
-    local nonce=$(get_pending_nonce)
-
-    if [[ "$nonce" == "ERROR" ]]; then
-        echo "[$timestamp] ${rpc_name} - addr:$ADDRESS NONCE_ERROR"
-    else
-        # Send transaction
-        send_transaction "$nonce"
-    fi
+    # Send transaction (nonce determined by RPC)
+    send_transaction
 }
 
 # Number of transactions to send (default 20)
