@@ -131,6 +131,10 @@ send_transaction() {
         return 1
     fi
 
+    # Decode and log transaction details
+    local tx_details=$(cast decode-transaction "$raw_tx" 2>/dev/null)
+    echo "[$timestamp] ${rpc_name} - Decoded TX: $tx_details"
+
     # Pre-calculate transaction hash from raw transaction
     local precalc_hash=$(cast keccak "$raw_tx")
 
