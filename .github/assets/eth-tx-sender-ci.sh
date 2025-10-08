@@ -103,8 +103,8 @@ poll_for_receipt() {
             echo "[$timestamp] ${rpc_name} - Poll #${poll_count} - No response or curl error" >&2
         fi
 
-        # Sleep 100ms between polls
-        sleep 0.1
+        # Sleep 250ms between polls
+        sleep 0.25
     done
 
     # Timeout reached
