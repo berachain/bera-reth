@@ -81,7 +81,7 @@ test-fuzz = "7"
 
 [build-dependencies]
 vergen = { version = "9.0.4", features = ["build", "cargo", "emit_and_set"] }
-vergen-git2 = "1.0.5"
+vergen-git2 = "1.0.7"
 
 [features]
 default = ["jemalloc"]
