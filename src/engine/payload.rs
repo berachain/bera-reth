@@ -327,7 +327,7 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
     }
 
     let out = hasher.finalize();
-    PayloadId::new(out.as_slice()[..8].try_into().expect("sufficient length"))
+    PayloadId::new(out[..8].try_into().expect("sufficient length"))
 }
 
 #[cfg(test)]
