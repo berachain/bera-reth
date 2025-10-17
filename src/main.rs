@@ -33,7 +33,7 @@ fn main() {
     let cli_components_builder = |spec: Arc<BerachainChainSpec>| {
         (
             BerachainEvmConfig::new_with_evm_factory(spec.clone(), BerachainEvmFactory::default()),
-            BerachainBeaconConsensus::new(spec),
+            Arc::new(BerachainBeaconConsensus::new(spec)),
         )
     };
 

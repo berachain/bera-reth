@@ -1,5 +1,4 @@
 name: Reusable Docker Build
-
 on:
   workflow_call:
     inputs:
@@ -12,12 +11,10 @@ on:
         required: false
         type: string
         default: 'release'
-
 env:
   IMAGE_NAME: ${{ github.repository_owner }}/bera-reth
   DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/bera-reth
   DOCKER_USERNAME: ${{ github.actor }}
-
 jobs:
   docker-build:
     runs-on: ubuntu-latest-large
@@ -29,23 +26,39 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
-
+      # use cosign for keyless signing of docker images
+      - name: Install cosign
+        # if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3.9.2
+        with:
+          cosign-release: 'v2.5.3'
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           buildkitd-config-inline: |
             [worker.oci]
               max-parallelism = 32
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
+      - name: Extract Docker metadata
+        id: docker-meta
+        uses: docker/metadata-action@v5.8.0
+        with:
+          images: ${{ env.DOCKER_IMAGE_NAME }}
       - name: Build and push Docker image
+        id: build-and-push
         run: DOCKER_IMAGE_NAME=${{ env.DOCKER_IMAGE_NAME }} PROFILE=${{ inputs.profile }} make ${{ inputs.make-target }}
+      - name: Sign the published Docker image
+        # if: ${{ github.event_name != 'pull_request' }}
+        env:
+          TAGS: ${{ steps.docker-meta.outputs.tags }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        # This step uses the identity token to provision an ephemeral certificate
+        # against the sigstore community Fulcio instance.
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}

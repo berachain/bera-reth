@@ -25,11 +25,12 @@ jobs:
     name: check dry run
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          echo "Dry run value: ${{ github.event.inputs.dry_run }}"
-          echo "Dry run enabled: ${{ github.event.inputs.dry_run == 'true'}}"
-          echo "Dry run disabled: ${{ github.event.inputs.dry_run != 'true'}}"
-
+      - env:
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          echo "Dry run value: $DRY_RUN"
+          echo "Dry run enabled: $([ "$DRY_RUN" = "true" ] && echo "true" || echo "false")"
+          echo "Dry run disabled: $([ "$DRY_RUN" != "true" ] && echo "true" || echo "false")"
   extract-version:
     name: extract version
     runs-on: ubuntu-latest

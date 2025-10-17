@@ -11,20 +11,21 @@ use crate::{
 };
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
+use alloy_primitives::Bytes;
 use reth::{
     chainspec::{EthereumHardfork, EthereumHardforks},
     providers::BlockExecutionResult,
     revm::{
         DatabaseCommit, Inspector, State,
-        context::result::{ExecutionResult, ResultAndState},
+        context::result::{ExecutionResult, Output, ResultAndState, SuccessReason},
     },
 };
 use reth_evm::{
     Database, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, OnStateHook,
     block::{
         BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor,
-        BlockValidationError, CommitChanges, ExecutableTx, StateChangePostBlockSource,
-        StateChangeSource, SystemCaller,
+        BlockValidationError, ExecutableTx, StateChangePostBlockSource, StateChangeSource,
+        SystemCaller,
     },
     eth::{
         dao_fork, eip6110,
@@ -32,7 +33,7 @@ use reth_evm::{
     },
     state_change::{balance_increment_state, post_block_balance_increments},
 };
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 #[derive(Debug)]
 pub struct BerachainBlockExecutor<'a, Evm> {
@@ -177,16 +178,23 @@ where
         Ok(())
     }
 
-    fn execute_transaction_with_commit_condition(
+    fn execute_transaction_without_commit(
         &mut self,
         tx: impl ExecutableTx<Self>,
-        f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>) -> CommitChanges,
-    ) -> Result<Option<u64>, BlockExecutionError> {
-        // Check if this is a POL transaction - skip execution since it's already executed as
-        // a system-call in apply_pre_execution_changes.
-        // Validation is done in the consensus rust module.
+    ) -> Result<ResultAndState<<Self::Evm as Evm>::HaltReason>, BlockExecutionError> {
+        // For PoL txs, we simply populate a dummy result and state as it is ultimately ignored
+        // during commit_transaction.
         if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
-            return Ok(Some(0));
+            return Ok(ResultAndState {
+                result: ExecutionResult::Success {
+                    reason: SuccessReason::Stop,
+                    gas_used: 0,
+                    gas_refunded: 0,
+                    logs: Vec::new(),
+                    output: Output::Call(Bytes::default()),
+                },
+                state: HashMap::default(),
+            });
         }
 
         // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
@@ -201,15 +209,22 @@ where
             .into());
         }
 
-        // Execute transaction.
-        let ResultAndState { result, state } = self
-            .evm
-            .transact(&tx)
-            .map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))?;
+        // Execute transaction and return the result
+        self.evm.transact(&tx).map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))
+    }
 
-        if !f(&result).should_commit() {
-            return Ok(None);
+    fn commit_transaction(
+        &mut self,
+        output: ResultAndState<<Self::Evm as Evm>::HaltReason>,
+        tx: impl ExecutableTx<Self>,
+    ) -> Result<u64, BlockExecutionError> {
+        // Skip commit for POL transactions at it's already been applied in
+        // apply_pre_execution_changes
+        if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
+            return Ok(0);
         }
+
+        let ResultAndState { result, state } = output;
 
         self.system_caller.on_state(StateChangeSource::Transaction(self.receipts.len()), &state);
 
@@ -230,7 +245,7 @@ where
         // Commit the state changes.
         self.evm.db_mut().commit(state);
 
-        Ok(Some(gas_used))
+        Ok(gas_used)
     }
 
     fn finish(

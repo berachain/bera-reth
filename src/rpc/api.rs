@@ -454,6 +454,10 @@ where
         EthTransactions::signers(&self.inner)
     }
 
+    fn send_raw_transaction_sync_timeout(&self) -> std::time::Duration {
+        EthTransactions::send_raw_transaction_sync_timeout(&self.inner)
+    }
+
     /// Decodes and recovers the transaction and submits it to the pool.
     ///
     /// Returns the hash of the transaction.

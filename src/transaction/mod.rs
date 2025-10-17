@@ -7,7 +7,7 @@ use alloy_consensus::{
     TxEip4844, TxEip4844WithSidecar,
     crypto::RecoveryError,
     error::ValueError,
-    transaction::{Recovered, SignerRecoverable},
+    transaction::{Recovered, SignerRecoverable, TxHashRef},
 };
 use alloy_eips::{
     Decodable2718, Encodable2718, Typed2718, eip2718::Eip2718Result, eip2930::AccessList,
@@ -419,16 +419,18 @@ impl SignerRecoverable for BerachainTxEnvelope {
     }
 }
 
-impl SignedTransaction for BerachainTxEnvelope
-where
-    Self: Clone + PartialEq + Eq + Decodable + Decodable2718 + MaybeSerde + InMemorySize,
-{
+impl TxHashRef for BerachainTxEnvelope {
     fn tx_hash(&self) -> &TxHash {
         match self {
             Self::Ethereum(tx) => tx.hash(),
             Self::Berachain(tx) => tx.hash_ref(),
         }
     }
+}
+
+impl SignedTransaction for BerachainTxEnvelope where
+    Self: Clone + PartialEq + Eq + Decodable + Decodable2718 + MaybeSerde + InMemorySize
+{
 }
 
 impl RlpBincode for BerachainTxEnvelope {}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copied from reth at commit 91730cd326f6b0f975e56d8985f08a2a6c943f89
+# Copied from reth v1.8.1
 # set -x
 
 cd hivetests/
@@ -16,7 +16,7 @@ check_log() {
 }
 
 attempt=0
-max_attempts=30
+max_attempts=5
 
 while [ $attempt -lt $max_attempts ]; do
     run_hive
