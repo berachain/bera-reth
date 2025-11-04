@@ -15,10 +15,10 @@ on:
         default: false
 
 env:
-  REPO_NAME: ${{ github.repository_owner }}/bera-reth-internal
-  IMAGE_NAME: ${{ github.repository_owner }}/bera-reth-internal
+  REPO_NAME: ${{ github.repository_owner }}/bera-reth
+  IMAGE_NAME: ${{ github.repository_owner }}/bera-reth
   CARGO_TERM_COLOR: always
-  DOCKER_IMAGE_NAME_URL: https://ghcr.io/${{ github.repository_owner }}/bera-reth-internal
+  DOCKER_IMAGE_NAME_URL: https://ghcr.io/${{ github.repository_owner }}/bera-reth
 
 jobs:
   dry-run:
@@ -163,7 +163,7 @@ jobs:
           fi
 
           body=$(cat <<- "ENDBODY"
-          ![image](https://raw.githubusercontent.com/${{ env.GITHUB_USER }}/bera-reth-internal/main/assets/bera-reth.png)
+          ![image](https://raw.githubusercontent.com/${{ env.GITHUB_USER }}/bera-reth/main/assets/bera-reth.png)
 
           ## Testing Checklist (DELETE ME)
 
@@ -219,16 +219,16 @@ jobs:
                   assets+=("$asset")
               fi
           done
-          
+
           # Ensure we have assets before proceeding
           if [[ ${#assets[@]} -eq 0 ]]; then
               echo "ERROR: No assets found!"
               exit 1
           fi
-          
+
           echo "Found ${#assets[@]} assets to upload"
           tag_name="${{ env.VERSION }}"
-          
+
           # Extensive debugging
           echo "=== DEBUG INFO ==="
           echo "GITHUB_REF: '$GITHUB_REF'"
@@ -255,33 +255,33 @@ jobs:
               git push origin "$tag_name"
               echo "Tag created and pushed"
           fi
-          
+
           echo "Assets found: ${#assets[@]}"
           for i in "${!assets[@]}"; do
               echo "Asset $i: '${assets[i]}' (size: $(stat -c%s "${assets[i]}" 2>/dev/null || echo "unknown"))"
           done
-          
+
           echo "Environment variables:"
           env | grep -E "(GITHUB_|GH_)" | sort
-          
+
           echo "GitHub CLI version:"
           gh --version
-          
+
           echo "Testing gh auth:"
           gh auth status || echo "Auth check failed"
-          
+
           echo "=== RUNNING RELEASE COMMAND ==="
           echo "Command: gh release create --draft $prerelease_flag -t \"Bera-Reth $tag_name\" -F \"-\" \"$tag_name\" ${assets[*]}"
-          
+
           # Create release with verbose output
           set -x  # Enable bash debug mode
           echo "$body" | gh release create --draft $prerelease_flag -t "Bera-Reth $tag_name" -F "-" "$tag_name" "${assets[@]}"
           release_exit_code=$?
           set +x  # Disable bash debug mode
-          
+
           echo "=== POST-RELEASE DEBUG ==="
           echo "Release command exit code: $release_exit_code"
-          
+
           if [[ $release_exit_code -eq 0 ]]; then
               echo "Release created successfully"
               echo "Checking if release exists:"

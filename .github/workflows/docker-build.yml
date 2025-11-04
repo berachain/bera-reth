@@ -14,8 +14,8 @@ on:
         default: 'release'
 
 env:
-  IMAGE_NAME: ${{ github.repository_owner }}/bera-reth-internal
-  DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/bera-reth-internal
+  IMAGE_NAME: ${{ github.repository_owner }}/bera-reth
+  DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/bera-reth
   DOCKER_USERNAME: ${{ github.actor }}
 
 jobs:

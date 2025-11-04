@@ -23,7 +23,7 @@ jobs:
   prepare-bera-reth:
     uses: ./.github/workflows/prepare-bera-reth.yml
     with:
-      image_tag: ghcr.io/berachain/bera-reth-internal:nightly
+      image_tag: ghcr.io/berachain/bera-reth:nightly
       binary_name: bera-reth
 
   prepare-hive:
@@ -207,5 +207,5 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_COLOR: ${{ job.status }}
-          SLACK_MESSAGE: "Hive test failed: https://github.com/berachain/bera-reth-internal/actions/runs/${{ github.run_id }}"
+          SLACK_MESSAGE: "Hive test failed: https://github.com/berachain/bera-reth/actions/runs/${{ github.run_id }}"
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}

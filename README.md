@@ -3,10 +3,10 @@
 <img src="assets/bera-reth.png" alt="Bera-Reth" width="400"/>
 
 <p>
-  <a href="https://github.com/berachain/bera-reth-internal/actions/workflows/ci.yml">
-    <img src="https://github.com/berachain/bera-reth-internal/actions/workflows/ci.yml/badge.svg" alt="CI"/>
+  <a href="https://github.com/berachain/bera-reth/actions/workflows/ci.yml">
+    <img src="https://github.com/berachain/bera-reth/actions/workflows/ci.yml/badge.svg" alt="CI"/>
   </a>
-  <a href="https://github.com/berachain/bera-reth-internal">
+  <a href="https://github.com/berachain/bera-reth">
     <img src="https://img.shields.io/badge/status-production-brightgreen" alt="Status"/>
   </a>
 </p>
@@ -27,8 +27,8 @@ A high-performance Rust execution client for Berachain, built with the Reth SDK.
 ### Build and Run
 
 ```bash
-git clone https://github.com/berachain/bera-reth-internal.git
-cd bera-reth-internal
+git clone https://github.com/berachain/bera-reth.git
+cd bera-reth
 cargo build --release
 ```
 
