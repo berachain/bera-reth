@@ -1,15 +1,19 @@
+use reth_rpc_eth_api::helpers::config::EthConfigApiServer;
 pub mod api;
+pub mod config;
 pub mod receipt;
 
 use crate::{
+    chainspec::BerachainChainSpec,
     engine::{
         BerachainExecutionData, rpc::BerachainEngineApiBuilder,
         validator::BerachainEngineValidatorBuilder,
     },
-    node::evm::config::BerachainNextBlockEnvAttributes,
+    node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
     primitives::BerachainPrimitives,
     rpc::{
         api::{BerachainApi, BerachainNetwork},
+        config::BerachainConfigHandler,
         receipt::BerachainEthReceiptConverter,
     },
 };
@@ -17,7 +21,11 @@ use reth::{
     api::{FullNodeComponents, HeaderTy, PrimitivesTy},
     chainspec::EthereumHardforks,
     revm::context::TxEnv,
-    rpc::{api::eth::FromEvmError, builder::Identity, server_types::eth::EthApiError},
+    rpc::{
+        api::eth::FromEvmError,
+        builder::{Identity, RethRpcModule},
+        server_types::eth::EthApiError,
+    },
 };
 use reth_chainspec::{ChainSpecProvider, EthChainSpec, Hardforks};
 use reth_evm::{ConfigureEvm, EvmFactory, EvmFactoryFor, SpecFor, TxEnvFor};
@@ -134,14 +142,14 @@ impl<N, EthB, PVB, EB, EVB, RpcMiddleware> NodeAddOns<N>
 where
     N: FullNodeComponents<
             Types: NodeTypes<
-                ChainSpec: EthChainSpec + EthereumHardforks,
+                ChainSpec = BerachainChainSpec,
                 Primitives = BerachainPrimitives,
                 Payload: reth_engine_primitives::EngineTypes<
                     ExecutionData = BerachainExecutionData,
                 >,
             >,
             Provider: ChainSpecProvider<ChainSpec: EthereumHardforks>,
-            Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
+            Evm = BerachainEvmConfig,
         >,
     EthB: EthApiBuilder<N>,
     PVB: PayloadValidatorBuilder<N>,
@@ -157,7 +165,17 @@ where
         self,
         ctx: reth_node_api::AddOnsContext<'_, N>,
     ) -> eyre::Result<Self::Handle> {
-        self.inner.launch_add_ons(ctx).await
+        let berachain_config =
+            BerachainConfigHandler::new(ctx.node.provider().clone(), ctx.node.evm_config().clone());
+
+        self.inner
+            .launch_add_ons_with(ctx, move |container| {
+                container
+                    .modules
+                    .merge_if_module_configured(RethRpcModule::Eth, berachain_config.into_rpc())?;
+                Ok(())
+            })
+            .await
     }
 }
 
@@ -165,13 +183,13 @@ impl<N, EthB, PVB, EB, EVB> RethRpcAddOns<N> for BerachainAddOns<N, EthB, PVB, E
 where
     N: FullNodeComponents<
             Types: NodeTypes<
-                ChainSpec: EthChainSpec + EthereumHardforks,
+                ChainSpec = BerachainChainSpec,
                 Primitives = BerachainPrimitives,
                 Payload: reth_engine_primitives::EngineTypes<
                     ExecutionData = BerachainExecutionData,
                 >,
             >,
-            Evm: ConfigureEvm<NextBlockEnvCtx = BerachainNextBlockEnvAttributes>,
+            Evm = BerachainEvmConfig,
         >,
     EthB: EthApiBuilder<N>,
     PVB: PayloadValidatorBuilder<N>,

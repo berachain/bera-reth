@@ -45,3 +45,14 @@ where
         Ok(evm_config)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_extra_data_format() {
+        let expected = format!("bera-reth/v{}/{}", env!("CARGO_PKG_VERSION"), std::env::consts::OS);
+        assert_eq!(default_extra_data(), expected);
+    }
+}

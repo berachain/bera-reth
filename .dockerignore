@@ -5,6 +5,7 @@
 !/src
 !Cargo.lock
 !Cargo.toml
+!build.rs
 !rustfmt.toml
 
 # include for vergen constants

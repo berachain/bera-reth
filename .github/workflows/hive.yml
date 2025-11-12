@@ -38,7 +38,7 @@ jobs:
           ref: master
           path: hivetests
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "^1.13.1"
       - run: go version
@@ -56,7 +56,7 @@ jobs:
     needs:
       - prepare-bera-reth
       - prepare-hive
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -99,6 +99,7 @@ jobs:
               - eth_getTransactionReceipt
               - eth_sendRawTransaction
               - eth_syncing
+              - eth_config
               # debug_ rpc methods
               - debug_
 
@@ -133,6 +134,12 @@ jobs:
             limit: .*tests/homestead.*
           - sim: ethereum/eest/consume-rlp
             limit: .*tests/frontier.*
+
+          # osaka
+          - sim: ethereum/eest/consume-engine
+            limit: .*tests/osaka.*
+          - sim: ethereum/eest/consume-rlp
+            limit: .*tests/osaka.*
 
           # Berachain
           - sim: berachain/berachain-rpc-compat

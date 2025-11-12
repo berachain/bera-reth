@@ -110,7 +110,7 @@ impl ConfigureEvm for BerachainEvmConfig {
         &self.block_assembler
     }
 
-    fn evm_env(&self, header: &HeaderTy<Self::Primitives>) -> EvmEnvFor<Self> {
+    fn evm_env(&self, header: &HeaderTy<Self::Primitives>) -> Result<EvmEnvFor<Self>, Self::Error> {
         let blob_params = self.chain_spec().blob_params_at_timestamp(header.timestamp);
         let spec = revm_spec::<BerachainChainSpec, BerachainHeader>(self.chain_spec(), header);
 
@@ -145,7 +145,7 @@ impl ConfigureEvm for BerachainEvmConfig {
             blob_excess_gas_and_price,
         };
 
-        EvmEnv { cfg_env, block_env }
+        Ok(EvmEnv { cfg_env, block_env })
     }
     fn next_evm_env(
         &self,
@@ -218,28 +218,28 @@ impl ConfigureEvm for BerachainEvmConfig {
     fn context_for_block<'a>(
         &self,
         block: &'a SealedBlock<BlockTy<Self::Primitives>>,
-    ) -> ExecutionCtxFor<'a, Self> {
-        BerachainBlockExecutionCtx {
+    ) -> Result<ExecutionCtxFor<'a, Self>, Self::Error> {
+        Ok(BerachainBlockExecutionCtx {
             parent_hash: block.header().parent_hash,
             parent_beacon_block_root: block.header().parent_beacon_block_root,
             ommers: &block.body().ommers,
             withdrawals: block.body().withdrawals.as_ref().map(Cow::Borrowed),
             prev_proposer_pubkey: block.header().prev_proposer_pubkey,
-        }
+        })
     }
 
     fn context_for_next_block(
         &self,
         parent: &SealedHeader<HeaderTy<Self::Primitives>>,
         attributes: Self::NextBlockEnvCtx,
-    ) -> ExecutionCtxFor<'_, Self> {
-        BerachainBlockExecutionCtx {
+    ) -> Result<ExecutionCtxFor<'_, Self>, Self::Error> {
+        Ok(BerachainBlockExecutionCtx {
             parent_hash: parent.hash(),
             parent_beacon_block_root: attributes.parent_beacon_block_root,
             ommers: &[],
             withdrawals: attributes.withdrawals.map(Cow::Owned),
             prev_proposer_pubkey: attributes.prev_proposer_pubkey,
-        }
+        })
     }
 }
 

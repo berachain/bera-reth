@@ -13,6 +13,7 @@ pub mod pool;
 pub mod primitives;
 pub mod rpc;
 pub mod transaction;
+pub mod version;
 
 #[cfg(test)]
 pub mod test_utils;

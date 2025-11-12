@@ -1,4 +1,4 @@
-# Copied from reth at commit 91730cd326f6b0f975e56d8985f08a2a6c943f89
+# Copied from reth v1.8.1
 import json
 import yaml
 import sys

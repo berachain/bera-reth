@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Adapted from reth's build_simulators.sh
-# Original: https://github.com/paradigmxyz/reth/blob/main/.github/assets/hive/build_simulators.sh
+# Copied from reth v1.8.1
 set -eo pipefail
 
 # Create the hive_assets directory
@@ -13,7 +12,7 @@ go build .
 
 # Run each hive command in the background for each simulator and wait
 echo "Building images"
-./hive -client bera-reth --sim "ethereum/eest" --sim.buildarg fixtures=https://github.com/ethereum/execution-spec-tests/releases/download/v4.4.0/fixtures_develop.tar.gz --sim.buildarg branch=v4.4.0 -sim.timelimit 1s || true &
+./hive -client bera-reth --sim "ethereum/eest" --sim.buildarg fixtures=https://github.com/ethereum/execution-spec-tests/releases/download/v5.1.0/fixtures_develop.tar.gz --sim.buildarg branch=v5.1.0 -sim.timelimit 1s || true &
 ./hive -client bera-reth --sim "ethereum/engine" -sim.timelimit 1s || true &
 ./hive -client bera-reth --sim "devp2p" -sim.timelimit 1s || true &
 ./hive -client bera-reth --sim "ethereum/rpc-compat" -sim.timelimit 1s || true &
