@@ -2136,9 +2136,10 @@ mod tests {
         let spec = BerachainChainSpec::from(genesis);
 
         // Test cases matching bera-geth mainnet test:
-        // Prague at 1749056400, Prague1 at 1756915200, Prague2 at 1759248000
+        // Prague at 1749056400, Prague1 at 1756915200, Prague2 at 1759248000,
+        // Prague3 at 1762164459, Prague4 at 1762963200
 
-        // Genesis state - all forks active except Prague/Prague1/Prague2
+        // Genesis state - all forks active except Prague/Prague1/Prague2/Prague3/Prague4
         let head_genesis = Head {
             number: 0,
             hash: B256::ZERO,
@@ -2174,13 +2175,31 @@ mod tests {
             timestamp: 1756915200,
         };
 
-        // Prague2 active
+        // Prague2 active, before Prague3
         let head_prague2_active = Head {
             number: 100,
             hash: B256::ZERO,
             difficulty: Default::default(),
             total_difficulty: Default::default(),
             timestamp: 1759248000,
+        };
+
+        // Prague3 active, before Prague4
+        let head_prague3_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1762164459,
+        };
+
+        // Prague4 active
+        let head_prague4_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1762963200,
         };
 
         // Far future
@@ -2198,6 +2217,8 @@ mod tests {
         let fork_id_prague = spec.fork_id(&head_prague_active);
         let fork_id_prague1 = spec.fork_id(&head_prague1_active);
         let fork_id_prague2 = spec.fork_id(&head_prague2_active);
+        let fork_id_prague3 = spec.fork_id(&head_prague3_active);
+        let fork_id_prague4 = spec.fork_id(&head_prague4_active);
         let fork_id_future = spec.fork_id(&head_far_future);
 
         // Test fork_filter at each stage
@@ -2206,6 +2227,8 @@ mod tests {
         let fork_filter_prague = spec.fork_filter(head_prague_active);
         let fork_filter_prague1 = spec.fork_filter(head_prague1_active);
         let fork_filter_prague2 = spec.fork_filter(head_prague2_active);
+        let fork_filter_prague3 = spec.fork_filter(head_prague3_active);
+        let fork_filter_prague4 = spec.fork_filter(head_prague4_active);
         let fork_filter_future = spec.fork_filter(head_far_future);
 
         // Verify fork_filter.current() matches fork_id() at each stage
@@ -2214,6 +2237,8 @@ mod tests {
         assert_eq!(fork_filter_prague.current(), fork_id_prague);
         assert_eq!(fork_filter_prague1.current(), fork_id_prague1);
         assert_eq!(fork_filter_prague2.current(), fork_id_prague2);
+        assert_eq!(fork_filter_prague3.current(), fork_id_prague3);
+        assert_eq!(fork_filter_prague4.current(), fork_id_prague4);
         assert_eq!(fork_filter_future.current(), fork_id_future);
 
         // Verify next fork schedule matches mainnet configuration
@@ -2221,7 +2246,9 @@ mod tests {
         assert_eq!(fork_id_before_prague.next, 1749056400, "next fork should be Prague");
         assert_eq!(fork_id_prague.next, 1756915200, "next fork should be Prague1");
         assert_eq!(fork_id_prague1.next, 1759248000, "next fork should be Prague2");
-        assert_eq!(fork_id_prague2.next, 0, "no next fork after Prague2");
+        assert_eq!(fork_id_prague2.next, 1762164459, "next fork should be Prague3");
+        assert_eq!(fork_id_prague3.next, 1762963200, "next fork should be Prague4");
+        assert_eq!(fork_id_prague4.next, 0, "no next fork after Prague4");
         assert_eq!(fork_id_future.next, 0, "no next fork in far future");
 
         // Expected fork hash values for mainnet (matching bera-geth test values)
@@ -2230,7 +2257,9 @@ mod tests {
         assert_eq!(fork_id_prague.hash, ForkHash([0x3f, 0x78, 0xb1, 0x27]));
         assert_eq!(fork_id_prague1.hash, ForkHash([0xd2, 0xeb, 0xec, 0xac]));
         assert_eq!(fork_id_prague2.hash, ForkHash([0xcb, 0xbf, 0x6c, 0x9f]));
-        assert_eq!(fork_id_future.hash, ForkHash([0xcb, 0xbf, 0x6c, 0x9f]));
+        assert_eq!(fork_id_prague3.hash, ForkHash([0x64, 0x94, 0xa1, 0x76]));
+        assert_eq!(fork_id_prague4.hash, ForkHash([0x70, 0x1a, 0x09, 0x7f]));
+        assert_eq!(fork_id_future.hash, ForkHash([0x70, 0x1a, 0x09, 0x7f]));
     }
 
     #[test]
