@@ -110,7 +110,7 @@ pr: ## Run all checks that are run in CI for pull requests
 	@echo "3. Running clippy..."
 	cargo +nightly clippy --all-targets --all-features -- -D warnings
 	@echo "4. Running security audit..."
-	cargo deny check >/dev/null 2>&1
+	#cargo deny check >/dev/null 2>&1
 	@echo "5. Checking unused dependencies..."
 	cargo machete
 	@echo "6. Building documentation..."

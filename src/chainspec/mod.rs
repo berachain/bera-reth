@@ -2279,21 +2279,9 @@ mod tests {
                     "polDistributorAddress": "0x4200000000000000000000000000000000000042"
                 },
                 "prague2": {
-                    "time": 1000,
+                    "time": 0,
                     "minimumBaseFeeWei": 0
                 },
-                "prague3": {
-                    "time": 2000,
-                    "blockedAddresses": [
-                        "0x1111111111111111111111111111111111111111",
-                        "0x2222222222222222222222222222222222222222"
-                    ],
-                    "rescueAddress": "0x9999999999999999999999999999999999999999",
-                    "bexVaultAddress": "0xBE0BE0BE0BE0BE0BE0BE0BE0BE0BE0BE0BE0BE0B"
-                },
-                "prague4": {
-                    "time": 3000
-                }
             }
         });
         genesis.config.extra_fields =
