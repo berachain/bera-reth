@@ -3,12 +3,13 @@ use crate::{
     engine::payload::{
         BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
     },
+    hardforks::BerachainHardforks,
     node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
     primitives::{BerachainHeader, BerachainPrimitives},
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::Transaction;
-use alloy_primitives::{Address, U256};
+use alloy_primitives::U256;
 use alloy_rlp::Encodable;
 use reth::{
     api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, TxTy},
@@ -245,6 +246,14 @@ where
 
     let is_osaka = chain_spec.is_osaka_active_at_timestamp(attributes.timestamp);
 
+    // Check if Prague3 is active and skip all transactions if so
+    if chain_spec.is_prague3_active_at_timestamp(attributes.timestamp()) {
+        warn!(target: "payload_builder", "Prague3 is active, building payload without transactions is not supported");
+        return Err(PayloadBuilderError::Other(Box::from(
+            "Prague 3 block building is not supported",
+        )))
+    }
+    // Skip all transactions and proceed to finalize the empty block
     while let Some(pool_tx) = best_txs.next() {
         // ensure we still have capacity for this transaction
         if cumulative_gas_used + pool_tx.gas_limit() > block_gas_limit {
@@ -335,85 +344,9 @@ where
             };
         }
 
-        // Check Prague3 blocked addresses and BEX vault
-        let timestamp = attributes.timestamp();
-        let blocked_addresses = chain_spec.prague3_blocked_addresses_at_timestamp(timestamp);
-        let rescue_address = chain_spec.prague3_rescue_address_at_timestamp(timestamp);
-        let bex_vault_address = chain_spec.prague3_bex_vault_address_at_timestamp(timestamp);
-
-        // Event signatures
-        const TRANSFER_EVENT_SIGNATURE: alloy_primitives::B256 = alloy_primitives::b256!(
-            "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-        );
-        const INTERNAL_BALANCE_CHANGED_SIGNATURE: alloy_primitives::B256 = alloy_primitives::b256!(
-            "18e1ea4139e68413d7d08aa752e71568e36b2c5bf940893314c2c5b01eaa0c42"
-        );
-
-        let gas_used = match builder.execute_transaction_with_commit_condition(
-            tx.clone(),
-            |result| {
-                // Check for Prague3 violations before committing
-                if let reth::revm::context::result::ExecutionResult::Success { logs, .. } = result {
-                    for log in logs {
-                        // Check for Transfer events (blocked addresses or BEX vault)
-                        if log.topics().first() == Some(&TRANSFER_EVENT_SIGNATURE) &&
-                            log.topics().len() >= 3
-                        {
-                            // Transfer event has indexed from (topics[1]) and to (topics[2])
-                            // addresses
-                            let from_addr = Address::from_word(log.topics()[1]);
-                            let to_addr = Address::from_word(log.topics()[2]);
-
-                            // Check if BEX vault is involved (block all BEX vault transfers)
-                            if let Some(bex_vault) = bex_vault_address &&
-                                (from_addr == bex_vault || to_addr == bex_vault)
-                            {
-                                return reth_evm::block::CommitChanges::No;
-                            }
-
-                            // Check blocked addresses
-                            if let Some(blocked_addresses) = blocked_addresses {
-                                // Check if from address is blocked
-                                if blocked_addresses.contains(&from_addr) {
-                                    // Blocked addresses can only send to rescue address
-                                    if rescue_address != Some(to_addr) {
-                                        return reth_evm::block::CommitChanges::No;
-                                    }
-                                }
-
-                                // Check if to address is blocked (blocked addresses cannot receive)
-                                if blocked_addresses.contains(&to_addr) {
-                                    return reth_evm::block::CommitChanges::No;
-                                }
-                            }
-                        }
-
-                        // Check for BEX vault InternalBalanceChanged events
-                        if let Some(bex_vault) = bex_vault_address &&
-                            log.address == bex_vault &&
-                            log.topics().first() == Some(&INTERNAL_BALANCE_CHANGED_SIGNATURE)
-                        {
-                            return reth_evm::block::CommitChanges::No;
-                        }
-                    }
-                }
-                // Commit the transaction if no violations
-                reth_evm::block::CommitChanges::Yes
-            },
-        ) {
-            Ok(Some(gas_used)) => gas_used,
-            Ok(None) => {
-                // Transaction was discarded due to Prague3 violation
-                warn!(target: "payload_builder", ?tx, "skipping transaction due to Prague3 violation");
-                best_txs.mark_invalid(
-                    &pool_tx,
-                    InvalidPoolTransactionError::Consensus(
-                        // Using TxTypeNotSupported as a proxy for Prague3 violation
-                        InvalidTransactionError::TxTypeNotSupported,
-                    ),
-                );
-                continue
-            }
+        // Execute the transaction
+        let gas_used = match builder.execute_transaction(tx.clone()) {
+            Ok(gas_used) => gas_used,
             Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx {
                 error, ..
             })) => {
