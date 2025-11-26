@@ -4,6 +4,14 @@ version = "1.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
+[[bin]]
+name = "bera-reth"
+path = "src/main.rs"
+
+[[bin]]
+name = "bera-sequencer"
+path = "src/bin/bera-sequencer.rs"
+
 [dependencies]
 alloy-consensus = "1.0.37"
 alloy-eips = "1.0.37"
@@ -22,6 +30,9 @@ clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6.12"
 sha2 = "0.10"
+
+# Requires minor modifications to rblib such that `FixedTransactions` is public
+rblib = { path = "../rblib", default-features = false }
 
 # rpc
 jsonrpsee = "0.26.0"
@@ -69,12 +80,9 @@ tokio = "1.46.0"
 tracing = "0.1.41"
 
 [dev-dependencies]
-alloy-provider = "1.0.37"
-alloy-rpc-client = "1.0.37"
 alloy-rpc-types-trace = "1.0.37"
 eyre = "0.6.12"
 reth-e2e-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.8.2" }
-reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.8.2" }
 revm-inspectors = "0.30.0"
 serde_json = "1.0"
 test-fuzz = "7"

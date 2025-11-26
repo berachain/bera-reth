@@ -25,7 +25,7 @@ use reth_evm::{SpecFor, TxEnvFor};
 use reth_rpc::eth::DevSigner;
 use reth_rpc_convert::SignableTxRequest;
 use reth_rpc_eth_api::{
-    EthApiTypes, RpcNodeCore, RpcNodeCoreExt,
+    EthApiTypes, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
     helpers::{
         AddDevSigners, Call, EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions,
         LoadBlock, LoadFee, LoadPendingBlock, LoadReceipt, LoadState, LoadTransaction,
@@ -474,6 +474,28 @@ where
             self.pool().add_transaction(TransactionOrigin::Local, pool_transaction).await?;
 
         Ok(hash)
+    }
+
+    /// Returns the transaction receipt for the given hash.
+    ///
+    /// Returns None if the transaction does not exist or is pending
+    /// Note: The tx receipt is not available for pending transactions.
+    /// TOOD: Override this to use Berachain Flashblocks
+    async fn transaction_receipt(
+        &self,
+        hash: B256,
+    ) -> Result<Option<RpcReceipt<Self::NetworkTypes>>, Self::Error>
+    where
+        Self: LoadReceipt + 'static,
+    {
+        match self.load_transaction_and_receipt(hash).await? {
+            Some((tx, meta, receipt)) => {
+                self.build_transaction_receipt(tx, meta, receipt).await.map(Some)
+            }
+            // TODO: In the none case, we should attempt to fetch from flashblock state
+            // The flashblock state needs to be ingested from WS stream
+            None => Ok(None),
+        }
     }
 }
 

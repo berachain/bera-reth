@@ -19,7 +19,7 @@ use reth_transaction_pool::TransactionValidationTaskExecutor;
 use std::{fmt::Debug, time::SystemTime};
 use tracing::{debug, info};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct BerachainPoolBuilder;
 
 impl<Types, Node> PoolBuilder<Node> for BerachainPoolBuilder

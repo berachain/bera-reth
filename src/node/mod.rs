@@ -2,17 +2,19 @@
 
 pub mod evm;
 
+pub use crate::{
+    consensus::BerachainConsensusBuilder, pool::BerachainPoolBuilder, rpc::BerachainAddOns,
+};
+pub use evm::BerachainExecutorBuilder;
+
 use crate::{
     chainspec::BerachainChainSpec,
-    consensus::BerachainConsensusBuilder,
     engine::{
         BerachainEngineTypes, builder::BerachainPayloadServiceBuilder,
         validator::BerachainEngineValidatorBuilder,
     },
-    node::evm::BerachainExecutorBuilder,
-    pool::BerachainPoolBuilder,
     primitives::{BerachainHeader, BerachainPrimitives},
-    rpc::{BerachainAddOns, BerachainEthApiBuilder},
+    rpc::BerachainEthApiBuilder,
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::{SignableTransaction, error::ValueError};
