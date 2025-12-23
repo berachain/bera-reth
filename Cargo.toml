@@ -63,6 +63,7 @@ reth-rpc-convert = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.2
 reth-rpc-engine-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.2" }
 reth-rpc-eth-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.2" }
 reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.2" }
+reth-storage-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.2" }
 reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.2" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 thiserror = "2.0"

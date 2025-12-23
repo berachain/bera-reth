@@ -4,7 +4,7 @@ use crate::{
     evm::BerachainEvmFactory,
     node::evm::{
         assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,
-        receipt::BerachainReceiptBuilder,
+        builder::BerachainBlockBuilder, receipt::BerachainReceiptBuilder,
     },
     primitives::{BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
 };
@@ -17,6 +17,7 @@ use reth::{
     chainspec::{EthereumHardfork, EthereumHardforks, Hardforks},
     providers::errors::any::AnyError,
     revm::{
+        State,
         context::{BlockEnv, CfgEnv},
         context_interface::block::BlobExcessGasAndPrice,
         primitives::hardfork::SpecId,
@@ -25,7 +26,8 @@ use reth::{
 use reth_chainspec::EthChainSpec;
 use reth_engine_primitives::ExecutionPayload;
 use reth_evm::{
-    ConfigureEngineEvm, ConfigureEvm, EvmEnv, EvmEnvFor, ExecutableTxIterator, ExecutionCtxFor,
+    ConfigureEngineEvm, ConfigureEvm, Database, EvmEnv, EvmEnvFor, EvmFor, ExecutableTxIterator,
+    ExecutionCtxFor, InspectorFor, block::BlockExecutorFactory, execute::BasicBlockBuilder,
 };
 use reth_evm_ethereum::{revm_spec, revm_spec_by_timestamp_and_block_number};
 use reth_primitives_traits::{
@@ -245,6 +247,30 @@ impl ConfigureEvm for BerachainEvmConfig {
             withdrawals: attributes.withdrawals.map(Cow::Owned),
             prev_proposer_pubkey: attributes.prev_proposer_pubkey,
         })
+    }
+
+    fn create_block_builder<'a, DB, I>(
+        &'a self,
+        evm: EvmFor<Self, &'a mut State<DB>, I>,
+        parent: &'a SealedHeader<HeaderTy<Self::Primitives>>,
+        ctx: <Self::BlockExecutorFactory as BlockExecutorFactory>::ExecutionCtx<'a>,
+    ) -> impl reth_evm::execute::BlockBuilder<
+        Primitives = Self::Primitives,
+        Executor: reth_evm::block::BlockExecutorFor<'a, Self::BlockExecutorFactory, DB, I>,
+    >
+    where
+        DB: Database,
+        I: InspectorFor<Self, &'a mut State<DB>> + 'a,
+    {
+        let inner: BasicBlockBuilder<'a, Self, _, BerachainBlockAssembler, BerachainPrimitives> =
+            BasicBlockBuilder {
+                executor: BlockExecutorFactory::create_executor(self, evm, ctx.clone()),
+                ctx,
+                assembler: self.block_assembler().clone(),
+                parent,
+                transactions: Vec::new(),
+            };
+        BerachainBlockBuilder::new(inner, self.spec.clone())
     }
 }
 
