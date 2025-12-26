@@ -1,4 +1,6 @@
+use jsonrpsee::client_transport::ws::Url;
 use reth_rpc_eth_api::helpers::config::EthConfigApiServer;
+use std::sync::Arc;
 pub mod api;
 pub mod config;
 pub mod receipt;
@@ -9,6 +11,7 @@ use crate::{
         BerachainExecutionData, rpc::BerachainEngineApiBuilder,
         validator::BerachainEngineValidatorBuilder,
     },
+    flashblocks::{BerachainFlashblockPayload, BerachainFlashblockPayloadBase},
     node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
     primitives::BerachainPrimitives,
     rpc::{
@@ -35,18 +38,62 @@ use reth_node_builder::rpc::{
     EthApiBuilder, EthApiCtx, PayloadValidatorBuilder, RethRpcAddOns, RethRpcMiddleware, RpcAddOns,
     RpcHandle,
 };
+use reth_optimism_flashblocks::{FlashBlockService, FlashblocksListeners, WsFlashBlockStream};
+use reth_optimism_rpc::OpRpcTypes;
 use reth_rpc_convert::{RpcConvert, RpcConverter};
 use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
+use tokio::sync::watch;
+use tracing::info;
 
 /// Builds `BerachainEthApi` for Berachain.
-#[derive(Debug, Default)]
-pub struct BerachainEthApiBuilder;
+#[derive(Clone, Default)]
+pub struct BerachainEthApiBuilder {
+    /// A URL pointing to a secure websocket connection (wss) that streams out flashblocks.
+    flashblocks_url: Option<Url>,
+    /// Pre-built flashblocks listeners (for testing/dependency injection).
+    /// Wrapped in Arc for clonability.
+    flashblocks_listeners:
+        Option<Arc<FlashblocksListeners<BerachainPrimitives, BerachainFlashblockPayload>>>,
+}
+
+impl std::fmt::Debug for BerachainEthApiBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BerachainEthApiBuilder")
+            .field("flashblocks_url", &self.flashblocks_url)
+            .field("has_flashblocks_listeners", &self.flashblocks_listeners.is_some())
+            .finish()
+    }
+}
+
+impl BerachainEthApiBuilder {
+    /// Configure flashblocks with a WebSocket URL.
+    pub fn with_flashblocks_url(mut self, url: Option<Url>) -> Self {
+        self.flashblocks_url = url;
+        self
+    }
+
+    /// Configure flashblocks with pre-built listeners.
+    ///
+    /// This is primarily useful for testing, where you can build `FlashblocksListeners`
+    /// from a custom stream source instead of connecting to a real WebSocket server.
+    pub fn with_flashblocks_listeners(
+        mut self,
+        listeners: FlashblocksListeners<BerachainPrimitives, BerachainFlashblockPayload>,
+    ) -> Self {
+        self.flashblocks_listeners = Some(Arc::new(listeners));
+        self
+    }
+}
 
 pub type BerachainEthRpcConverterFor<N> = RpcConverter<
     BerachainNetwork,
     <N as FullNodeComponents>::Evm,
     BerachainEthReceiptConverter<<<N as FullNodeTypes>::Provider as ChainSpecProvider>::ChainSpec>,
 >;
+
+impl OpRpcTypes for BerachainNetwork {
+    type Flashblock = BerachainFlashblockPayload;
+}
 
 impl<N> EthApiBuilder<N> for BerachainEthApiBuilder
 where
@@ -55,7 +102,11 @@ where
                 ChainSpec: EthereumHardforks + Hardforks,
                 Primitives = BerachainPrimitives,
             >,
-            Evm: ConfigureEvm<NextBlockEnvCtx: BuildPendingEnv<HeaderTy<N::Types>>>,
+            Evm: ConfigureEvm<
+                NextBlockEnvCtx: BuildPendingEnv<HeaderTy<N::Types>>
+                                     + From<BerachainFlashblockPayloadBase>
+                                     + Unpin,
+            >,
         >,
     BerachainEthRpcConverterFor<N>: RpcConvert<
             Primitives = PrimitivesTy<N::Types>,
@@ -68,13 +119,52 @@ where
     type EthApi = BerachainApi<N, BerachainEthRpcConverterFor<N>>;
 
     async fn build_eth_api(self, ctx: EthApiCtx<'_, N>) -> eyre::Result<Self::EthApi> {
+        if self.flashblocks_listeners.is_some() && self.flashblocks_url.is_some() {
+            return Err(eyre::eyre!(
+                "Cannot configure both flashblocks_listeners and flashblocks_url. \
+                 Use flashblocks_listeners for testing or flashblocks_url for production."
+            ));
+        }
+
         let tx_resp_builder = BerachainEthRpcConverterFor::<N>::new(
             BerachainEthReceiptConverter::new(ctx.components.provider().clone().chain_spec()),
         );
 
+        let flashblocks = if let Some(listeners) = self.flashblocks_listeners {
+            info!(target: "bera-reth:rpc", "Using pre-built flashblocks listeners");
+            Some(listeners)
+        } else if let Some(ws_url) = self.flashblocks_url {
+            info!(target: "bera-reth:rpc", %ws_url, "Launching flashblocks service");
+
+            let (tx, pending_rx) = watch::channel(None);
+            let stream: WsFlashBlockStream<_, _, _, BerachainFlashblockPayload> =
+                WsFlashBlockStream::new(ws_url);
+            let service = FlashBlockService::new(
+                stream,
+                ctx.components.evm_config().clone(),
+                ctx.components.provider().clone(),
+                ctx.components.task_executor().clone(),
+                false,
+            );
+
+            let flashblocks_sequence = service.block_sequence_broadcaster().clone();
+            let received_flashblocks = service.flashblocks_broadcaster().clone();
+            let in_progress_rx = service.subscribe_in_progress();
+            ctx.components.task_executor().spawn(Box::pin(service.run(tx)));
+
+            Some(Arc::new(FlashblocksListeners::new(
+                pending_rx,
+                flashblocks_sequence,
+                in_progress_rx,
+                received_flashblocks,
+            )))
+        } else {
+            None
+        };
+
         let inner = ctx.eth_api_builder().with_rpc_converter(tx_resp_builder.clone()).build();
 
-        Ok(BerachainApi { inner })
+        Ok(BerachainApi { inner, flashblocks })
     }
 }
 
@@ -97,9 +187,27 @@ where
     BerachainEthApiBuilder: EthApiBuilder<N>,
 {
     fn default() -> Self {
+        Self::new(BerachainEthApiBuilder::default())
+    }
+}
+
+impl<N> BerachainAddOns<N, BerachainEthApiBuilder, BerachainEngineValidatorBuilder>
+where
+    N: FullNodeComponents,
+    BerachainEthApiBuilder: EthApiBuilder<N>,
+{
+    /// Creates new Berachain add-ons with a custom EthApiBuilder.
+    ///
+    /// This is useful for testing, where you can inject pre-built flashblocks listeners:
+    /// ```ignore
+    /// let eth_api_builder = BerachainEthApiBuilder::default()
+    ///     .with_flashblocks_listeners(listeners);
+    /// let add_ons = BerachainAddOns::new(eth_api_builder);
+    /// ```
+    pub fn new(eth_api_builder: BerachainEthApiBuilder) -> Self {
         Self {
             inner: RpcAddOns::new(
-                BerachainEthApiBuilder,
+                eth_api_builder,
                 BerachainEngineValidatorBuilder::default(),
                 BerachainEngineApiBuilder::<BerachainEngineValidatorBuilder>::default(),
                 BasicEngineValidatorBuilder::new(BerachainEngineValidatorBuilder::default()),

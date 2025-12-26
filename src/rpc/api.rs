@@ -1,9 +1,10 @@
 use crate::{
+    flashblocks::BerachainFlashblockPayload,
     primitives::BerachainHeader,
     rpc::receipt::BerachainReceiptEnvelope,
     transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE},
 };
-use alloy_consensus::Transaction;
+use alloy_consensus::{BlockHeader, Transaction};
 use alloy_eips::eip2930::AccessList;
 use alloy_network::{
     BuildResult, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
@@ -13,16 +14,17 @@ use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
 use reth::{
-    providers::ProviderHeader,
+    providers::{BlockReaderIdExt, ProviderHeader},
     rpc::compat::RpcConvert,
     tasks::{
         TaskSpawner,
         pool::{BlockingTaskGuard, BlockingTaskPool},
     },
 };
+use reth_optimism_flashblocks::{FlashBlockBuildInfo, FlashblocksListeners, PendingFlashBlock};
 use reth_primitives_traits::{Recovered, WithEncoded};
 use reth_rpc_eth_api::{
-    EthApiTypes, RpcNodeCore, RpcNodeCoreExt,
+    EthApiTypes, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
     helpers::{
         Call, EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, LoadBlock,
         LoadFee, LoadPendingBlock, LoadReceipt, LoadState, LoadTransaction, SpawnBlocking, Trace,
@@ -34,6 +36,8 @@ use reth_rpc_eth_types::{
     builder::config::PendingBlockKind, error::FromEvmError,
 };
 use reth_transaction_pool::PoolPooledTx;
+use std::{sync::Arc, time::Duration};
+use tokio::time;
 
 impl fmt::Display for BerachainTxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -327,6 +331,75 @@ pub struct BerachainApi<N: RpcNodeCore, Rpc: RpcConvert> {
     /// All nested fields bundled together.
     #[deref]
     pub(super) inner: reth_rpc::EthApi<N, Rpc>,
+
+    /// Flashblocks listeners.
+    ///
+    /// If set, provides receivers for pending blocks, flashblock sequences, and build status.
+    pub flashblocks: Option<Arc<FlashblocksListeners<N::Primitives, BerachainFlashblockPayload>>>,
+}
+
+/// Maximum duration to wait for a fresh flashblock when one is being built.
+const MAX_FLASHBLOCK_WAIT_DURATION: Duration = Duration::from_millis(50);
+
+impl<N: RpcNodeCore, Rpc: RpcConvert> BerachainApi<N, Rpc> {
+    /// Returns information about the flashblock currently being built, if any.
+    fn flashblock_build_info(&self) -> Option<FlashBlockBuildInfo> {
+        self.flashblocks.as_ref().and_then(|f| *f.in_progress_rx.borrow())
+    }
+
+    /// Extracts pending block if it matches the expected parent hash.
+    fn extract_matching_block(
+        &self,
+        block: Option<&PendingFlashBlock<N::Primitives>>,
+        parent_hash: B256,
+    ) -> Option<PendingBlock<N::Primitives>> {
+        block.filter(|b| b.block().parent_hash() == parent_hash).map(|b| b.pending.clone())
+    }
+
+    /// Returns a [`PendingBlock`] that is built out of flashblocks.
+    ///
+    /// If flashblocks receiver is not set, then it always returns `None`.
+    ///
+    /// It may wait up to 50ms for a fresh flashblock if one is currently being built.
+    pub async fn pending_flashblock(&self) -> eyre::Result<Option<PendingBlock<N::Primitives>>>
+    where
+        // OpEthApiError: FromEvmError<N::Evm>,
+        Rpc: RpcConvert<Primitives = N::Primitives>,
+    {
+        let Some(latest) = self.provider().latest_header()? else {
+            return Ok(None);
+        };
+
+        self.flashblock(latest.hash()).await
+    }
+
+    /// Awaits a fresh flashblock if one is being built, otherwise returns current.
+    async fn flashblock(
+        &self,
+        parent_hash: B256,
+    ) -> eyre::Result<Option<PendingBlock<N::Primitives>>> {
+        let Some(rx) = self.flashblocks.as_ref().as_ref().map(|f| &f.pending_block_rx) else {
+            return Ok(None)
+        };
+
+        // Check if a flashblock is being built
+        if let Some(build_info) = self.flashblock_build_info() {
+            let current_index = rx.borrow().as_ref().map(|b| b.last_flashblock_index);
+
+            // Check if this is the first flashblock or the next consecutive index
+            let is_next_index = current_index.is_none_or(|idx| build_info.index == idx + 1);
+
+            // Wait only for relevant flashblocks: matching parent and next in sequence
+            if build_info.parent_hash == parent_hash && is_next_index {
+                let mut rx_clone = rx.clone();
+                // Wait up to MAX_FLASHBLOCK_WAIT_DURATION for a new flashblock to arrive
+                let _ = time::timeout(MAX_FLASHBLOCK_WAIT_DURATION, rx_clone.changed()).await;
+            }
+        }
+
+        // Fall back to current block
+        Ok(self.extract_matching_block(rx.borrow().as_ref(), parent_hash))
+    }
 }
 
 impl<N, Rpc> Clone for BerachainApi<N, Rpc>
@@ -335,7 +408,7 @@ where
     Rpc: RpcConvert,
 {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
+        Self { inner: self.inner.clone(), flashblocks: self.flashblocks.clone() }
     }
 }
 
@@ -444,6 +517,34 @@ where
         tx: WithEncoded<Recovered<PoolPooledTx<Self::Pool>>>,
     ) -> Result<B256, Self::Error> {
         EthTransactions::send_transaction(&self.inner, tx).await
+    }
+
+    /// Returns the transaction receipt for the given hash.
+    ///
+    /// With flashblocks, we should also lookup the pending block for the transaction
+    /// because this is considered confirmed/mined.
+    fn transaction_receipt(
+        &self,
+        hash: B256,
+    ) -> impl Future<Output = Result<Option<RpcReceipt<Self::NetworkTypes>>, Self::Error>> + Send
+    {
+        let this = self.clone();
+        async move {
+            // first attempt to fetch the mined transaction receipt data
+            let tx_receipt = this.load_transaction_and_receipt(hash).await?;
+
+            if tx_receipt.is_none() {
+                // if flashblocks are supported, attempt to find id from the pending block
+                if let Ok(Some(pending_block)) = this.pending_flashblock().await &&
+                    let Some(Ok(receipt)) = pending_block
+                        .find_and_convert_transaction_receipt(hash, this.converter())
+                {
+                    return Ok(Some(receipt));
+                }
+            }
+            let Some((tx, meta, receipt)) = tx_receipt else { return Ok(None) };
+            self.build_transaction_receipt(tx, meta, receipt).await.map(Some)
+        }
     }
 }
 

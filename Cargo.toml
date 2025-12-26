@@ -54,6 +54,8 @@ reth-node-api = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd"
 reth-node-builder = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-node-core = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
+reth-optimism-flashblocks = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
+reth-optimism-rpc = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-payload-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-payload-validator = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
@@ -75,6 +77,7 @@ alloy-provider = "1.1.2"
 alloy-rpc-client = "1.1.2"
 alloy-rpc-types-trace = "1.1.2"
 eyre = "0.6.12"
+futures-util = { version = "0.3", default-features = false }
 reth-e2e-test-utils = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 revm-inspectors = "0.33.0"
@@ -111,49 +114,53 @@ lto = "thin"
 [package.metadata.cargo-machete]
 ignored = ["modular-bitfield"]
 
-# [patch."https://github.com/paradigmxyz/reth"]
-# reth = { path = "../reth/bin/reth" }
-# reth-rpc = { path = "../reth/crates/rpc/rpc" }
-# reth-basic-payload-builder = { path = "../reth/crates/payload/basic" }
-# reth-chainspec = { path = "../reth/crates/chainspec" }
-# reth-cli = { path = "../reth/crates/cli/cli" }
-# reth-cli-commands = { path = "../reth/crates/cli/commands" }
-# reth-cli-util = { path = "../reth/crates/cli/util" }
-# reth-db = { path = "../reth/crates/storage/db" }
-# reth-engine-local = { path = "../reth/crates/engine/local" }
-# reth-engine-primitives = { path = "../reth/crates/engine/primitives" }
-# reth-ethereum-cli = { path = "../reth/crates/ethereum/cli" }
-# reth-engine-tree = { path = "../reth/crates/engine/tree" }
-# reth-ethereum-engine-primitives = { path = "../reth/crates/ethereum/engine-primitives" }
-# reth-ethereum-payload-builder = { path = "../reth/crates/ethereum/payload" }
-# reth-ethereum-primitives = { path = "../reth/crates/ethereum/primitives" }
-# reth-evm = { path = "../reth/crates/evm/evm" }
-# reth-evm-ethereum = { path = "../reth/crates/ethereum/evm" }
-# reth-network-peers = { path = "../reth/crates/net/peers" }
-# reth-node-api = { path = "../reth/crates/node/api" }
-# reth-node-builder = { path = "../reth/crates/node/builder" }
-# reth-node-core = { path = "../reth/crates/node/core" }
-# reth-payload-validator = { path = "../reth/crates/payload/validator" }
-# reth-node-ethereum = { path = "../reth/crates/ethereum/node" }
-# reth-payload-primitives = { path = "../reth/crates/payload/primitives" }
-# reth-primitives-traits = { path = "../reth/crates/primitives-traits" }
-# reth-tracing = { path = "../reth/crates/tracing" }
-# reth-codecs = { path = "../reth/crates/storage/codecs" }
-# reth-db-api = { path = "../reth/crates/storage/db-api" }
-# reth-rpc-engine-api = { path = "../reth/crates/rpc/rpc-engine-api" }
-# reth-rpc-eth-api = { path = "../reth/crates/rpc/rpc-eth-api" }
-# reth-rpc-eth-types = { path = "../reth/crates/rpc/rpc-eth-types" }
-# reth-rpc-convert = { path = "../reth/crates/rpc/rpc-convert" }
-# reth-transaction-pool = { path = "../reth/crates/transaction-pool" }
-# reth-zstd-compressors = { path = "../reth/crates/storage/zstd-compressors" }
-# reth-trie-common = { path = "../reth/crates/trie/common" }
-# reth-trie-db = { path = "../reth/crates/trie/db" }
-# reth-trie = { path = "../reth/crates/trie/trie" }
-# reth-stages-types = { path = "../reth/crates/stages/types" }
-# reth-execution-types = { path = "../reth/crates/evm/execution-types" }
-# reth-execution-errors = { path = "../reth/crates/evm/execution-errors" }
-# reth-storage-api = { path = "../reth/crates/storage/storage-api" }
-# reth-provider = { path = "../reth/crates/storage/provider" }
-# reth-storage-errors = { path = "../reth/crates/storage/errors" }
-# reth-e2e-test-utils = { path = "../reth/crates/e2e-test-utils" }
-# reth-rpc-builder = { path = "../reth/crates/rpc/rpc-builder" }
+[patch."https://github.com/paradigmxyz/reth"]
+reth = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-rpc = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-basic-payload-builder = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-cli = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-cli-util = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-db = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-engine-local = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-engine-primitives = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-errors = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-ethereum-cli = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-engine-tree = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-ethereum-engine-primitives = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-ethereum-payload-builder = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-ethereum-primitives = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-evm = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-evm-ethereum = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-network-peers = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-node-api = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-node-builder = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-node-core = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-payload-validator = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-node-ethereum = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-payload-primitives = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-primitives-traits = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-tracing = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-codecs = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-db-api = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-rpc-engine-api = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-rpc-eth-api = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-rpc-eth-types = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-rpc-convert = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-transaction-pool = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-zstd-compressors = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-trie-common = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-trie-db = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-trie = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-stages-types = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-execution-types = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-execution-errors = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-storage-api = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-provider = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-storage-errors = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-e2e-test-utils = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-rpc-builder = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-optimism-flashblocks = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-optimism-rpc = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-consensus-common = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }

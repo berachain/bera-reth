@@ -18,6 +18,7 @@ use reth_payload_primitives::PayloadBuilderAttributes;
 use std::{str::FromStr, sync::Arc};
 
 pub mod coinbase_system_state_change_test;
+pub mod flashblocks;
 pub mod gas_limit_regression_test;
 pub mod pol_revert_test;
 pub mod transaction_tests;

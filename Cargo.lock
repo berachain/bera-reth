@@ -249,6 +249,7 @@ dependencies = [
  "alloy-consensus",
  "alloy-eips",
  "alloy-hardforks",
+ "alloy-op-hardforks",
  "alloy-primitives",
  "alloy-rpc-types-engine",
  "alloy-rpc-types-eth",
@@ -354,6 +355,36 @@ dependencies = [
  "alloy-primitives",
  "alloy-serde",
  "serde",
+]
+
+[[package]]
+name = "alloy-op-evm"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "231262d7e06000f3fb642d32d38ca75e09e78e04977c10be0a07a5ee2c869cfd"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-evm",
+ "alloy-op-hardforks",
+ "alloy-primitives",
+ "auto_impl",
+ "op-alloy",
+ "op-revm",
+ "revm",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "alloy-op-hardforks"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f96fb2fce4024ada5b2c11d4076acf778a0d3e4f011c6dfd2ffce6d0fcf84ee9"
+dependencies = [
+ "alloy-chains",
+ "alloy-hardforks",
+ "alloy-primitives",
+ "auto_impl",
 ]
 
 [[package]]
@@ -932,7 +963,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -943,7 +974,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1462,6 +1493,7 @@ dependencies = [
  "clap",
  "derive_more",
  "eyre",
+ "futures-util",
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
@@ -1491,6 +1523,8 @@ dependencies = [
  "reth-node-builder",
  "reth-node-core",
  "reth-node-ethereum",
+ "reth-optimism-flashblocks",
+ "reth-optimism-rpc",
  "reth-payload-primitives",
  "reth-payload-validator",
  "reth-primitives-traits",
@@ -2832,7 +2866,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3103,7 +3137,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3999,7 +4033,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -5186,7 +5220,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5376,6 +5410,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-alloy-flz"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a79f352fc3893dcd670172e615afef993a41798a1d3fc0db88a3e60ef2e70ecc"
+
+[[package]]
 name = "op-alloy-network"
 version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5404,6 +5444,16 @@ dependencies = [
  "alloy-transport",
  "async-trait",
  "op-alloy-rpc-types-engine",
+]
+
+[[package]]
+name = "op-alloy-rpc-jsonrpsee"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ef9114426b16172254555aad34a8ea96c01895e40da92f5d12ea680a1baeaa7"
+dependencies = [
+ "alloy-primitives",
+ "jsonrpsee",
 ]
 
 [[package]]
@@ -6466,7 +6516,7 @@ checksum = "1e061d1b48cb8d38042de4ae0a7a6401009d6143dc80d2e2d6f31f0bdd6470c7"
 [[package]]
 name = "reth"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-rpc-types",
  "aquamarine",
@@ -6512,7 +6562,7 @@ dependencies = [
 [[package]]
 name = "reth-basic-payload-builder"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6536,7 +6586,7 @@ dependencies = [
 [[package]]
 name = "reth-chain-state"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6567,7 +6617,7 @@ dependencies = [
 [[package]]
 name = "reth-chainspec"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -6587,7 +6637,7 @@ dependencies = [
 [[package]]
 name = "reth-cli"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-genesis",
  "clap",
@@ -6601,7 +6651,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-commands"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -6676,7 +6726,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-runner"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "reth-tasks",
  "tokio",
@@ -6686,7 +6736,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-util"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -6704,7 +6754,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6724,7 +6774,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs-derive"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6734,7 +6784,7 @@ dependencies = [
 [[package]]
 name = "reth-config"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "eyre",
  "humantime-serde",
@@ -6750,7 +6800,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -6763,7 +6813,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-common"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6775,7 +6825,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-debug-client"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6801,7 +6851,7 @@ dependencies = [
 [[package]]
 name = "reth-db"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "derive_more",
@@ -6827,7 +6877,7 @@ dependencies = [
 [[package]]
 name = "reth-db-api"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-genesis",
@@ -6855,7 +6905,7 @@ dependencies = [
 [[package]]
 name = "reth-db-common"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-genesis",
@@ -6885,7 +6935,7 @@ dependencies = [
 [[package]]
 name = "reth-db-models"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -6900,7 +6950,7 @@ dependencies = [
 [[package]]
 name = "reth-discv4"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -6925,7 +6975,7 @@ dependencies = [
 [[package]]
 name = "reth-discv5"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -6949,7 +6999,7 @@ dependencies = [
 [[package]]
 name = "reth-dns-discovery"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "data-encoding",
@@ -6973,7 +7023,7 @@ dependencies = [
 [[package]]
 name = "reth-downloaders"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7008,7 +7058,7 @@ dependencies = [
 [[package]]
 name = "reth-e2e-test-utils"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7066,7 +7116,7 @@ dependencies = [
 [[package]]
 name = "reth-ecies"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "aes",
  "alloy-primitives",
@@ -7095,7 +7145,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-local"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7118,7 +7168,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-primitives"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7143,7 +7193,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-service"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "futures",
  "pin-project",
@@ -7165,7 +7215,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-tree"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7220,7 +7270,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-util"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types-engine",
@@ -7248,7 +7298,7 @@ dependencies = [
 [[package]]
 name = "reth-era"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7263,7 +7313,7 @@ dependencies = [
 [[package]]
 name = "reth-era-downloader"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "bytes",
@@ -7279,7 +7329,7 @@ dependencies = [
 [[package]]
 name = "reth-era-utils"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7301,7 +7351,7 @@ dependencies = [
 [[package]]
 name = "reth-errors"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "reth-consensus",
  "reth-execution-errors",
@@ -7312,7 +7362,7 @@ dependencies = [
 [[package]]
 name = "reth-eth-wire"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-chains",
  "alloy-primitives",
@@ -7340,7 +7390,7 @@ dependencies = [
 [[package]]
 name = "reth-eth-wire-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -7361,7 +7411,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-cli"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "clap",
  "eyre",
@@ -7383,7 +7433,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-consensus"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7399,7 +7449,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-engine-primitives"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -7417,7 +7467,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-forks"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eip2124",
  "alloy-hardforks",
@@ -7430,7 +7480,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-payload-builder"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7459,7 +7509,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-primitives"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7479,7 +7529,7 @@ dependencies = [
 [[package]]
 name = "reth-etl"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "rayon",
  "reth-db-api",
@@ -7489,7 +7539,7 @@ dependencies = [
 [[package]]
 name = "reth-evm"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7512,7 +7562,7 @@ dependencies = [
 [[package]]
 name = "reth-evm-ethereum"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7533,7 +7583,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-errors"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-evm",
  "alloy-primitives",
@@ -7546,7 +7596,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7564,7 +7614,7 @@ dependencies = [
 [[package]]
 name = "reth-exex"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7602,7 +7652,7 @@ dependencies = [
 [[package]]
 name = "reth-exex-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -7616,7 +7666,7 @@ dependencies = [
 [[package]]
 name = "reth-fs-util"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "serde",
  "serde_json",
@@ -7626,7 +7676,7 @@ dependencies = [
 [[package]]
 name = "reth-invalid-block-hooks"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7654,7 +7704,7 @@ dependencies = [
 [[package]]
 name = "reth-ipc"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "bytes",
  "futures",
@@ -7674,7 +7724,7 @@ dependencies = [
 [[package]]
 name = "reth-libmdbx"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "bitflags 2.10.0",
  "byteorder",
@@ -7690,7 +7740,7 @@ dependencies = [
 [[package]]
 name = "reth-mdbx-sys"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "bindgen 0.71.1",
  "cc",
@@ -7699,7 +7749,7 @@ dependencies = [
 [[package]]
 name = "reth-metrics"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "futures",
  "metrics",
@@ -7711,7 +7761,7 @@ dependencies = [
 [[package]]
 name = "reth-net-banlist"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "ipnet",
@@ -7720,7 +7770,7 @@ dependencies = [
 [[package]]
 name = "reth-net-nat"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "futures-util",
  "if-addrs",
@@ -7734,7 +7784,7 @@ dependencies = [
 [[package]]
 name = "reth-network"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7789,7 +7839,7 @@ dependencies = [
 [[package]]
 name = "reth-network-api"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7814,7 +7864,7 @@ dependencies = [
 [[package]]
 name = "reth-network-p2p"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7837,7 +7887,7 @@ dependencies = [
 [[package]]
 name = "reth-network-peers"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -7852,7 +7902,7 @@ dependencies = [
 [[package]]
 name = "reth-network-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eip2124",
  "humantime-serde",
@@ -7866,7 +7916,7 @@ dependencies = [
 [[package]]
 name = "reth-nippy-jar"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "anyhow",
  "bincode 1.3.3",
@@ -7883,7 +7933,7 @@ dependencies = [
 [[package]]
 name = "reth-node-api"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-rpc-types-engine",
  "eyre",
@@ -7907,7 +7957,7 @@ dependencies = [
 [[package]]
 name = "reth-node-builder"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7974,7 +8024,7 @@ dependencies = [
 [[package]]
 name = "reth-node-core"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8030,7 +8080,7 @@ dependencies = [
 [[package]]
 name = "reth-node-ethereum"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-network",
@@ -8068,7 +8118,7 @@ dependencies = [
 [[package]]
 name = "reth-node-ethstats"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -8092,7 +8142,7 @@ dependencies = [
 [[package]]
 name = "reth-node-events"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8116,7 +8166,7 @@ dependencies = [
 [[package]]
 name = "reth-node-metrics"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "eyre",
  "http",
@@ -8138,7 +8188,7 @@ dependencies = [
 [[package]]
 name = "reth-node-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "reth-chainspec",
  "reth-db-api",
@@ -8148,9 +8198,174 @@ dependencies = [
 ]
 
 [[package]]
+name = "reth-optimism-chainspec"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-chains",
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-genesis",
+ "alloy-hardforks",
+ "alloy-primitives",
+ "derive_more",
+ "op-alloy-consensus",
+ "op-alloy-rpc-types",
+ "reth-chainspec",
+ "reth-ethereum-forks",
+ "reth-network-peers",
+ "reth-optimism-forks",
+ "reth-optimism-primitives",
+ "reth-primitives-traits",
+ "serde_json",
+]
+
+[[package]]
+name = "reth-optimism-consensus"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-trie",
+ "reth-chainspec",
+ "reth-consensus",
+ "reth-consensus-common",
+ "reth-execution-types",
+ "reth-optimism-chainspec",
+ "reth-optimism-forks",
+ "reth-optimism-primitives",
+ "reth-primitives-traits",
+ "reth-storage-api",
+ "reth-storage-errors",
+ "reth-trie-common",
+ "revm",
+ "thiserror 2.0.17",
+ "tracing",
+]
+
+[[package]]
+name = "reth-optimism-evm"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-evm",
+ "alloy-op-evm",
+ "alloy-primitives",
+ "op-alloy-consensus",
+ "op-alloy-rpc-types-engine",
+ "op-revm",
+ "reth-chainspec",
+ "reth-evm",
+ "reth-execution-errors",
+ "reth-execution-types",
+ "reth-optimism-chainspec",
+ "reth-optimism-consensus",
+ "reth-optimism-forks",
+ "reth-optimism-primitives",
+ "reth-primitives-traits",
+ "reth-storage-errors",
+ "revm",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "reth-optimism-flashblocks"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-rpc-types-engine",
+ "brotli",
+ "derive_more",
+ "eyre",
+ "futures-util",
+ "metrics",
+ "op-alloy-consensus",
+ "op-alloy-rpc-types-engine",
+ "reth-chain-state",
+ "reth-engine-primitives",
+ "reth-errors",
+ "reth-evm",
+ "reth-execution-types",
+ "reth-metrics",
+ "reth-optimism-payload-builder",
+ "reth-optimism-primitives",
+ "reth-payload-primitives",
+ "reth-primitives-traits",
+ "reth-revm",
+ "reth-rpc-eth-types",
+ "reth-storage-api",
+ "reth-tasks",
+ "ringbuffer",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "reth-optimism-forks"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-op-hardforks",
+ "alloy-primitives",
+ "once_cell",
+ "reth-ethereum-forks",
+]
+
+[[package]]
+name = "reth-optimism-payload-builder"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-evm",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-types-debug",
+ "alloy-rpc-types-engine",
+ "derive_more",
+ "either",
+ "op-alloy-consensus",
+ "op-alloy-rpc-types-engine",
+ "reth-basic-payload-builder",
+ "reth-chainspec",
+ "reth-evm",
+ "reth-execution-types",
+ "reth-optimism-evm",
+ "reth-optimism-forks",
+ "reth-optimism-primitives",
+ "reth-optimism-txpool",
+ "reth-payload-builder",
+ "reth-payload-builder-primitives",
+ "reth-payload-primitives",
+ "reth-payload-util",
+ "reth-payload-validator",
+ "reth-primitives-traits",
+ "reth-revm",
+ "reth-storage-api",
+ "reth-transaction-pool",
+ "revm",
+ "serde",
+ "sha2",
+ "thiserror 2.0.17",
+ "tracing",
+]
+
+[[package]]
 name = "reth-optimism-primitives"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8163,9 +8378,106 @@ dependencies = [
 ]
 
 [[package]]
+name = "reth-optimism-rpc"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-json-rpc",
+ "alloy-primitives",
+ "alloy-rpc-client",
+ "alloy-rpc-types-debug",
+ "alloy-rpc-types-engine",
+ "alloy-rpc-types-eth",
+ "alloy-transport",
+ "alloy-transport-http",
+ "async-trait",
+ "derive_more",
+ "eyre",
+ "futures",
+ "jsonrpsee",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+ "metrics",
+ "op-alloy-consensus",
+ "op-alloy-network",
+ "op-alloy-rpc-jsonrpsee",
+ "op-alloy-rpc-types",
+ "op-alloy-rpc-types-engine",
+ "op-revm",
+ "reqwest",
+ "reth-chain-state",
+ "reth-chainspec",
+ "reth-evm",
+ "reth-metrics",
+ "reth-node-api",
+ "reth-node-builder",
+ "reth-optimism-evm",
+ "reth-optimism-flashblocks",
+ "reth-optimism-forks",
+ "reth-optimism-payload-builder",
+ "reth-optimism-primitives",
+ "reth-optimism-txpool",
+ "reth-primitives-traits",
+ "reth-rpc",
+ "reth-rpc-api",
+ "reth-rpc-engine-api",
+ "reth-rpc-eth-api",
+ "reth-rpc-eth-types",
+ "reth-rpc-server-types",
+ "reth-storage-api",
+ "reth-tasks",
+ "reth-transaction-pool",
+ "revm",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-stream",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "reth-optimism-txpool"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-json-rpc",
+ "alloy-primitives",
+ "alloy-rpc-client",
+ "alloy-rpc-types-eth",
+ "alloy-serde",
+ "c-kzg",
+ "derive_more",
+ "futures-util",
+ "metrics",
+ "op-alloy-consensus",
+ "op-alloy-flz",
+ "op-alloy-rpc-types",
+ "op-revm",
+ "parking_lot",
+ "reth-chain-state",
+ "reth-chainspec",
+ "reth-metrics",
+ "reth-optimism-evm",
+ "reth-optimism-forks",
+ "reth-optimism-primitives",
+ "reth-primitives-traits",
+ "reth-storage-api",
+ "reth-transaction-pool",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "reth-payload-builder"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -8186,7 +8498,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-builder-primitives"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "pin-project",
  "reth-payload-primitives",
@@ -8198,7 +8510,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-primitives"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8219,9 +8531,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "reth-payload-util"
+version = "1.9.3"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "reth-transaction-pool",
+]
+
+[[package]]
 name = "reth-payload-validator"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types-engine",
@@ -8231,7 +8553,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "once_cell",
@@ -8244,7 +8566,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives-traits"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8277,7 +8599,7 @@ dependencies = [
 [[package]]
 name = "reth-provider"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8321,7 +8643,7 @@ dependencies = [
 [[package]]
 name = "reth-prune"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8349,7 +8671,7 @@ dependencies = [
 [[package]]
 name = "reth-prune-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -8364,7 +8686,7 @@ dependencies = [
 [[package]]
 name = "reth-ress-protocol"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -8383,7 +8705,7 @@ dependencies = [
 [[package]]
 name = "reth-ress-provider"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -8410,7 +8732,7 @@ dependencies = [
 [[package]]
 name = "reth-revm"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "reth-primitives-traits",
@@ -8423,7 +8745,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -8502,7 +8824,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-api"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-genesis",
@@ -8530,7 +8852,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-builder"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-network",
  "alloy-provider",
@@ -8569,7 +8891,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-convert"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-evm",
@@ -8581,16 +8903,21 @@ dependencies = [
  "auto_impl",
  "dyn-clone",
  "jsonrpsee-types",
+ "op-alloy-consensus",
+ "op-alloy-network",
+ "op-alloy-rpc-types",
  "reth-ethereum-primitives",
  "reth-evm",
+ "reth-optimism-primitives",
  "reth-primitives-traits",
+ "reth-storage-api",
  "thiserror 2.0.17",
 ]
 
 [[package]]
 name = "reth-rpc-engine-api"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8619,7 +8946,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-eth-api"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -8663,7 +8990,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-eth-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8710,7 +9037,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-layer"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-rpc-types-engine",
  "http",
@@ -8724,7 +9051,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-server-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8740,7 +9067,7 @@ dependencies = [
 [[package]]
 name = "reth-stages"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8788,7 +9115,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-api"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8815,7 +9142,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -8829,7 +9156,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "parking_lot",
@@ -8849,7 +9176,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file-types"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "clap",
@@ -8861,7 +9188,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-api"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8885,7 +9212,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-errors"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8901,7 +9228,7 @@ dependencies = [
 [[package]]
 name = "reth-tasks"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -8919,7 +9246,7 @@ dependencies = [
 [[package]]
 name = "reth-testing-utils"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8935,7 +9262,7 @@ dependencies = [
 [[package]]
 name = "reth-tokio-util"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "tokio",
  "tokio-stream",
@@ -8945,7 +9272,7 @@ dependencies = [
 [[package]]
 name = "reth-tracing"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "clap",
  "eyre",
@@ -8961,7 +9288,7 @@ dependencies = [
 [[package]]
 name = "reth-tracing-otlp"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "clap",
  "eyre",
@@ -8978,7 +9305,7 @@ dependencies = [
 [[package]]
 name = "reth-transaction-pool"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -9019,7 +9346,7 @@ dependencies = [
 [[package]]
 name = "reth-trie"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -9045,7 +9372,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-common"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -9072,7 +9399,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-db"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "reth-db-api",
@@ -9085,7 +9412,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-parallel"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -9110,7 +9437,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-sparse"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -9129,7 +9456,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-sparse-parallel"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -9147,7 +9474,7 @@ dependencies = [
 [[package]]
 name = "reth-zstd-compressors"
 version = "1.9.3"
-source = "git+https://github.com/paradigmxyz/reth?rev=536bebfcd#536bebfcd7e8100ed69fe32c1122e18d6d6c3ff4"
+source = "git+https://github.com/rezbera/reth?branch=rezbera%2Fmodular-flashblocks#64b95481b3900c3d8986f7fee5a4f17f85ef871b"
 dependencies = [
  "zstd",
 ]
@@ -9579,7 +9906,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -10421,7 +10748,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11569,7 +11896,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
