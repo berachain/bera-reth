@@ -21,6 +21,7 @@ use reth::{
         pool::{BlockingTaskGuard, BlockingTaskPool},
     },
 };
+use reth_chain_state::BlockState;
 use reth_optimism_flashblocks::{FlashBlockBuildInfo, FlashblocksListeners, PendingFlashBlock};
 use reth_primitives_traits::{Recovered, WithEncoded};
 use reth_rpc_eth_api::{
@@ -35,6 +36,7 @@ use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
     builder::config::PendingBlockKind, error::FromEvmError,
 };
+use reth_storage_api::StateProviderFactory;
 use reth_transaction_pool::PoolPooledTx;
 use std::{sync::Arc, time::Duration};
 use tokio::time;
@@ -699,5 +701,30 @@ where
     #[inline]
     fn pending_block_kind(&self) -> PendingBlockKind {
         self.inner.pending_block_kind()
+    }
+
+    /// Returns a state provider for the pending flashblock state.
+    ///
+    /// This overlays the flashblock execution output on top of the parent block's historical state,
+    /// allowing RPC methods like `eth_getBalance`, `eth_getCode`, etc. to query pending state
+    /// when called with the "pending" block tag.
+    async fn local_pending_state(
+        &self,
+    ) -> Result<Option<reth_storage_api::StateProviderBox>, Self::Error>
+    where
+        Self: SpawnBlocking,
+    {
+        let Ok(Some(pending_block)) = self.pending_flashblock().await else {
+            return Ok(None);
+        };
+
+        let latest_historical = self
+            .provider()
+            .history_by_block_hash(pending_block.block().parent_hash())
+            .map_err(Into::<EthApiError>::into)?;
+
+        let state = BlockState::from(pending_block);
+
+        Ok(Some(Box::new(state.state_provider(latest_historical))))
     }
 }

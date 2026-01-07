@@ -32,6 +32,7 @@ async-trait = "0.1.88"
 modular-bitfield = "0.11.2"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
+reth-chain-state = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-cli = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
@@ -118,6 +119,7 @@ ignored = ["modular-bitfield"]
 reth = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
 reth-rpc = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
 reth-basic-payload-builder = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
+reth-chain-state = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
 reth-chainspec = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
 reth-cli = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }
 reth-cli-commands = { git = "https://github.com/rezbera/reth", branch = "rezbera/modular-flashblocks" }

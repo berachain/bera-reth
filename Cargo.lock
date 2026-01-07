@@ -1500,6 +1500,7 @@ dependencies = [
  "modular-bitfield",
  "reth",
  "reth-basic-payload-builder",
+ "reth-chain-state",
  "reth-chainspec",
  "reth-cli",
  "reth-cli-commands",
