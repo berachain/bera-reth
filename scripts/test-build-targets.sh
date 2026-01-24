@@ -61,6 +61,13 @@ echo "Testing cross-compilation targets..."
 test_build_target "x86_64-unknown-linux-gnu" "Linux x86_64"
 test_build_target "aarch64-unknown-linux-gnu" "Linux aarch64"
 
+# macOS target (only test on macOS, since it can't be cross-compiled from other platforms)
+if [[ "$PLATFORM" == "macos" ]]; then
+    test_build_target "aarch64-apple-darwin" "macOS Apple Silicon"
+else
+    echo -e "${YELLOW}⏭️  Skipping macOS target (requires macOS platform)${NC}"
+fi
+
 echo ""
 echo "🎉 Build target testing complete!"
 echo ""
