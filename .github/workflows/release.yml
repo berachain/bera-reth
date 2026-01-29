@@ -87,14 +87,12 @@ jobs:
         with:
           target: ${{ matrix.configs.target }}
       - name: Install cross main
-        if: ${{ !startsWith(matrix.configs.os, 'macos') }}
+        if: runner.os == 'Linux'
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-
-
 
       - name: Build Bera-Reth
         run: make PROFILE=${{ matrix.configs.profile }} build-${{ matrix.configs.target }}
