@@ -218,10 +218,7 @@ deny = [
 
 # Certain crates/versions that will be skipped when doing duplicate detection.
 skip = [
-
-
-  # "ansi_term@0.11.0",
-  # { crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },
+  { crate = "base64@0.21.7", reason = "coins-core pins 0.21.7; duplicate with 0.22.1 until upstream updates" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
