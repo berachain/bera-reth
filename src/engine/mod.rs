@@ -29,7 +29,7 @@ use alloy_eips::{
     eip7002::SYSTEM_ADDRESS,
     eip7685::{Requests, RequestsOrHash},
 };
-use alloy_primitives::{B256, Sealed};
+use alloy_primitives::{B256, Bytes, Sealed};
 use alloy_rpc_types::engine::{
     CancunPayloadFields, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadInputV2,
@@ -255,6 +255,14 @@ impl ExecutionPayloadTrait for BerachainExecutionData {
 
     fn gas_used(&self) -> u64 {
         self.payload.as_v1().gas_used
+    }
+
+    fn block_access_list(&self) -> Option<&Bytes> {
+        None
+    }
+
+    fn transaction_count(&self) -> usize {
+        self.payload.as_v1().transactions.len()
     }
 }
 

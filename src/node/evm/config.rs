@@ -92,6 +92,8 @@ pub struct BerachainNextBlockEnvAttributes {
     pub withdrawals: Option<Withdrawals>,
     /// Previous proposer public key.
     pub prev_proposer_pubkey: Option<BlsPublicKey>,
+    /// Extra data for the block.
+    pub extra_data: Bytes,
 }
 
 impl ConfigureEvm for BerachainEvmConfig {
@@ -115,8 +117,9 @@ impl ConfigureEvm for BerachainEvmConfig {
         let spec = revm_spec::<BerachainChainSpec, BerachainHeader>(self.chain_spec(), header);
 
         // configure evm env based on parent block
-        let mut cfg_env =
-            CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec);
+        let mut cfg_env = CfgEnv::new()
+            .with_chain_id(self.chain_spec().chain().id())
+            .with_spec_and_mainnet_gas_params(spec);
 
         if let Some(blob_params) = &blob_params {
             cfg_env.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
@@ -161,7 +164,9 @@ impl ConfigureEvm for BerachainEvmConfig {
             parent.number() + 1,
         );
         // configure evm env based on parent block
-        let mut cfg = CfgEnv::new().with_chain_id(chain_spec.chain().id()).with_spec(spec_id);
+        let mut cfg = CfgEnv::new()
+            .with_chain_id(chain_spec.chain().id())
+            .with_spec_and_mainnet_gas_params(spec_id);
 
         if let Some(blob_params) = &blob_params {
             cfg.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
@@ -253,6 +258,7 @@ impl BuildPendingEnv<BerachainHeader> for BerachainNextBlockEnvAttributes {
             parent_beacon_block_root: parent.parent_beacon_block_root().map(|_| B256::ZERO),
             withdrawals: parent.withdrawals_root().map(|_| Default::default()),
             prev_proposer_pubkey: parent.header().prev_proposer_pubkey,
+            extra_data: Default::default(),
         }
     }
 }
@@ -270,8 +276,9 @@ impl ConfigureEngineEvm<BerachainExecutionData> for BerachainEvmConfig {
             revm_spec_by_timestamp_and_block_number(self.chain_spec(), timestamp, block_number);
 
         // configure evm env based on parent block
-        let mut cfg_env =
-            CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec);
+        let mut cfg_env = CfgEnv::new()
+            .with_chain_id(self.chain_spec().chain().id())
+            .with_spec_and_mainnet_gas_params(spec);
 
         if let Some(blob_params) = &blob_params {
             cfg_env.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
@@ -324,7 +331,7 @@ impl ConfigureEngineEvm<BerachainExecutionData> for BerachainEvmConfig {
         &self,
         payload: &BerachainExecutionData,
     ) -> Result<impl ExecutableTxIterator<Self>, core::convert::Infallible> {
-        Ok(payload.payload.transactions().clone().into_iter().map(|tx| {
+        Ok((payload.payload.transactions().clone(), |tx: Bytes| {
             let tx =
                 TxTy::<Self::Primitives>::decode_2718_exact(tx.as_ref()).map_err(AnyError::new)?;
             let signer = tx.try_recover().map_err(AnyError::new)?;

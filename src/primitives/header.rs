@@ -4,10 +4,11 @@ use alloy_primitives::{
 };
 use alloy_rlp::{Decodable, Encodable, length_of_length};
 use bytes::BufMut;
-use reth_cli_commands::common::CliHeader;
 use reth_codecs::Compact;
 use reth_db_api::table::{Compress, Decompress};
-use reth_primitives_traits::{BlockHeader, InMemorySize, serde_bincode_compat::RlpBincode};
+use reth_primitives_traits::{
+    BlockHeader, InMemorySize, header::HeaderMut, serde_bincode_compat::RlpBincode,
+};
 use serde::{Deserialize, Serialize};
 
 /// 48-byte BLS12-381 public key for Berachain consensus
@@ -93,10 +94,26 @@ pub struct BerachainHeader {
     pub extra_data: Bytes,
 }
 
-/// Implementation of CliHeader trait for CLI operations
-impl CliHeader for BerachainHeader {
-    fn set_number(&mut self, number: u64) {
+/// Implementation of HeaderMut trait for CLI operations
+impl HeaderMut for BerachainHeader {
+    fn set_parent_hash(&mut self, hash: B256) {
+        self.parent_hash = hash;
+    }
+
+    fn set_block_number(&mut self, number: BlockNumber) {
         self.number = number;
+    }
+
+    fn set_timestamp(&mut self, timestamp: u64) {
+        self.timestamp = timestamp;
+    }
+
+    fn set_state_root(&mut self, state_root: B256) {
+        self.state_root = state_root;
+    }
+
+    fn set_difficulty(&mut self, difficulty: U256) {
+        self.difficulty = difficulty;
     }
 }
 

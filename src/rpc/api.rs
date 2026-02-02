@@ -31,7 +31,7 @@ use reth_rpc_eth_api::{
 };
 use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
-    builder::config::PendingBlockKind, error::FromEvmError, utils::recover_raw_transaction,
+    builder::config::PendingBlockKind, error::FromEvmError,
 };
 use reth_transaction_pool::{AddedTransactionOutcome, TransactionOrigin};
 
@@ -342,15 +342,15 @@ where
 impl<N, Rpc> EthApiTypes for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
-    Rpc: RpcConvert,
+    Rpc: RpcConvert<Error = EthApiError>,
 {
     type Error = EthApiError;
 
     type NetworkTypes = Rpc::Network;
     type RpcConvert = Rpc;
 
-    fn tx_resp_builder(&self) -> &Self::RpcConvert {
-        self.inner.tx_resp_builder()
+    fn converter(&self) -> &Self::RpcConvert {
+        self.inner.converter()
     }
 }
 
@@ -406,7 +406,7 @@ where
 impl<N, Rpc> SpawnBlocking for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
-    Rpc: RpcConvert,
+    Rpc: RpcConvert<Error = EthApiError>,
 {
     #[inline]
     fn io_task_spawner(&self) -> impl TaskSpawner {
@@ -421,6 +421,11 @@ where
     #[inline]
     fn tracing_task_guard(&self) -> &BlockingTaskGuard {
         self.inner.blocking_task_guard()
+    }
+
+    #[inline]
+    fn blocking_io_task_guard(&self) -> &std::sync::Arc<tokio::sync::Semaphore> {
+        self.inner.blocking_io_request_semaphore()
     }
 }
 
@@ -439,14 +444,16 @@ where
         EthTransactions::send_raw_transaction_sync_timeout(&self.inner)
     }
 
-    /// Decodes and recovers the transaction and submits it to the pool.
-    ///
-    /// Returns the hash of the transaction.
-    async fn send_raw_transaction(&self, tx: Bytes) -> Result<B256, Self::Error> {
-        let recovered = recover_raw_transaction(&tx)?;
+    async fn send_transaction(
+        &self,
+        tx: reth_primitives_traits::WithEncoded<
+            reth_primitives_traits::Recovered<reth_transaction_pool::PoolPooledTx<Self::Pool>>,
+        >,
+    ) -> Result<B256, Self::Error> {
+        let (raw_tx, recovered) = tx.split();
 
         // broadcast raw transaction to subscribers if there is any.
-        self.broadcast_raw_transaction(tx);
+        self.broadcast_raw_transaction(raw_tx);
 
         let pool_transaction = <Self::Pool as TransactionPool>::Transaction::from_pooled(recovered);
 
@@ -477,7 +484,7 @@ where
 impl<N, Rpc> EthApiSpec for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
-    Rpc: RpcConvert<Primitives = N::Primitives>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
     fn starting_block(&self) -> U256 {
         self.inner.starting_block()
@@ -549,7 +556,8 @@ where
 impl<N, Rpc> EthState for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
-    Rpc: RpcConvert<Primitives = N::Primitives>,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
     Self: LoadPendingBlock,
 {
     fn max_proof_window(&self) -> u64 {
@@ -561,14 +569,14 @@ impl<N, Rpc> Trace for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Evm = N::Evm, Error = EthApiError>,
 {
 }
 
 impl<N, Rpc> LoadState for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
-    Rpc: RpcConvert<Primitives = N::Primitives>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
     Self: LoadPendingBlock,
 {
 }
@@ -594,7 +602,7 @@ impl<N, Rpc> LoadPendingBlock for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
-    Rpc: RpcConvert<Primitives = N::Primitives>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
     #[inline]
     fn pending_block(&self) -> &tokio::sync::Mutex<Option<PendingBlock<Self::Primitives>>> {

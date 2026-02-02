@@ -116,14 +116,14 @@ impl BerachainEngineValidator {
 impl PayloadValidator<BerachainEngineTypes> for BerachainEngineValidator {
     type Block = BerachainBlock;
 
-    fn ensure_well_formed_payload(
+    fn convert_payload_to_block(
         &self,
         payload: BerachainExecutionData,
-    ) -> Result<RecoveredBlock<Self::Block>, NewPayloadError> {
+    ) -> Result<SealedBlock<Self::Block>, NewPayloadError> {
         let BerachainExecutionData { payload, sidecar } = payload;
         let expected_hash = payload.block_hash();
 
-        // Parse the block directly to BerachainBlock
+        // Parse the block directly to BerachainBlock (without signature recovery)
         let sealed_block = self.parse_berachain_block(payload, &sidecar)?;
 
         // Validate block hash
@@ -137,6 +137,14 @@ impl PayloadValidator<BerachainEngineTypes> for BerachainEngineValidator {
         // Apply standard + Berachain hardfork validations
         self.validate_hardfork_fields(&sealed_block, &sidecar)?;
 
+        Ok(sealed_block)
+    }
+
+    fn ensure_well_formed_payload(
+        &self,
+        payload: BerachainExecutionData,
+    ) -> Result<RecoveredBlock<Self::Block>, NewPayloadError> {
+        let sealed_block = self.convert_payload_to_block(payload)?;
         sealed_block.try_recover().map_err(|e| NewPayloadError::Other(e.into()))
     }
 }
