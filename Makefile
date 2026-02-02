@@ -96,6 +96,10 @@ build-x86_64-unknown-linux-gnu: ## Build bera-reth for x86_64-unknown-linux-gnu
 build-aarch64-unknown-linux-gnu: ## Build bera-reth for aarch64-unknown-linux-gnu
 	cross build --target aarch64-unknown-linux-gnu --features "$(FEATURES)" --profile "$(PROFILE)"
 
+.PHONY: build-aarch64-apple-darwin
+build-aarch64-apple-darwin: ## Build bera-reth for macOS Apple Silicon
+	cargo build --target aarch64-apple-darwin --features "$(FEATURES)" --profile "$(PROFILE)"
+
 ###############################################################################
 ###                               Development                               ###
 ###############################################################################

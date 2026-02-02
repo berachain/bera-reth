@@ -75,21 +75,24 @@ jobs:
             os: ubuntu-24.04
             profile: maxperf
             allow_fail: false
+          - target: aarch64-apple-darwin
+            os: macos-14
+            profile: maxperf
+            allow_fail: false
     steps:
       - uses: actions/checkout@v5
       - uses: rui314/setup-mold@v1
+        if: runner.os == 'Linux'
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: ${{ matrix.configs.target }}
       - name: Install cross main
-        id: cross_main
+        if: runner.os == 'Linux'
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-
-
 
       - name: Build Bera-Reth
         run: make PROFILE=${{ matrix.configs.profile }} build-${{ matrix.configs.target }}
@@ -211,6 +214,7 @@ jobs:
           |:---:|:---:|:---:|:---|
           | <img src="https://www.svgrepo.com/download/473700/linux.svg" width="50"/> | x86_64 | [bera-reth-${{ env.VERSION }}-x86_64-unknown-linux-gnu.tar.gz](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-x86_64-unknown-linux-gnu.tar.gz) | [PGP Signature](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-x86_64-unknown-linux-gnu.tar.gz.asc) |
           | <img src="https://www.svgrepo.com/download/473700/linux.svg" width="50"/> | aarch64 | [bera-reth-${{ env.VERSION }}-aarch64-unknown-linux-gnu.tar.gz](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-aarch64-unknown-linux-gnu.tar.gz) | [PGP Signature](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-aarch64-unknown-linux-gnu.tar.gz.asc) |
+          | <img src="https://www.svgrepo.com/download/473712/macos.svg" width="50"/> | aarch64 | [bera-reth-${{ env.VERSION }}-aarch64-apple-darwin.tar.gz](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-aarch64-apple-darwin.tar.gz) | [PGP Signature](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-aarch64-apple-darwin.tar.gz.asc) |
           | <img src="https://www.svgrepo.com/download/473589/docker.svg" width="50"/> | Docker | [${{ env.IMAGE_NAME }}](${{ env.DOCKER_IMAGE_NAME_URL }}) | - |
           ENDBODY
           )
