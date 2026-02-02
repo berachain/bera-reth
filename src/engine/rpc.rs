@@ -89,6 +89,7 @@ where
             EngineCapabilities::default(),
             engine_validator,
             ctx.config.engine.accept_execution_requests_hash,
+            ctx.node.network().clone(),
         );
         Ok(BerachainEngineApi { inner, chain_spec: ctx.config.chain.clone() })
     }

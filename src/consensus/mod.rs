@@ -10,7 +10,7 @@ use alloy_primitives::Address;
 use reth::{
     api::NodeTypes,
     beacon_consensus::EthBeaconConsensus,
-    consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator},
+    consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator, ReceiptRootBloom},
     providers::BlockExecutionResult,
 };
 use reth_node_api::FullNodeTypes;
@@ -112,9 +112,10 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
         &self,
         block: &RecoveredBlock<BerachainBlock>,
         result: &BlockExecutionResult<<BerachainPrimitives as NodePrimitives>::Receipt>,
+        receipt_root_bloom: Option<ReceiptRootBloom>,
     ) -> Result<(), ConsensusError> {
         // First run the standard validation
-        <EthBeaconConsensus<BerachainChainSpec> as FullConsensus<BerachainPrimitives>>::validate_block_post_execution(&self.inner, block, result)?;
+        <EthBeaconConsensus<BerachainChainSpec> as FullConsensus<BerachainPrimitives>>::validate_block_post_execution(&self.inner, block, result, receipt_root_bloom)?;
 
         // Check for Prague3 blocked address transfers if the hardfork is active
         let timestamp = block.header().timestamp();
@@ -215,13 +216,11 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
 }
 
 impl Consensus<BerachainBlock> for BerachainBeaconConsensus {
-    type Error = ConsensusError;
-
     fn validate_body_against_header(
         &self,
         body: &<BerachainBlock as reth_primitives_traits::Block>::Body,
         header: &SealedHeader<BerachainHeader>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), ConsensusError> {
         <EthBeaconConsensus<BerachainChainSpec> as Consensus<BerachainBlock>>::validate_body_against_header(
             &self.inner,
             body,
@@ -232,7 +231,7 @@ impl Consensus<BerachainBlock> for BerachainBeaconConsensus {
     fn validate_block_pre_execution(
         &self,
         block: &SealedBlock<BerachainBlock>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), ConsensusError> {
         <EthBeaconConsensus<BerachainChainSpec> as Consensus<BerachainBlock>>::validate_block_pre_execution(
             &self.inner,
             block,
