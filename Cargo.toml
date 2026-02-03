@@ -17,7 +17,7 @@ alloy-serde = "1.0.41"
 alloy-signer-local = "1.0.41"
 alloy-sol-macro = "1.4.1"
 alloy-sol-types = "1.4.1"
-bytes = "1.10.1"
+bytes = "1.11.1"
 clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
 eyre = "0.6.12"
