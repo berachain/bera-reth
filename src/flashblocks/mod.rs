@@ -1,7 +1,11 @@
 #[cfg(test)]
 pub mod test_utils;
 
-use crate::{primitives::header::BlsPublicKey, transaction::BerachainTxEnvelope};
+use crate::{
+    primitives::header::BlsPublicKey,
+    sequencer::signing::BlsSignature,
+    transaction::BerachainTxEnvelope,
+};
 use alloy_consensus::{crypto::RecoveryError, transaction::Recovered};
 use alloy_eips::{
     eip2718::WithEncoded,
@@ -117,13 +121,46 @@ pub struct BerachainFlashblockPayloadMetadata {
     pub block_number: u64,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BerachainFlashblockPayload {
     pub payload_id: PayloadId,
     pub index: u64,
     pub base: Option<BerachainFlashblockPayloadBase>,
     pub diff: BerachainFlashblockPayloadDiff,
     pub metadata: BerachainFlashblockPayloadMetadata,
+    #[serde(with = "signature_serde")]
+    pub signature: BlsSignature,
+    pub is_last: bool,
+}
+
+mod signature_serde {
+    use super::BlsSignature;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(sig: &BlsSignature, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("0x{}", hex::encode(sig)))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BlsSignature, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let hex_str = String::deserialize(deserializer)?;
+        let hex_str = hex_str.trim_start_matches("0x");
+        let bytes = hex::decode(hex_str).map_err(serde::de::Error::custom)?;
+        if bytes.len() != 96 {
+            return Err(serde::de::Error::custom(format!(
+                "expected 96 bytes, got {}",
+                bytes.len()
+            )));
+        }
+        let mut arr = [0u8; 96];
+        arr.copy_from_slice(&bytes);
+        Ok(arr)
+    }
 }
 
 impl BerachainFlashblockPayload {

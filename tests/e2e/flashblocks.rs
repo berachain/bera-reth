@@ -69,6 +69,8 @@ fn create_test_flashblock(
             blob_gas_used: None,
         },
         metadata: BerachainFlashblockPayloadMetadata { block_number },
+        signature: [0u8; 96],
+        is_last: false,
     }
 }
 

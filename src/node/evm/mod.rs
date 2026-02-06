@@ -2,11 +2,13 @@
 
 mod assembler;
 mod block_context;
-mod builder;
+pub mod builder;
 pub mod config;
 pub mod error;
 pub mod executor;
 pub mod receipt;
+
+pub use builder::{BerachainBlockBuilder, FlashblockState};
 
 use crate::{
     evm::BerachainEvmFactory,

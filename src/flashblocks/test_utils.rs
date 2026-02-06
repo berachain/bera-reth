@@ -164,6 +164,8 @@ impl BerachainTestFlashBlockBuilder {
                 blob_gas_used: None,
             },
             metadata: BerachainFlashblockPayloadMetadata { block_number: self.block_number },
+            signature: [0u8; 96],
+            is_last: false,
         }
     }
 }

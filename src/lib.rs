@@ -13,6 +13,7 @@ pub mod node;
 pub mod pool;
 pub mod primitives;
 pub mod rpc;
+pub mod sequencer;
 pub mod transaction;
 pub mod version;
 
