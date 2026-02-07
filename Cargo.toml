@@ -31,6 +31,7 @@ jsonrpsee-core = { version = "0.26.0", features = ["server"] }
 jsonrpsee-proc-macros = "0.26.0"
 
 async-trait = "0.1.88"
+futures-util = "0.3"
 modular-bitfield = "0.11.2"
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", rev = "536bebfcd" }
@@ -77,7 +78,6 @@ tokio = { version = "1.46.0", features = ["sync", "net", "macros"] }
 tokio-tungstenite = "0.26"
 tokio-util = "0.7"
 tracing = "0.1.41"
-futures-util = "0.3"
 
 [dev-dependencies]
 alloy-provider = "1.1.2"

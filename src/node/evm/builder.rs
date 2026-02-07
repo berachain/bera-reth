@@ -3,13 +3,7 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::BlockHeader;
-use reth::revm::{
-    State,
-    context::result::ExecutionResult,
-    db::states::bundle_state::BundleRetention,
-    database_interface::Database,
-};
-use revm::database::BundleState;
+use reth::revm::context::result::ExecutionResult;
 use reth_evm::{
     Evm,
     block::{BlockExecutionError, BlockExecutor, CommitChanges},
@@ -18,42 +12,6 @@ use reth_evm::{
 use reth_primitives_traits::RecoveredBlock;
 use reth_storage_api::StateProvider;
 use std::sync::Arc;
-
-/// Trait for accessing state data needed for flashblock state root computation.
-///
-/// This trait abstracts the `State<DB>` type's methods that we need for computing
-/// intermediate state roots during flashblock production. By using a trait instead
-/// of concrete types, we can work through the `BlockBuilder` trait abstraction.
-pub trait FlashblockState {
-    /// Merge pending transitions into the bundle state.
-    ///
-    /// This accumulates state changes so they can be used for state root computation.
-    fn merge_transitions_for_flashblock(&mut self);
-
-    /// Get a reference to the accumulated bundle state.
-    fn bundle_state(&self) -> &BundleState;
-}
-
-impl<DB: Database> FlashblockState for State<DB> {
-    fn merge_transitions_for_flashblock(&mut self) {
-        self.merge_transitions(BundleRetention::PlainState);
-    }
-
-    fn bundle_state(&self) -> &BundleState {
-        &self.bundle_state
-    }
-}
-
-// Blanket impl for mutable references (needed because Evm::DB is &'a mut State<DB>)
-impl<T: FlashblockState + ?Sized> FlashblockState for &mut T {
-    fn merge_transitions_for_flashblock(&mut self) {
-        (*self).merge_transitions_for_flashblock()
-    }
-
-    fn bundle_state(&self) -> &BundleState {
-        (**self).bundle_state()
-    }
-}
 
 type EResult<E> = ExecutionResult<<<E as BlockExecutor>::Evm as Evm>::HaltReason>;
 

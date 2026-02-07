@@ -8,14 +8,16 @@ use bera_reth::{
     consensus::BerachainBeaconConsensus,
     evm::BerachainEvmFactory,
     node::{BerachainNode, evm::config::BerachainEvmConfig},
-    sequencer::{FlashblockPayloadServiceBuilder, FlashblockSigner, SequencerConfig, WebSocketPublisher},
+    sequencer::{
+        FlashblockPayloadServiceBuilder, FlashblockSigner, SequencerConfig, WebSocketPublisher,
+    },
     version::init_bera_version,
 };
 use clap::Parser;
 use reth::CliRunner;
 use reth_chainspec::EthChainSpec;
 use reth_ethereum_cli::Cli;
-use reth_node_builder::{components::BasicPayloadServiceBuilder, Node, NodeHandle};
+use reth_node_builder::{Node, NodeHandle, components::BasicPayloadServiceBuilder};
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio_util::sync::CancellationToken;
 use tracing::info;

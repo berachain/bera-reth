@@ -7,7 +7,7 @@ use crate::{
     },
     primitives::header::BlsPublicKey,
 };
-use alloy_primitives::{Address, B256, Bloom, Bytes, U256};
+use alloy_primitives::{Address, B256, Bytes, U256};
 use reth::rpc::types::engine::PayloadId;
 
 #[derive(Debug)]
@@ -22,11 +22,6 @@ impl BerachainTestFlashBlockFactory {
         Self { block_time: 2, base_timestamp: 1_000_000, current_block_number: 100 }
     }
 
-    pub fn with_block_number(mut self, block_number: u64) -> Self {
-        self.current_block_number = block_number;
-        self
-    }
-
     pub fn flashblock_at(&self, index: u64) -> BerachainTestFlashBlockBuilder {
         self.builder().index(index).block_number(self.current_block_number)
     }
@@ -35,8 +30,7 @@ impl BerachainTestFlashBlockFactory {
         &self,
         previous: &BerachainFlashblockPayload,
     ) -> BerachainTestFlashBlockBuilder {
-        let parent_hash =
-            previous.base.as_ref().map(|b| b.parent_hash).unwrap_or(previous.diff.block_hash);
+        let parent_hash = previous.base.as_ref().map(|b| b.parent_hash).unwrap_or_default();
 
         self.builder()
             .index(previous.index + 1)
@@ -58,7 +52,7 @@ impl BerachainTestFlashBlockFactory {
             .index(0)
             .block_number(prev_block_number + 1)
             .payload_id(PayloadId::new(B256::random().0[0..8].try_into().unwrap()))
-            .parent_hash(previous.diff.block_hash)
+            .parent_hash(B256::random())
             .timestamp(prev_timestamp + self.block_time)
     }
 
@@ -69,7 +63,6 @@ impl BerachainTestFlashBlockFactory {
             payload_id: PayloadId::new([1u8; 8]),
             parent_hash: B256::random(),
             timestamp: self.base_timestamp,
-            gas_limit: 30_000_000,
             transactions: vec![],
             prev_proposer_pubkey: Some(BlsPublicKey::random()),
         }
@@ -89,7 +82,6 @@ pub struct BerachainTestFlashBlockBuilder {
     payload_id: PayloadId,
     parent_hash: B256,
     timestamp: u64,
-    gas_limit: u64,
     transactions: Vec<Bytes>,
     prev_proposer_pubkey: Option<BlsPublicKey>,
 }
@@ -138,7 +130,7 @@ impl BerachainTestFlashBlockBuilder {
                 fee_recipient: Address::default(),
                 prev_randao: B256::random(),
                 block_number: self.block_number,
-                gas_limit: self.gas_limit,
+                gas_limit: 30_000_000,
                 timestamp: self.timestamp,
                 extra_data: Default::default(),
                 base_fee_per_gas: U256::from(1_000_000_000u64),
@@ -153,15 +145,8 @@ impl BerachainTestFlashBlockBuilder {
             payload_id: self.payload_id,
             base,
             diff: BerachainFlashblockPayloadDiff {
-                block_hash: B256::random(),
-                state_root: B256::random(),
-                receipts_root: B256::random(),
-                logs_bloom: Bloom::default(),
-                gas_used: 0,
                 transactions: self.transactions,
                 withdrawals: vec![],
-                withdrawals_root: B256::ZERO,
-                blob_gas_used: None,
             },
             metadata: BerachainFlashblockPayloadMetadata { block_number: self.block_number },
             signature: [0u8; 96],

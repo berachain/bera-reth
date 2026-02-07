@@ -11,29 +11,22 @@ use crate::{
         BerachainFlashblockPayloadMetadata,
     },
     hardforks::BerachainHardforks,
-    node::evm::{
-        FlashblockState,
-        config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
-    },
+    node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
     primitives::BerachainHeader,
     sequencer::{
-        signing::{compute_diff_hash, FlashblockSigner},
         SequencerConfig, WebSocketPublisher,
+        signing::{FlashblockSigner, compute_transactions_hash},
     },
     transaction::BerachainTxEnvelope,
 };
-use alloy_consensus::{
-    Transaction, TxReceipt, EMPTY_OMMER_ROOT_HASH, EMPTY_ROOT_HASH,
-    proofs::{calculate_withdrawals_root, ordered_trie_root_with_encoder},
-};
+use alloy_consensus::Transaction;
 use alloy_eips::{eip2718::Encodable2718, eip4895::Withdrawal};
-use bytes::BufMut;
-use alloy_primitives::{logs_bloom, B256, B64, Bloom, Bytes, Sealable, U256};
+use alloy_primitives::{Bytes, U256};
 use reth::{
     api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, TxTy},
     chainspec::EthereumHardforks,
     providers::StateProviderFactory,
-    revm::{context::Block, database::StateProviderDatabase, State},
+    revm::{State, context::Block, database::StateProviderDatabase},
     transaction_pool::{PoolTransaction, TransactionPool},
 };
 use reth_basic_payload_builder::{
@@ -43,16 +36,16 @@ use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_ethereum_primitives::Receipt;
 use reth_evm::{
+    ConfigureEvm, Evm,
     block::{BlockExecutionError, BlockValidationError, CommitChanges},
     execute::{BlockBuilder, BlockBuilderOutcome},
-    ConfigureEvm, Evm,
 };
-use reth_node_builder::{components::PayloadBuilderBuilder, BuilderContext, PayloadBuilderConfig};
+use reth_node_builder::{BuilderContext, PayloadBuilderConfig, components::PayloadBuilderBuilder};
 use reth_payload_primitives::PayloadBuilderAttributes;
 use reth_primitives_traits::transaction::error::InvalidTransactionError;
 use reth_transaction_pool::{
-    error::InvalidPoolTransactionError, BestTransactions, BestTransactionsAttributes,
-    ValidPoolTransaction,
+    BestTransactions, BestTransactionsAttributes, ValidPoolTransaction,
+    error::InvalidPoolTransactionError,
 };
 use std::{
     sync::Arc,
@@ -231,41 +224,10 @@ impl FlashblockExecutionTracker {
         }
     }
 
-    /// Compute the receipts root from accumulated receipts.
-    fn receipts_root(&self) -> B256 {
-        Receipt::calculate_receipt_root_no_memo(&self.receipts)
-    }
-
-    /// Compute the logs bloom from accumulated receipts.
-    fn logs_bloom(&self) -> Bloom {
-        logs_bloom(self.receipts.iter().flat_map(|r| r.logs()))
-    }
-
     /// Clear interval transactions for next flashblock.
     fn clear_interval(&mut self) {
         self.interval_transactions.clear();
     }
-}
-
-use reth_storage_api::{HashedPostStateProvider, StateRootProvider};
-
-/// Compute the intermediate state root from a block builder.
-///
-/// Merges pending state transitions and computes the state root. Requires
-/// the builder's database to implement [`FlashblockState`].
-fn compute_intermediate_state_root<B, S>(
-    builder: &mut B,
-    state_provider: &S,
-) -> reth_storage_api::errors::ProviderResult<B256>
-where
-    B: BlockBuilder,
-    S: StateRootProvider + HashedPostStateProvider,
-    <<B::Executor as reth_evm::block::BlockExecutor>::Evm as Evm>::DB: FlashblockState,
-{
-    let db = builder.evm_mut().db_mut();
-    db.merge_transitions_for_flashblock();
-    let hashed_state = state_provider.hashed_post_state(db.bundle_state());
-    state_provider.state_root(hashed_state)
 }
 
 /// Build a payload while emitting flashblocks at regular intervals.
@@ -370,39 +332,21 @@ where
     let interval = sequencer_config.interval;
     let build_start_time = Instant::now();
 
-    // Helper to compute state root, emit flashblock, and handle errors.
-    // Returns true if emission succeeded.
-    let try_emit_flashblock =
-        |builder: &mut _, flashblock_index: u64, tracker: &_, is_last: bool| -> bool {
-            match compute_intermediate_state_root(builder, &state_provider) {
-                Ok(state_root) => {
-                    emit_flashblock(
-                        &publisher,
-                        payload_id,
-                        flashblock_index,
-                        &base,
-                        flashblock_index == 0,
-                        tracker,
-                        block_number,
-                        &sequencer_config.signer,
-                        state_root,
-                        &withdrawals,
-                        is_last,
-                    );
-                    true
-                }
-                Err(e) => {
-                    warn!(
-                        target: "sequencer::builder",
-                        payload_id = %payload_id,
-                        index = flashblock_index,
-                        error = %e,
-                        "skipping flashblock emission due to state root computation failure"
-                    );
-                    false
-                }
-            }
-        };
+    // Helper to emit flashblock. Per BRIP-0007, no state root computation needed.
+    let emit = |flashblock_index: u64, tracker: &FlashblockExecutionTracker, is_last: bool| {
+        emit_flashblock(
+            &publisher,
+            payload_id,
+            flashblock_index,
+            &base,
+            flashblock_index == 0,
+            tracker,
+            block_number,
+            &sequencer_config.signer,
+            &withdrawals,
+            is_last,
+        );
+    };
 
     // Main transaction execution loop with flashblock emission.
     // Flashblocks are emitted at regular intervals (~200ms) regardless of transaction activity.
@@ -453,10 +397,9 @@ where
 
         // Emit flashblock at regular intervals (may be empty, serving as heartbeat)
         if last_flashblock_time.elapsed() >= interval {
-            if try_emit_flashblock(&mut builder, flashblock_index, &tracker, false) {
-                flashblock_index += 1;
-                tracker.clear_interval();
-            }
+            emit(flashblock_index, &tracker, false);
+            flashblock_index += 1;
+            tracker.clear_interval();
             last_flashblock_time = Instant::now();
         }
 
@@ -481,11 +424,11 @@ where
 
         // Execute the transaction and capture the result
         let mut execution_logs = Vec::new();
+        let mut tx_success = false;
 
         let result = builder.execute_transaction_with_commit_condition(tx.clone(), |exec_result| {
-            // Capture execution result before commit decision
-            // ExecutionResult contains the output with logs
-            if exec_result.is_success() {
+            tx_success = exec_result.is_success();
+            if tx_success {
                 execution_logs = exec_result.logs().to_vec();
             }
             CommitChanges::Yes
@@ -516,7 +459,7 @@ where
         // Build receipt from execution result
         let receipt = Receipt {
             tx_type: tx.tx_type(),
-            success: true,
+            success: tx_success,
             cumulative_gas_used: tracker.cumulative_gas_used + gas_used,
             logs: execution_logs,
         };
@@ -545,7 +488,7 @@ where
 
     // Always emit the final flashblock marked as last, even if empty.
     // This signals to RPC nodes that no more flashblocks will arrive for this payload.
-    try_emit_flashblock(&mut builder, flashblock_index, &tracker, true);
+    emit(flashblock_index, &tracker, true);
 
     // Finalize the block
     let BlockBuilderOutcome { execution_result, block, .. } = builder.finish(&state_provider)?;
@@ -565,7 +508,8 @@ where
         "sealed flashblock payload ready for getPayload"
     );
 
-    let payload = BerachainBuiltPayload::new(payload_id, sealed_block, tracker.total_fees, requests);
+    let payload =
+        BerachainBuiltPayload::new(payload_id, sealed_block, tracker.total_fees, requests);
 
     Ok(BuildOutcome::Better { payload, cached_reads })
 }
@@ -580,81 +524,21 @@ fn emit_flashblock(
     tracker: &FlashblockExecutionTracker,
     block_number: u64,
     signer: &FlashblockSigner,
-    state_root: B256,
     withdrawals: &[Withdrawal],
     is_last: bool,
 ) {
-    // Compute roots from accumulated receipts
-    let receipts_root = tracker.receipts_root();
-    let logs_bloom = tracker.logs_bloom();
-
-    // Compute transactions root from all transactions (already encoded)
-    let transactions_root = ordered_trie_root_with_encoder(
-        &tracker.all_transactions,
-        |tx, buf| buf.put_slice(tx.as_ref()),
-    );
-
     // Withdrawals are included in first flashblock only (index 0)
-    let (diff_withdrawals, withdrawals_root) = if include_base_in_payload {
-        let root = if withdrawals.is_empty() {
-            EMPTY_ROOT_HASH
-        } else {
-            calculate_withdrawals_root(withdrawals)
-        };
-        (withdrawals.to_vec(), root)
-    } else {
-        (vec![], EMPTY_ROOT_HASH)
-    };
+    let diff_withdrawals = if include_base_in_payload { withdrawals.to_vec() } else { vec![] };
 
-    // Construct header to compute block_hash
-    let header = BerachainHeader {
-        parent_hash: base.parent_hash,
-        ommers_hash: EMPTY_OMMER_ROOT_HASH,
-        beneficiary: base.fee_recipient,
-        state_root,
-        transactions_root,
-        receipts_root,
-        withdrawals_root: Some(withdrawals_root),
-        logs_bloom,
-        difficulty: U256::ZERO,
-        number: block_number,
-        gas_limit: base.gas_limit,
-        gas_used: tracker.cumulative_gas_used,
-        timestamp: base.timestamp,
-        mix_hash: base.prev_randao,
-        nonce: B64::ZERO,
-        base_fee_per_gas: Some(base.base_fee_per_gas.to::<u64>()),
-        blob_gas_used: None,
-        excess_blob_gas: None,
-        parent_beacon_block_root: Some(base.parent_beacon_block_root),
-        requests_hash: None,
-        prev_proposer_pubkey: base.prev_proposer_pubkey,
-        extra_data: base.extra_data.clone(),
-    };
-
-    let block_hash = header.hash_slow();
-
+    // Flashblocks just contain transactions, no computed roots
     let diff = BerachainFlashblockPayloadDiff {
-        state_root,
-        receipts_root,
-        logs_bloom,
-        gas_used: tracker.cumulative_gas_used,
-        block_hash,
         transactions: tracker.interval_transactions.clone(),
         withdrawals: diff_withdrawals,
-        withdrawals_root,
-        blob_gas_used: None,
     };
 
-    let diff_hash = compute_diff_hash(
-        state_root,
-        receipts_root,
-        logs_bloom.as_slice(),
-        tracker.cumulative_gas_used,
-        block_hash,
-        &tracker.interval_transactions,
-    );
-    let signature = signer.sign_flashblock(block_number, payload_id, index, diff_hash);
+    // Sign over transactions hash
+    let tx_hash = compute_transactions_hash(&tracker.interval_transactions);
+    let signature = signer.sign_flashblock(block_number, payload_id, index, tx_hash);
 
     let flashblock = BerachainFlashblockPayload {
         payload_id,
@@ -673,7 +557,6 @@ fn emit_flashblock(
                 payload_id = %payload_id,
                 index,
                 block_number,
-                block_hash = %block_hash,
                 transactions = tracker.interval_transactions.len(),
                 subscribers = count,
                 is_last,

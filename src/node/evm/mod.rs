@@ -8,7 +8,7 @@ pub mod error;
 pub mod executor;
 pub mod receipt;
 
-pub use builder::{BerachainBlockBuilder, FlashblockState};
+pub use builder::BerachainBlockBuilder;
 
 use crate::{
     evm::BerachainEvmFactory,

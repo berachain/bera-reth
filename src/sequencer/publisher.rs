@@ -6,9 +6,10 @@ use std::{
     io,
     net::SocketAddr,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
+    time::Duration,
 };
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -19,8 +20,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 /// Capacity for the flashblock broadcast channel.
-/// At ~200ms intervals, 64 messages allows ~12.8 seconds of buffering for slow clients.
-const FLASHBLOCK_CHANNEL_CAPACITY: usize = 64;
+const FLASHBLOCK_CHANNEL_CAPACITY: usize = 20;
+
+/// Maximum concurrent WebSocket connections.
+const MAX_CONNECTIONS: usize = 256;
+
+/// Timeout for WebSocket handshake.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// WebSocket publisher that broadcasts flashblocks to all connected clients.
 #[derive(Debug)]
@@ -88,6 +94,10 @@ impl WebSocketPublisher {
                 result = listener.accept() => {
                     match result {
                         Ok((stream, addr)) => {
+                            if self.subscriber_count.load(Ordering::Relaxed) >= MAX_CONNECTIONS {
+                                warn!(target: "sequencer::publisher", %addr, "connection limit reached");
+                                continue;
+                            }
                             let rx = self.sender.subscribe();
                             let count = self.subscriber_count.clone();
                             let conn_cancel = cancel.clone();
@@ -116,7 +126,9 @@ async fn handle_connection(
     subscriber_count: Arc<AtomicUsize>,
     cancel: CancellationToken,
 ) -> eyre::Result<()> {
-    let ws_stream = accept_async(stream).await?;
+    let ws_stream = tokio::time::timeout(HANDSHAKE_TIMEOUT, accept_async(stream))
+        .await
+        .map_err(|_| eyre::eyre!("handshake timeout"))??;
     let (mut write, mut read) = ws_stream.split();
 
     subscriber_count.fetch_add(1, Ordering::Relaxed);

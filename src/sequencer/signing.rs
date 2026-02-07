@@ -4,7 +4,7 @@
 //! `message = keccak256(domain || block_number || payload_id || index || diff_hash)`
 //! where `domain = keccak256("BerachainPreconf-v1" || chain_id)`
 
-use alloy_primitives::{keccak256, B256};
+use alloy_primitives::{B256, keccak256};
 use blst::min_pk::{PublicKey, SecretKey, Signature};
 use reth::rpc::types::engine::PayloadId;
 use std::path::Path;
@@ -73,8 +73,8 @@ impl FlashblockSigner {
             )));
         }
 
-        let secret_key = SecretKey::from_bytes(&key_bytes)
-            .map_err(|_| SigningError::InvalidSecretKey)?;
+        let secret_key =
+            SecretKey::from_bytes(&key_bytes).map_err(|_| SigningError::InvalidSecretKey)?;
 
         Ok(Self::new(secret_key, chain_id))
     }
@@ -98,13 +98,8 @@ impl FlashblockSigner {
         index: u64,
         diff_hash: B256,
     ) -> BlsSignature {
-        let message = compute_signing_message(
-            self.domain,
-            block_number,
-            payload_id,
-            index,
-            diff_hash,
-        );
+        let message =
+            compute_signing_message(self.domain, block_number, payload_id, index, diff_hash);
 
         let signature = self.secret_key.sign(&message, BLS_DST, &[]);
         signature.to_bytes()
@@ -120,22 +115,13 @@ impl FlashblockSigner {
         index: u64,
         diff_hash: B256,
     ) -> Result<bool, SigningError> {
-        let pk = PublicKey::from_bytes(public_key)
-            .map_err(|_| SigningError::InvalidPublicKey)?;
-        let sig = Signature::from_bytes(signature)
-            .map_err(|_| SigningError::InvalidSignature)?;
+        let pk = PublicKey::from_bytes(public_key).map_err(|_| SigningError::InvalidPublicKey)?;
+        let sig = Signature::from_bytes(signature).map_err(|_| SigningError::InvalidSignature)?;
 
         let domain = compute_domain(chain_id);
         let message = compute_signing_message(domain, block_number, payload_id, index, diff_hash);
 
-        let result = sig.verify(
-            true,
-            &message,
-            BLS_DST,
-            &[],
-            &pk,
-            true,
-        );
+        let result = sig.verify(true, &message, BLS_DST, &[], &pk, true);
 
         Ok(result == blst::BLST_ERROR::BLST_SUCCESS)
     }
@@ -166,23 +152,13 @@ fn compute_signing_message(
     keccak256(&data).0
 }
 
-/// Compute the hash of a flashblock diff for signing.
-pub fn compute_diff_hash(
-    state_root: B256,
-    receipts_root: B256,
-    logs_bloom: &[u8],
-    gas_used: u64,
-    block_hash: B256,
-    transactions: &[impl AsRef<[u8]>],
-) -> B256 {
+/// Compute the hash of flashblock transactions for signing.
+pub fn compute_transactions_hash(transactions: &[impl AsRef<[u8]>]) -> B256 {
     let mut data = Vec::new();
-    data.extend_from_slice(state_root.as_slice());
-    data.extend_from_slice(receipts_root.as_slice());
-    data.extend_from_slice(logs_bloom);
-    data.extend_from_slice(&gas_used.to_be_bytes());
-    data.extend_from_slice(block_hash.as_slice());
     for tx in transactions {
-        data.extend_from_slice(tx.as_ref());
+        let tx_bytes = tx.as_ref();
+        data.extend_from_slice(&(tx_bytes.len() as u64).to_be_bytes());
+        data.extend_from_slice(tx_bytes);
     }
     keccak256(&data)
 }
@@ -191,31 +167,31 @@ pub fn compute_diff_hash(
 mod tests {
     use super::*;
 
-    fn test_secret_key() -> SecretKey {
+    const CHAIN_ID: u64 = 80094;
+    const BLOCK_NUMBER: u64 = 100;
+    const INDEX: u64 = 0;
+
+    fn test_signer() -> FlashblockSigner {
         let seed = [1u8; 32];
-        SecretKey::key_gen(&seed, &[]).unwrap()
+        FlashblockSigner::new(SecretKey::key_gen(&seed, &[]).unwrap(), CHAIN_ID)
     }
 
     #[test]
     fn test_sign_and_verify() {
-        let chain_id = 80094;
-        let signer = FlashblockSigner::new(test_secret_key(), chain_id);
-
-        let block_number = 100;
+        let signer = test_signer();
         let payload_id = PayloadId::new([1u8; 8]);
-        let index = 0;
-        let diff_hash = B256::repeat_byte(0x42);
+        let tx_hash = B256::repeat_byte(0x42);
 
-        let signature = signer.sign_flashblock(block_number, payload_id, index, diff_hash);
+        let signature = signer.sign_flashblock(BLOCK_NUMBER, payload_id, INDEX, tx_hash);
 
         let valid = FlashblockSigner::verify(
             &signer.public_key_bytes(),
             &signature,
-            chain_id,
-            block_number,
+            CHAIN_ID,
+            BLOCK_NUMBER,
             payload_id,
-            index,
-            diff_hash,
+            INDEX,
+            tx_hash,
         )
         .unwrap();
 
@@ -224,26 +200,21 @@ mod tests {
 
     #[test]
     fn test_invalid_signature_fails_verification() {
-        let chain_id = 80094;
-        let signer = FlashblockSigner::new(test_secret_key(), chain_id);
-
-        let block_number = 100;
+        let signer = test_signer();
         let payload_id = PayloadId::new([1u8; 8]);
-        let index = 0;
-        let diff_hash = B256::repeat_byte(0x42);
+        let tx_hash = B256::repeat_byte(0x42);
 
-        let signature = signer.sign_flashblock(block_number, payload_id, index, diff_hash);
+        let signature = signer.sign_flashblock(BLOCK_NUMBER, payload_id, INDEX, tx_hash);
 
-        // Verify with wrong diff_hash should fail
-        let wrong_diff_hash = B256::repeat_byte(0x43);
+        let wrong_hash = B256::repeat_byte(0x43);
         let valid = FlashblockSigner::verify(
             &signer.public_key_bytes(),
             &signature,
-            chain_id,
-            block_number,
+            CHAIN_ID,
+            BLOCK_NUMBER,
             payload_id,
-            index,
-            wrong_diff_hash,
+            INDEX,
+            wrong_hash,
         )
         .unwrap();
 

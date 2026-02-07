@@ -6,7 +6,7 @@
 use crate::e2e::{setup_test_boilerplate, test_signer};
 use alloy_consensus::BlockHeader;
 use alloy_eips::eip2718::Encodable2718;
-use alloy_primitives::{Address, B256, Bloom, Bytes, U256};
+use alloy_primitives::{Address, B256, Bytes, U256};
 use alloy_provider::Provider;
 use bera_reth::{
     engine::validator::BerachainEngineValidatorBuilder,
@@ -57,17 +57,7 @@ fn create_test_flashblock(
         payload_id,
         index,
         base,
-        diff: BerachainFlashblockPayloadDiff {
-            state_root: B256::random(),
-            receipts_root: B256::random(),
-            logs_bloom: Bloom::default(),
-            gas_used: 21000,
-            block_hash: B256::random(),
-            transactions: vec![],
-            withdrawals: vec![],
-            withdrawals_root: B256::ZERO,
-            blob_gas_used: None,
-        },
+        diff: BerachainFlashblockPayloadDiff { transactions: vec![], withdrawals: vec![] },
         metadata: BerachainFlashblockPayloadMetadata { block_number },
         signature: [0u8; 96],
         is_last: false,
@@ -207,7 +197,6 @@ async fn test_rpc_returns_flashblock_pending_receipt() -> eyre::Result<()> {
     let payload_id = PayloadId::new([1u8; 8]);
     let mut fb0 = create_test_flashblock(0, next_block, payload_id, latest_hash, next_timestamp);
     fb0.diff.transactions = vec![tx_bytes];
-    fb0.diff.gas_used = 21000;
 
     // Inject the flashblock into the service via our mock stream.
     fb_tx.send(fb0).await?;

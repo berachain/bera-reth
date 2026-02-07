@@ -28,10 +28,6 @@ pub struct SequencerConfig {
 impl SequencerConfig {
     /// Create a new sequencer config with the required signer.
     pub fn new(interval_ms: u64, ws_addr: SocketAddr, signer: FlashblockSigner) -> Self {
-        Self {
-            interval: Duration::from_millis(interval_ms),
-            ws_addr,
-            signer: Arc::new(signer),
-        }
+        Self { interval: Duration::from_millis(interval_ms), ws_addr, signer: Arc::new(signer) }
     }
 }
