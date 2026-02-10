@@ -48,7 +48,10 @@ use reth_transaction_pool::{
     error::InvalidPoolTransactionError,
 };
 use std::{
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 use tracing::{debug, info, trace, warn};
@@ -127,6 +130,7 @@ pub struct FlashblockPayloadBuilder<Pool, Client> {
     sequencer_config: SequencerConfig,
     publisher: Arc<WebSocketPublisher>,
     deadline: Duration,
+    payload_requested: Arc<AtomicBool>,
 }
 
 impl<Pool: Clone, Client: Clone> Clone for FlashblockPayloadBuilder<Pool, Client> {
@@ -139,6 +143,7 @@ impl<Pool: Clone, Client: Clone> Clone for FlashblockPayloadBuilder<Pool, Client
             sequencer_config: self.sequencer_config.clone(),
             publisher: self.publisher.clone(),
             deadline: self.deadline,
+            payload_requested: self.payload_requested.clone(),
         }
     }
 }
@@ -154,7 +159,16 @@ impl<Pool, Client> FlashblockPayloadBuilder<Pool, Client> {
         publisher: Arc<WebSocketPublisher>,
         deadline: Duration,
     ) -> Self {
-        Self { client, pool, evm_config, builder_config, sequencer_config, publisher, deadline }
+        Self {
+            client,
+            pool,
+            evm_config,
+            builder_config,
+            sequencer_config,
+            publisher,
+            deadline,
+            payload_requested: Arc::new(AtomicBool::new(false)),
+        }
     }
 }
 
@@ -170,6 +184,7 @@ where
         &self,
         args: BuildArguments<Self::Attributes, BerachainBuiltPayload>,
     ) -> Result<BuildOutcome<BerachainBuiltPayload>, PayloadBuilderError> {
+        self.payload_requested.store(false, Ordering::Relaxed);
         build_flashblock_payload(
             self.evm_config.clone(),
             self.client.clone(),
@@ -178,6 +193,7 @@ where
             self.sequencer_config.clone(),
             self.publisher.clone(),
             self.deadline,
+            self.payload_requested.clone(),
             args,
             |attributes| self.pool.best_transactions_with_attributes(attributes),
         )
@@ -187,6 +203,7 @@ where
         &self,
         _args: BuildArguments<Self::Attributes, Self::BuiltPayload>,
     ) -> MissingPayloadBehaviour<Self::BuiltPayload> {
+        self.payload_requested.store(true, Ordering::Relaxed);
         MissingPayloadBehaviour::AwaitInProgress
     }
 
@@ -240,6 +257,7 @@ fn build_flashblock_payload<Client, Pool, F>(
     sequencer_config: SequencerConfig,
     publisher: Arc<WebSocketPublisher>,
     deadline: Duration,
+    payload_requested: Arc<AtomicBool>,
     args: BuildArguments<BerachainPayloadBuilderAttributes, BerachainBuiltPayload>,
     best_txs: F,
 ) -> Result<BuildOutcome<BerachainBuiltPayload>, PayloadBuilderError>
@@ -248,7 +266,7 @@ where
     Pool: TransactionPool<Transaction: PoolTransaction<Consensus = BerachainTxEnvelope>>,
     F: FnOnce(BestTransactionsAttributes) -> BestTransactionsIter<Pool>,
 {
-    let BuildArguments { mut cached_reads, config, cancel, best_payload: _ } = args;
+    let BuildArguments { mut cached_reads, config, cancel: _, best_payload: _ } = args;
     let PayloadConfig { parent_header, attributes } = config;
 
     let state_provider = client.state_by_block_hash(parent_header.hash())?;
@@ -353,9 +371,7 @@ where
     // Empty flashblocks serve as heartbeats, allowing subscribers to detect liveness and
     // track the current state even when no transactions are being processed.
     loop {
-        // Check if cancelled (getPayload called).
-        // TODO: detect orphaned builds on new forkchoiceUpdated.
-        if cancel.is_cancelled() {
+        if payload_requested.load(Ordering::Relaxed) {
             info!(
                 target: "sequencer::builder",
                 id = %payload_id,
