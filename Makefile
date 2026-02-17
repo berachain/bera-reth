@@ -50,6 +50,17 @@ docker-build-debug: ## Fast debug build using Docker multistage (no cross-compil
 	docker build --file Dockerfile.debug --tag $(DOCKER_IMAGE_NAME):debug \
 		--build-arg COMMIT=$(GIT_SHA) \
 		--build-arg VERSION=$(GIT_TAG) \
+		--build-arg BUILD_PROFILE=$(PROFILE) \
+		.
+
+.PHONY: docker-build-debug-profiling
+docker-build-debug-profiling: ## Build profiling-friendly debug image (frame pointers + debuginfo) for flamegraphs.
+	@echo "Building profiling debug Docker image..."
+	docker build --file Dockerfile.debug --tag $(DOCKER_IMAGE_NAME):debug-profiling \
+		--build-arg COMMIT=$(GIT_SHA) \
+		--build-arg VERSION=$(GIT_TAG) \
+		--build-arg BUILD_PROFILE=$(PROFILE) \
+		--build-arg RUSTFLAGS="-C force-frame-pointers=yes -C debuginfo=1 -C symbol-mangling-version=v0" \
 		.
 
 .PHONY: docker-build-push-nightly
