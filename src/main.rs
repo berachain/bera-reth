@@ -8,12 +8,14 @@ use bera_reth::{
     consensus::BerachainBeaconConsensus,
     evm::BerachainEvmFactory,
     node::{BerachainNode, evm::config::BerachainEvmConfig},
+    rpc::{BerachainAddOns, BerachainEthApiBuilder},
     sequencer::{
         FlashblockPayloadServiceBuilder, FlashblockSigner, SequencerConfig, WebSocketPublisher,
     },
     version::init_bera_version,
 };
 use clap::Parser;
+use jsonrpsee::client_transport::ws::Url;
 use reth::CliRunner;
 use reth_chainspec::EthChainSpec;
 use reth_ethereum_cli::Cli;
@@ -40,6 +42,10 @@ pub struct SequencerArgs {
     /// Path to BLS secret key file for signing flashblocks (hex-encoded 32-byte key)
     #[arg(long)]
     pub flashblock_signing_key: Option<PathBuf>,
+
+    /// WebSocket URL for subscribing to flashblocks from a sequencer (e.g., ws://sequencer:8548)
+    #[arg(long)]
+    pub flashblocks_url: Option<Url>,
 }
 
 fn main() {
@@ -120,9 +126,22 @@ fn main() {
                     ws_cancel.cancel();
                     result
                 } else {
-                    info!(target: "reth::cli", "Launching Berachain node");
-                    let NodeHandle { node: _node, node_exit_future } =
-                        builder.node(BerachainNode::default()).launch_with_debug_capabilities().await?;
+                    if let Some(ref url) = extra_args.flashblocks_url {
+                        info!(target: "reth::cli", %url, "Launching Berachain node with flashblocks");
+                    } else {
+                        info!(target: "reth::cli", "Launching Berachain node");
+                    }
+
+                    let eth_api_builder = BerachainEthApiBuilder::default()
+                        .with_flashblocks_url(extra_args.flashblocks_url);
+                    let berachain_node = BerachainNode::default();
+
+                    let NodeHandle { node: _node, node_exit_future } = builder
+                        .with_types::<BerachainNode>()
+                        .with_components(berachain_node.components_builder())
+                        .with_add_ons(BerachainAddOns::new(eth_api_builder))
+                        .launch_with_debug_capabilities()
+                        .await?;
 
                     node_exit_future.await
                 }

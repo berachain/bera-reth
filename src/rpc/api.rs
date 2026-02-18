@@ -5,7 +5,7 @@ use crate::{
     transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE},
 };
 use alloy_consensus::{BlockHeader, Transaction};
-use alloy_eips::eip2930::AccessList;
+use alloy_eips::{BlockId, BlockNumberOrTag, eip2930::AccessList};
 use alloy_network::{
     BuildResult, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
 };
@@ -21,10 +21,11 @@ use reth::{
         pool::{BlockingTaskGuard, BlockingTaskPool},
     },
 };
+use reth_chain_state::BlockState;
 use reth_optimism_flashblocks::{FlashBlockBuildInfo, FlashblocksListeners, PendingFlashBlock};
-use reth_primitives_traits::{Recovered, WithEncoded};
+use reth_primitives_traits::{BlockBody, Recovered, RecoveredBlock, WithEncoded};
 use reth_rpc_eth_api::{
-    EthApiTypes, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
+    EthApiTypes, FromEthApiError, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
     helpers::{
         Call, EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, LoadBlock,
         LoadFee, LoadPendingBlock, LoadReceipt, LoadState, LoadTransaction, SpawnBlocking, Trace,
@@ -33,8 +34,9 @@ use reth_rpc_eth_api::{
 };
 use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
-    builder::config::PendingBlockKind, error::FromEvmError,
+    block::BlockAndReceipts, builder::config::PendingBlockKind, error::FromEvmError,
 };
+use reth_storage_api::{BlockIdReader, BlockReader, StateProviderBox, StateProviderFactory};
 use reth_transaction_pool::PoolPooledTx;
 use std::{sync::Arc, time::Duration};
 use tokio::time;
@@ -580,6 +582,43 @@ where
     EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
+    #[allow(clippy::manual_async_fn)]
+    fn block_transaction_count(
+        &self,
+        block_id: BlockId,
+    ) -> impl Future<Output = Result<Option<usize>, Self::Error>> + Send {
+        async move {
+            if (block_id.is_latest() || block_id.is_pending()) &&
+                let Ok(Some(pending)) = self.pending_flashblock().await
+            {
+                return Ok(Some(pending.block().body().transaction_count()));
+            }
+
+            if block_id.is_pending() {
+                return Ok(self
+                    .provider()
+                    .pending_block()
+                    .map_err(Into::<EthApiError>::into)?
+                    .map(|block| block.body().transaction_count()));
+            }
+
+            let block_hash = match self
+                .provider()
+                .block_hash_for_id(block_id)
+                .map_err(Into::<EthApiError>::into)?
+            {
+                Some(block_hash) => block_hash,
+                None => return Ok(None),
+            };
+
+            Ok(self
+                .cache()
+                .get_recovered_block(block_hash)
+                .await
+                .map_err(Into::<EthApiError>::into)?
+                .map(|b| b.body().transaction_count()))
+        }
+    }
 }
 
 impl<N, Rpc> LoadBlock for BerachainApi<N, Rpc>
@@ -588,6 +627,52 @@ where
     N: RpcNodeCore,
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
+    #[allow(clippy::manual_async_fn, clippy::collapsible_if)]
+    fn recovered_block(
+        &self,
+        block_id: BlockId,
+    ) -> impl Future<
+        Output = Result<
+            Option<Arc<RecoveredBlock<<Self::Provider as BlockReader>::Block>>>,
+            Self::Error,
+        >,
+    > + Send {
+        async move {
+            // Serve flashblock for both "latest" and "pending" when available
+            if block_id.is_latest() || block_id.is_pending() {
+                if self.pending_flashblock().await.ok().flatten().is_some() {
+                    if let Some(pending) = self.local_pending_block().await? {
+                        return Ok(Some(pending.block));
+                    }
+                }
+            }
+
+            // Default pending fallback: CL-provided block, then locally built
+            if block_id.is_pending() {
+                if let Some(pending_block) =
+                    self.provider().pending_block().map_err(Self::Error::from_eth_err)?
+                {
+                    return Ok(Some(Arc::new(pending_block)));
+                }
+
+                return match self.local_pending_block().await? {
+                    Some(pending) => Ok(Some(pending.block)),
+                    None => Ok(None),
+                };
+            }
+
+            let block_hash = match self
+                .provider()
+                .block_hash_for_id(block_id)
+                .map_err(Self::Error::from_eth_err)?
+            {
+                Some(block_hash) => block_hash,
+                None => return Ok(None),
+            };
+
+            self.cache().get_recovered_block(block_hash).await.map_err(Self::Error::from_eth_err)
+        }
+    }
 }
 
 impl<N, Rpc> EthCall for BerachainApi<N, Rpc>
@@ -661,6 +746,30 @@ where
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
     Self: LoadPendingBlock,
 {
+    #[allow(clippy::manual_async_fn, clippy::collapsible_if)]
+    fn state_at_block_id_or_latest(
+        &self,
+        block_id: Option<BlockId>,
+    ) -> impl Future<Output = Result<StateProviderBox, Self::Error>> + Send
+    where
+        Self: SpawnBlocking,
+    {
+        async move {
+            let should_use_flashblock = block_id.is_none_or(|id| id.is_latest() || id.is_pending());
+
+            if should_use_flashblock {
+                if let Ok(Some(state)) = self.local_pending_state().await {
+                    return Ok(state);
+                }
+            }
+
+            if let Some(block_id) = block_id {
+                self.state_at_block_id(block_id).await
+            } else {
+                Ok(self.latest_state()?)
+            }
+        }
+    }
 }
 
 impl<N, Rpc> LoadFee for BerachainApi<N, Rpc>
@@ -677,6 +786,25 @@ where
     #[inline]
     fn fee_history_cache(&self) -> &FeeHistoryCache<ProviderHeader<N::Provider>> {
         self.inner.fee_history_cache()
+    }
+
+    #[allow(clippy::manual_async_fn)]
+    fn gas_price(&self) -> impl Future<Output = Result<U256, Self::Error>> + Send {
+        async move {
+            let suggested_tip = LoadFee::suggested_priority_fee(self).await?;
+
+            let base_fee = if let Ok(Some(pending)) = self.pending_flashblock().await {
+                pending.block().base_fee_per_gas().unwrap_or_default()
+            } else {
+                self.provider()
+                    .latest_header()
+                    .map_err(Into::<EthApiError>::into)?
+                    .and_then(|h| h.base_fee_per_gas())
+                    .unwrap_or_default()
+            };
+
+            Ok(suggested_tip + U256::from(base_fee))
+        }
     }
 }
 
@@ -699,5 +827,44 @@ where
     #[inline]
     fn pending_block_kind(&self) -> PendingBlockKind {
         self.inner.pending_block_kind()
+    }
+
+    async fn local_pending_state(&self) -> Result<Option<StateProviderBox>, Self::Error>
+    where
+        Self: SpawnBlocking,
+    {
+        let Ok(Some(pending_block)) = self.pending_flashblock().await else {
+            return Ok(None);
+        };
+
+        let latest_historical = self
+            .provider()
+            .history_by_block_hash(pending_block.block().parent_hash())
+            .map_err(Into::<EthApiError>::into)?;
+
+        let state = BlockState::from(pending_block);
+
+        Ok(Some(Box::new(state.state_provider(latest_historical)) as StateProviderBox))
+    }
+
+    async fn local_pending_block(
+        &self,
+    ) -> Result<Option<BlockAndReceipts<Self::Primitives>>, Self::Error> {
+        if let Ok(Some(pending)) = self.pending_flashblock().await {
+            return Ok(Some(pending.into_block_and_receipts()));
+        }
+
+        let latest = self
+            .provider()
+            .latest_header()?
+            .ok_or(EthApiError::HeaderNotFound(BlockNumberOrTag::Latest.into()))?;
+
+        let latest = self
+            .cache()
+            .get_block_and_receipts(latest.hash())
+            .await
+            .map_err(Into::<EthApiError>::into)?
+            .map(|(block, receipts)| BlockAndReceipts { block, receipts });
+        Ok(latest)
     }
 }
