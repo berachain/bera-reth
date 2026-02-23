@@ -13,7 +13,10 @@ use bera_reth::{
     version::init_bera_version,
 };
 use clap::Parser;
-use reth::{CliRunner, chainspec::{ChainSpecProvider, EthChainSpec}};
+use reth::{
+    CliRunner,
+    chainspec::{ChainSpecProvider, EthChainSpec},
+};
 use reth_ethereum_cli::Cli;
 use reth_node_builder::NodeHandle;
 use std::sync::Arc;

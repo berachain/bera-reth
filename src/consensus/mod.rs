@@ -134,8 +134,8 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
             for receipt in &result.receipts {
                 for log in &receipt.logs {
                     // Check if this is a Transfer event (first topic is the event signature)
-                    if log.topics().first() == Some(&TRANSFER_EVENT_SIGNATURE) &&
-                        log.topics().len() >= 3
+                    if log.topics().first() == Some(&TRANSFER_EVENT_SIGNATURE)
+                        && log.topics().len() >= 3
                     {
                         // Transfer event has indexed from (topics[1]) and to (topics[2]) addresses
                         let from_addr = Address::from_word(log.topics()[1]);
@@ -143,8 +143,8 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
 
                         // Check if BEX vault is involved in the transfer (block all BEX vault
                         // transfers)
-                        if let Some(bex_vault) = bex_vault_address &&
-                            (from_addr == bex_vault || to_addr == bex_vault)
+                        if let Some(bex_vault) = bex_vault_address
+                            && (from_addr == bex_vault || to_addr == bex_vault)
                         {
                             return Err(ConsensusError::Other(
                                 BerachainExecutionError::Prague3BexVaultTransfer {
@@ -196,8 +196,8 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
                 for log in &receipt.logs {
                     // Check if this log is from the BEX vault and is an InternalBalanceChanged
                     // event
-                    if log.address == bex_vault_address &&
-                        log.topics().first() == Some(&INTERNAL_BALANCE_CHANGED_SIGNATURE)
+                    if log.address == bex_vault_address
+                        && log.topics().first() == Some(&INTERNAL_BALANCE_CHANGED_SIGNATURE)
                     {
                         return Err(ConsensusError::Other(
                             BerachainExecutionError::Prague3BexVaultEvent {
