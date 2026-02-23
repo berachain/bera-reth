@@ -52,7 +52,7 @@ fn main() {
 
                 if let Some(service) = new_pog_service(
                     node.network.clone(),
-                    "http://localhost:8545".to_string(),
+                    node.provider.clone(),
                     node.provider.chain_spec().chain().id(),
                     node.config.datadir().data_dir().to_path_buf(),
                     &args,

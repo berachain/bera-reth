@@ -1,12 +1,12 @@
 use crate::args::BerachainArgs;
 use alloy_consensus::{EthereumTxEnvelope, SignableTransaction, TxEip1559};
 use alloy_primitives::{Bytes, TxHash, U256};
-use alloy_provider::{Provider, ProviderBuilder};
 use alloy_signer::SignerSync;
 use alloy_signer_local::PrivateKeySigner;
 use eyre::Result;
 use rand::Rng;
 use rand::seq::SliceRandom;
+use reth::providers::{BlockReaderIdExt, StateProviderFactory};
 use reth_eth_wire_types::NetworkPrimitives;
 use reth_network::NetworkHandle;
 use reth_network_api::{Peers, ReputationChangeKind};
@@ -79,7 +79,12 @@ where
         + Send
         + Sync
         + 'static,
-    P: Provider + Clone + Send + Sync + 'static,
+    P: StateProviderFactory
+        + BlockReaderIdExt<Header = crate::primitives::BerachainHeader>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
 {
     pub async fn new_with_provider(
         network: Network,
@@ -95,10 +100,7 @@ where
         let signer = private_key_hex.parse::<PrivateKeySigner>()?;
         let address = signer.address();
 
-        let nonce = provider
-            .get_transaction_count(address)
-            .block_id(alloy_rpc_types::BlockId::latest())
-            .await?;
+        let nonce = provider.latest()?.account_nonce(&address)?.unwrap_or_default();
 
         let db_path = datadir.join("proof_of_gossip.db");
         let db = Connection::open(&db_path)?;
@@ -193,12 +195,11 @@ where
 
     async fn tick(&mut self) -> Result<()> {
         if let Some(canary) = &self.active {
-            if let Some(receipt) = self.provider.get_transaction_receipt(canary.tx_hash).await? {
+            if let Some(_receipt) = self.provider.receipt_by_hash(canary.tx_hash)? {
                 warn!(
                     target: "bera_reth::pog",
                     peer_id = %canary.peer_id,
                     tx_hash = %canary.tx_hash,
-                    block = receipt.block_number,
                     "Canary transaction confirmed"
                 );
 
@@ -230,11 +231,7 @@ where
                 self.active = None;
 
                 let address = self.signer.address();
-                self.nonce = self
-                    .provider
-                    .get_transaction_count(address)
-                    .block_id(alloy_rpc_types::BlockId::latest())
-                    .await?;
+                self.nonce = self.provider.latest()?.account_nonce(&address)?.unwrap_or_default();
 
                 warn!(
                     target: "bera_reth::pog",
@@ -285,11 +282,11 @@ where
 
         let latest_block = self
             .provider
-            .get_block_by_number(alloy_rpc_types::BlockNumberOrTag::Latest)
-            .await?
-            .ok_or_else(|| eyre::eyre!("Failed to fetch latest block"))?;
+            .latest_header()?
+            .ok_or_else(|| eyre::eyre!("Failed to fetch latest block header"))?
+            .into_header();
 
-        let base_fee = latest_block.header.base_fee_per_gas.unwrap_or(1_000_000_000);
+        let base_fee = latest_block.base_fee_per_gas.unwrap_or(1_000_000_000);
         let max_fee_per_gas = (base_fee as u128) * MAX_FEE_BUFFER_MULTIPLIER;
 
         let tx = TxEip1559 {
@@ -324,13 +321,13 @@ where
     }
 }
 
-pub async fn new_pog_service<Network>(
+pub async fn new_pog_service<Network, P>(
     network: Network,
-    provider_url: String,
+    provider: P,
     chain_id: u64,
     datadir: PathBuf,
     args: &BerachainArgs,
-) -> Result<Option<ProofOfGossipService<Network, impl Provider + Clone + Send + Sync + 'static>>>
+) -> Result<Option<ProofOfGossipService<Network, P>>>
 where
     Network: NetworkOps<
             Primitives: NetworkPrimitives<
@@ -340,8 +337,13 @@ where
         + Send
         + Sync
         + 'static,
+    P: StateProviderFactory
+        + BlockReaderIdExt<Header = crate::primitives::BerachainHeader>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
 {
-    let provider = ProviderBuilder::new().connect_http(provider_url.parse()?);
     ProofOfGossipService::new_with_provider(network, provider, chain_id, datadir, args).await
 }
 
