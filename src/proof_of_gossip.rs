@@ -9,7 +9,7 @@ use rand::seq::SliceRandom;
 use reth::providers::{BlockReaderIdExt, StateProviderFactory};
 use reth_eth_wire_types::NetworkPrimitives;
 use reth_network::NetworkHandle;
-use reth_network_api::{Peers, ReputationChangeKind};
+use reth_network_api::{NetworkInfo, Peers, ReputationChangeKind};
 use reth_network_peers::PeerId;
 use rusqlite::{Connection, params};
 use std::{
@@ -26,8 +26,9 @@ const MAX_FEE_BUFFER_MULTIPLIER: u128 = 2;
 const MIN_CANARY_VALUE: u64 = 1;
 const MAX_CANARY_VALUE: u64 = 1000;
 const LOOP_TICK_INTERVAL_SECS: u64 = 10;
+const LATE_CONFIRMATION_TRACK_WINDOW_SECS: u64 = 900;
 
-pub trait NetworkOps: Peers {
+pub trait NetworkOps: Peers + NetworkInfo {
     type Primitives: NetworkPrimitives;
 
     fn send_transactions(
@@ -55,6 +56,11 @@ struct ActiveCanary {
     sent_at: Instant,
 }
 
+struct TimedOutCanary {
+    peer_id: PeerId,
+    timed_out_at: Instant,
+}
+
 pub struct ProofOfGossipService<Network, P> {
     network: Network,
     provider: P,
@@ -65,8 +71,10 @@ pub struct ProofOfGossipService<Network, P> {
     failure_counts: HashMap<PeerId, u32>,
     reputation_penalty: i32,
     active: Option<ActiveCanary>,
+    timed_out_canaries: HashMap<TxHash, TimedOutCanary>,
     nonce: u64,
     timeout: Duration,
+    warned_syncing: bool,
 }
 
 impl<Network, P> ProofOfGossipService<Network, P>
@@ -121,8 +129,8 @@ where
         db.pragma_update(None, "journal_mode", "WAL")?;
 
         let confirmed_peers: HashSet<PeerId> = {
-            let mut stmt =
-                db.prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result = 'confirmed'")?;
+            let mut stmt = db
+                .prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result IN ('confirmed', 'late_confirmed')")?;
             stmt.query_map([], |row| {
                 let peer_id_str: String = row.get(0)?;
                 Ok(peer_id_str.parse::<PeerId>().map_err(|e| {
@@ -176,8 +184,10 @@ where
             failure_counts,
             reputation_penalty: -(args.pog_reputation_penalty.abs()),
             active: None,
+            timed_out_canaries: HashMap::new(),
             nonce,
             timeout: Duration::from_secs(args.pog_timeout),
+            warned_syncing: false,
         }))
     }
 
@@ -194,6 +204,26 @@ where
     }
 
     async fn tick(&mut self) -> Result<()> {
+        self.reconcile_late_confirmations()?;
+
+        if self.network.is_syncing() {
+            if !self.warned_syncing {
+                warn!(target: "bera_reth::pog", "PoG paused while node is syncing");
+                self.warned_syncing = true;
+            }
+
+            if let Some(active) = self.active.as_mut() {
+                active.sent_at = Instant::now();
+            }
+
+            return Ok(());
+        }
+
+        if self.warned_syncing {
+            warn!(target: "bera_reth::pog", "PoG resumed after sync");
+            self.warned_syncing = false;
+        }
+
         if let Some(canary) = &self.active {
             if let Some(_receipt) = self.provider.receipt_by_hash(canary.tx_hash)? {
                 warn!(
@@ -206,7 +236,7 @@ where
                 self.persist_result(&canary.peer_id, canary.tx_hash, "confirmed")?;
                 self.confirmed_peers.insert(canary.peer_id);
                 self.active = None;
-                self.nonce += 1;
+                self.refresh_nonce()?;
             } else if canary.sent_at.elapsed() > self.timeout {
                 warn!(
                     target: "bera_reth::pog",
@@ -228,10 +258,13 @@ where
                 );
                 self.network.disconnect_peer(canary.peer_id);
 
+                self.timed_out_canaries.insert(
+                    canary.tx_hash,
+                    TimedOutCanary { peer_id: canary.peer_id, timed_out_at: Instant::now() },
+                );
                 self.active = None;
 
-                let address = self.signer.address();
-                self.nonce = self.provider.latest()?.account_nonce(&address)?.unwrap_or_default();
+                self.refresh_nonce()?;
 
                 warn!(
                     target: "bera_reth::pog",
@@ -249,6 +282,7 @@ where
             let chosen_peer = eligible.choose(&mut rand::thread_rng()).map(|p| p.remote_id);
 
             if let Some(peer_id) = chosen_peer {
+                self.refresh_nonce()?;
                 let canary_tx = self.create_canary_tx().await?;
                 let tx_hash = *canary_tx.hash();
 
@@ -272,6 +306,42 @@ where
                 );
             }
         }
+
+        Ok(())
+    }
+
+    fn refresh_nonce(&mut self) -> Result<()> {
+        let address = self.signer.address();
+        self.nonce = self.provider.latest()?.account_nonce(&address)?.unwrap_or_default();
+        Ok(())
+    }
+
+    fn reconcile_late_confirmations(&mut self) -> Result<()> {
+        if self.timed_out_canaries.is_empty() {
+            return Ok(());
+        }
+
+        let mut confirmed_late = Vec::new();
+        for (&tx_hash, timed_out) in &self.timed_out_canaries {
+            if self.provider.receipt_by_hash(tx_hash)?.is_some() {
+                confirmed_late.push((tx_hash, timed_out.peer_id));
+            }
+        }
+
+        for (tx_hash, peer_id) in confirmed_late {
+            self.persist_result(&peer_id, tx_hash, "late_confirmed")?;
+            self.confirmed_peers.insert(peer_id);
+            self.timed_out_canaries.remove(&tx_hash);
+            warn!(
+                target: "bera_reth::pog",
+                peer_id = %peer_id,
+                tx_hash = %tx_hash,
+                "Timed-out canary confirmed later; marked peer as confirmed"
+            );
+        }
+
+        let window = Duration::from_secs(LATE_CONFIRMATION_TRACK_WINDOW_SECS);
+        self.timed_out_canaries.retain(|_, timed_out| timed_out.timed_out_at.elapsed() <= window);
 
         Ok(())
     }
