@@ -27,6 +27,7 @@ const MIN_CANARY_VALUE: u64 = 1;
 const MAX_CANARY_VALUE: u64 = 1000;
 const LOOP_TICK_INTERVAL_SECS: u64 = 10;
 const LATE_CONFIRMATION_TRACK_WINDOW_SECS: u64 = 900;
+const STARTUP_DELAY_SECS: u64 = 60;
 
 pub trait NetworkOps: Peers + NetworkInfo {
     type Primitives: NetworkPrimitives;
@@ -75,6 +76,7 @@ pub struct ProofOfGossipService<Network, P> {
     nonce: u64,
     timeout: Duration,
     warned_syncing: bool,
+    started_at: Instant,
 }
 
 impl<Network, P> ProofOfGossipService<Network, P>
@@ -107,8 +109,6 @@ where
 
         let signer = private_key_hex.parse::<PrivateKeySigner>()?;
         let address = signer.address();
-
-        let nonce = provider.latest()?.account_nonce(&address)?.unwrap_or_default();
 
         let db_path = datadir.join("proof_of_gossip.db");
         let db = Connection::open(&db_path)?;
@@ -168,7 +168,6 @@ where
         warn!(
             target: "bera_reth::pog",
             address = %address,
-            nonce = nonce,
             confirmed_peers = confirmed_peers.len(),
             failed_peers = failure_counts.len(),
             "Proof of Gossip service initialized"
@@ -185,9 +184,10 @@ where
             reputation_penalty: -(args.pog_reputation_penalty.abs()),
             active: None,
             timed_out_canaries: HashMap::new(),
-            nonce,
+            nonce: 0,
             timeout: Duration::from_secs(args.pog_timeout),
             warned_syncing: false,
+            started_at: Instant::now(),
         }))
     }
 
@@ -204,6 +204,10 @@ where
     }
 
     async fn tick(&mut self) -> Result<()> {
+        if self.started_at.elapsed() < Duration::from_secs(STARTUP_DELAY_SECS) {
+            return Ok(());
+        }
+
         self.reconcile_late_confirmations()?;
 
         if self.network.is_syncing() {
@@ -312,7 +316,11 @@ where
 
     fn refresh_nonce(&mut self) -> Result<()> {
         let address = self.signer.address();
-        self.nonce = self.provider.latest()?.account_nonce(&address)?.unwrap_or_default();
+        self.nonce = self
+            .provider
+            .latest()?
+            .account_nonce(&address)?
+            .ok_or_else(|| eyre::eyre!("PoG wallet {address} not found in state - is it funded?"))?;
         Ok(())
     }
 
@@ -356,7 +364,9 @@ where
             .ok_or_else(|| eyre::eyre!("Failed to fetch latest block header"))?
             .into_header();
 
-        let base_fee = latest_block.base_fee_per_gas.unwrap_or(1_000_000_000);
+        let base_fee = latest_block
+            .base_fee_per_gas
+            .ok_or_else(|| eyre::eyre!("Latest block has no base fee - pre-EIP-1559 chain?"))?;
         let max_fee_per_gas = (base_fee as u128) * MAX_FEE_BUFFER_MULTIPLIER;
 
         let tx = TxEip1559 {
@@ -381,7 +391,7 @@ where
     fn persist_result(&self, peer_id: &PeerId, tx_hash: TxHash, result: &str) -> Result<()> {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().map_err(|e| eyre::eyre!("PoG database lock poisoned: {e}"))?;
         db.execute(
             "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
             params![peer_id.to_string(), tx_hash.to_string(), result, timestamp],
