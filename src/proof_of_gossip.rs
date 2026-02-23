@@ -6,19 +6,20 @@ use alloy_signer::SignerSync;
 use alloy_signer_local::PrivateKeySigner;
 use eyre::Result;
 use rand::Rng;
+use rand::seq::SliceRandom;
 use reth_eth_wire_types::NetworkPrimitives;
 use reth_network::NetworkHandle;
-use reth_network_api::Peers;
+use reth_network_api::{Peers, ReputationChangeKind};
 use reth_network_peers::PeerId;
 use rusqlite::{Connection, params};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::time::sleep;
-use tracing::{debug, info, warn};
+use tracing::warn;
 
 const CANARY_GAS_LIMIT: u64 = 21000;
 const MAX_FEE_BUFFER_MULTIPLIER: u128 = 2;
@@ -28,14 +29,22 @@ const LOOP_TICK_INTERVAL_SECS: u64 = 10;
 
 pub trait NetworkOps: Peers {
     type Primitives: NetworkPrimitives;
-    
-    fn send_transactions(&self, peer_id: PeerId, msg: Vec<Arc<<Self::Primitives as NetworkPrimitives>::BroadcastedTransaction>>);
+
+    fn send_transactions(
+        &self,
+        peer_id: PeerId,
+        msg: Vec<Arc<<Self::Primitives as NetworkPrimitives>::BroadcastedTransaction>>,
+    );
 }
 
 impl<N: NetworkPrimitives> NetworkOps for NetworkHandle<N> {
     type Primitives = N;
-    
-    fn send_transactions(&self, peer_id: PeerId, msg: Vec<Arc<<Self::Primitives as NetworkPrimitives>::BroadcastedTransaction>>) {
+
+    fn send_transactions(
+        &self,
+        peer_id: PeerId,
+        msg: Vec<Arc<<Self::Primitives as NetworkPrimitives>::BroadcastedTransaction>>,
+    ) {
         NetworkHandle::send_transactions(self, peer_id, msg)
     }
 }
@@ -52,7 +61,9 @@ pub struct ProofOfGossipService<Network, P> {
     signer: PrivateKeySigner,
     chain_id: u64,
     db: Arc<Mutex<Connection>>,
-    tested_peers: HashSet<PeerId>,
+    confirmed_peers: HashSet<PeerId>,
+    failure_counts: HashMap<PeerId, u32>,
+    reputation_penalty: i32,
     active: Option<ActiveCanary>,
     nonce: u64,
     timeout: Duration,
@@ -60,7 +71,14 @@ pub struct ProofOfGossipService<Network, P> {
 
 impl<Network, P> ProofOfGossipService<Network, P>
 where
-    Network: NetworkOps<Primitives: NetworkPrimitives<BroadcastedTransaction = crate::transaction::BerachainTxEnvelope>> + Clone + Send + Sync + 'static,
+    Network: NetworkOps<
+            Primitives: NetworkPrimitives<
+                BroadcastedTransaction = crate::transaction::BerachainTxEnvelope,
+            >,
+        > + Clone
+        + Send
+        + Sync
+        + 'static,
     P: Provider + Clone + Send + Sync + 'static,
 {
     pub async fn new_with_provider(
@@ -77,14 +95,18 @@ where
         let signer = private_key_hex.parse::<PrivateKeySigner>()?;
         let address = signer.address();
 
-        let nonce = provider.get_transaction_count(address).block_id(alloy_rpc_types::BlockId::latest()).await?;
+        let nonce = provider
+            .get_transaction_count(address)
+            .block_id(alloy_rpc_types::BlockId::latest())
+            .await?;
 
         let db_path = datadir.join("proof_of_gossip.db");
         let db = Connection::open(&db_path)?;
-        
+
         db.execute(
-            "CREATE TABLE IF NOT EXISTS tested_peers (
-                peer_id TEXT PRIMARY KEY,
+            "CREATE TABLE IF NOT EXISTS peer_tests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                peer_id TEXT NOT NULL,
                 tx_hash TEXT NOT NULL,
                 result TEXT NOT NULL,
                 tested_at INTEGER NOT NULL
@@ -92,31 +114,53 @@ where
             [],
         )?;
 
+        db.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])?;
+
         db.execute("PRAGMA journal_mode=WAL", [])?;
 
-        let tested_peers: HashSet<PeerId> = {
-            let mut stmt = db.prepare("SELECT peer_id FROM tested_peers")?;
-            stmt
-                .query_map([], |row| {
-                    let peer_id_str: String = row.get(0)?;
-                    Ok(peer_id_str.parse::<PeerId>().map_err(|e| {
+        let confirmed_peers: HashSet<PeerId> = {
+            let mut stmt =
+                db.prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result = 'confirmed'")?;
+            stmt.query_map([], |row| {
+                let peer_id_str: String = row.get(0)?;
+                Ok(peer_id_str.parse::<PeerId>().map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?)
+            })?
+            .collect::<Result<_, _>>()?
+        };
+
+        let failure_counts: HashMap<PeerId, u32> = {
+            let mut stmt = db.prepare("SELECT peer_id, COUNT(*) FROM peer_tests WHERE result = 'timeout' GROUP BY peer_id")?;
+            stmt.query_map([], |row| {
+                let peer_id_str: String = row.get(0)?;
+                let count: u32 = row.get(1)?;
+                Ok((
+                    peer_id_str.parse::<PeerId>().map_err(|e| {
                         rusqlite::Error::FromSqlConversionFailure(
                             0,
                             rusqlite::types::Type::Text,
                             Box::new(e),
                         )
-                    })?)
-                })?
-                .collect::<Result<_, _>>()?
+                    })?,
+                    count,
+                ))
+            })?
+            .collect::<Result<_, _>>()?
         };
 
         let db = Arc::new(Mutex::new(db));
 
-        info!(
+        warn!(
             target: "bera_reth::pog",
             address = %address,
             nonce = nonce,
-            tested_peers = tested_peers.len(),
+            confirmed_peers = confirmed_peers.len(),
+            failed_peers = failure_counts.len(),
             "Proof of Gossip service initialized"
         );
 
@@ -126,7 +170,9 @@ where
             signer,
             chain_id,
             db,
-            tested_peers,
+            confirmed_peers,
+            failure_counts,
+            reputation_penalty: -(args.pog_reputation_penalty.abs()),
             active: None,
             nonce,
             timeout: Duration::from_secs(args.pog_timeout),
@@ -134,7 +180,7 @@ where
     }
 
     pub async fn run(mut self) {
-        info!(target: "bera_reth::pog", "Starting Proof of Gossip service loop");
+        warn!(target: "bera_reth::pog", "Starting Proof of Gossip service loop");
 
         loop {
             if let Err(e) = self.tick().await {
@@ -148,7 +194,7 @@ where
     async fn tick(&mut self) -> Result<()> {
         if let Some(canary) = &self.active {
             if let Some(receipt) = self.provider.get_transaction_receipt(canary.tx_hash).await? {
-                info!(
+                warn!(
                     target: "bera_reth::pog",
                     peer_id = %canary.peer_id,
                     tx_hash = %canary.tx_hash,
@@ -157,7 +203,7 @@ where
                 );
 
                 self.persist_result(&canary.peer_id, canary.tx_hash, "confirmed")?;
-                self.tested_peers.insert(canary.peer_id);
+                self.confirmed_peers.insert(canary.peer_id);
                 self.active = None;
                 self.nonce += 1;
             } else if canary.sent_at.elapsed() > self.timeout {
@@ -170,30 +216,48 @@ where
                 );
 
                 self.persist_result(&canary.peer_id, canary.tx_hash, "timeout")?;
-                self.tested_peers.insert(canary.peer_id);
+
+                let failure_count =
+                    self.failure_counts.entry(canary.peer_id).and_modify(|c| *c += 1).or_insert(1);
+                let failure_count = *failure_count;
+
+                self.network.reputation_change(
+                    canary.peer_id,
+                    ReputationChangeKind::Other(self.reputation_penalty),
+                );
+                self.network.disconnect_peer(canary.peer_id);
+
                 self.active = None;
 
                 let address = self.signer.address();
-                self.nonce = self.provider.get_transaction_count(address).block_id(alloy_rpc_types::BlockId::latest()).await?;
-                
-                debug!(
+                self.nonce = self
+                    .provider
+                    .get_transaction_count(address)
+                    .block_id(alloy_rpc_types::BlockId::latest())
+                    .await?;
+
+                warn!(
                     target: "bera_reth::pog",
                     nonce = self.nonce,
+                    failure_count = failure_count,
                     "Re-queried on-chain nonce after timeout"
                 );
             }
         } else {
             let all_peers = self.network.get_all_peers().await?;
-            
-            if let Some(peer_info) = all_peers.iter().find(|p| !self.tested_peers.contains(&p.remote_id)) {
-                let peer_id = peer_info.remote_id;
-                
+
+            let eligible: Vec<_> =
+                all_peers.iter().filter(|p| !self.confirmed_peers.contains(&p.remote_id)).collect();
+
+            let chosen_peer = eligible.choose(&mut rand::thread_rng()).map(|p| p.remote_id);
+
+            if let Some(peer_id) = chosen_peer {
                 let canary_tx = self.create_canary_tx().await?;
                 let tx_hash = *canary_tx.hash();
 
                 self.network.send_transactions(peer_id, vec![Arc::new(canary_tx)]);
 
-                info!(
+                warn!(
                     target: "bera_reth::pog",
                     peer_id = %peer_id,
                     tx_hash = %tx_hash,
@@ -201,16 +265,12 @@ where
                     "Sent canary transaction to peer"
                 );
 
-                self.active = Some(ActiveCanary {
-                    tx_hash,
-                    peer_id,
-                    sent_at: Instant::now(),
-                });
+                self.active = Some(ActiveCanary { tx_hash, peer_id, sent_at: Instant::now() });
             } else {
-                debug!(
+                warn!(
                     target: "bera_reth::pog",
                     connected_peers = all_peers.len(),
-                    tested_peers = self.tested_peers.len(),
+                    confirmed_peers = self.confirmed_peers.len(),
                     "No untested peers available"
                 );
             }
@@ -223,9 +283,11 @@ where
         let to = self.signer.address();
         let value = rand::thread_rng().gen_range(MIN_CANARY_VALUE..=MAX_CANARY_VALUE);
 
-        let latest_block = self.provider.get_block_by_number(
-            alloy_rpc_types::BlockNumberOrTag::Latest,
-        ).await?.ok_or_else(|| eyre::eyre!("Failed to fetch latest block"))?;
+        let latest_block = self
+            .provider
+            .get_block_by_number(alloy_rpc_types::BlockNumberOrTag::Latest)
+            .await?
+            .ok_or_else(|| eyre::eyre!("Failed to fetch latest block"))?;
 
         let base_fee = latest_block.header.base_fee_per_gas.unwrap_or(1_000_000_000);
         let max_fee_per_gas = (base_fee as u128) * MAX_FEE_BUFFER_MULTIPLIER;
@@ -250,13 +312,11 @@ where
     }
 
     fn persist_result(&self, peer_id: &PeerId, tx_hash: TxHash, result: &str) -> Result<()> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_secs() as i64;
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
         let db = self.db.lock().unwrap();
         db.execute(
-            "INSERT INTO tested_peers (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
             params![peer_id.to_string(), tx_hash.to_string(), result, timestamp],
         )?;
 
@@ -272,7 +332,14 @@ pub async fn new_pog_service<Network>(
     args: &BerachainArgs,
 ) -> Result<Option<ProofOfGossipService<Network, impl Provider + Clone + Send + Sync + 'static>>>
 where
-    Network: NetworkOps<Primitives: NetworkPrimitives<BroadcastedTransaction = crate::transaction::BerachainTxEnvelope>> + Clone + Send + Sync + 'static,
+    Network: NetworkOps<
+            Primitives: NetworkPrimitives<
+                BroadcastedTransaction = crate::transaction::BerachainTxEnvelope,
+            >,
+        > + Clone
+        + Send
+        + Sync
+        + 'static,
 {
     let provider = ProviderBuilder::new().connect_http(provider_url.parse()?);
     ProofOfGossipService::new_with_provider(network, provider, chain_id, datadir, args).await
@@ -348,33 +415,22 @@ mod tests {
     #[test]
     fn test_sqlite_persistence() {
         let temp_file = NamedTempFile::new().unwrap();
-        let db_path = temp_file.path();
-
-        let db = Connection::open(db_path).unwrap();
-        db.execute(
-            "CREATE TABLE IF NOT EXISTS tested_peers (
-                peer_id TEXT PRIMARY KEY,
-                tx_hash TEXT NOT NULL,
-                result TEXT NOT NULL,
-                tested_at INTEGER NOT NULL
-            )",
-            [],
-        )
-        .unwrap();
+        let db = create_test_db(temp_file.path());
 
         let peer_id = PeerId::random();
         let tx_hash = B256::random();
         let timestamp = 1234567890i64;
 
         db.execute(
-            "INSERT INTO tested_peers (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
             params![peer_id.to_string(), tx_hash.to_string(), "confirmed", timestamp],
         )
         .unwrap();
 
-        let mut stmt = db.prepare("SELECT peer_id, tx_hash, result, tested_at FROM tested_peers").unwrap();
+        let mut stmt =
+            db.prepare("SELECT peer_id, tx_hash, result, tested_at FROM peer_tests").unwrap();
         let mut rows = stmt.query([]).unwrap();
-        
+
         let row = rows.next().unwrap().unwrap();
         let loaded_peer_id: String = row.get(0).unwrap();
         let loaded_tx_hash: String = row.get(1).unwrap();
@@ -390,47 +446,29 @@ mod tests {
     #[test]
     fn test_sqlite_reload() {
         let temp_file = NamedTempFile::new().unwrap();
-        let db_path = temp_file.path();
 
         {
-            let db = Connection::open(db_path).unwrap();
+            let db = create_test_db(temp_file.path());
             db.execute(
-                "CREATE TABLE IF NOT EXISTS tested_peers (
-                    peer_id TEXT PRIMARY KEY,
-                    tx_hash TEXT NOT NULL,
-                    result TEXT NOT NULL,
-                    tested_at INTEGER NOT NULL
-                )",
-                [],
-            )
-            .unwrap();
-
-            let peer_id = PeerId::random();
-            let tx_hash = B256::random();
-            
-            db.execute(
-                "INSERT INTO tested_peers (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
-                params![peer_id.to_string(), tx_hash.to_string(), "timeout", 9999999],
+                "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+                params![PeerId::random().to_string(), B256::random().to_string(), "timeout", 9999999],
             )
             .unwrap();
         }
 
-        let db = Connection::open(db_path).unwrap();
-        let mut stmt = db.prepare("SELECT peer_id FROM tested_peers").unwrap();
+        let db = Connection::open(temp_file.path()).unwrap();
+        let mut stmt = db.prepare("SELECT peer_id FROM peer_tests").unwrap();
         let count = stmt.query_map([], |_| Ok(())).unwrap().count();
-        
+
         assert_eq!(count, 1);
     }
 
-    #[test]
-    fn test_sqlite_duplicate_peer_id() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let db_path = temp_file.path();
-
-        let db = Connection::open(db_path).unwrap();
+    fn create_test_db(path: &std::path::Path) -> Connection {
+        let db = Connection::open(path).unwrap();
         db.execute(
-            "CREATE TABLE IF NOT EXISTS tested_peers (
-                peer_id TEXT PRIMARY KEY,
+            "CREATE TABLE IF NOT EXISTS peer_tests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                peer_id TEXT NOT NULL,
                 tx_hash TEXT NOT NULL,
                 result TEXT NOT NULL,
                 tested_at INTEGER NOT NULL
@@ -438,22 +476,135 @@ mod tests {
             [],
         )
         .unwrap();
+        db
+    }
+
+    #[test]
+    fn test_confirmed_excludes_from_eligible() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = create_test_db(temp_file.path());
+
+        let confirmed = PeerId::random();
+        let timed_out = PeerId::random();
+
+        db.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![confirmed.to_string(), B256::random().to_string(), "confirmed", 1000],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![timed_out.to_string(), B256::random().to_string(), "timeout", 2000],
+        )
+        .unwrap();
+
+        let confirmed_peers: HashSet<PeerId> = {
+            let mut stmt = db
+                .prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result = 'confirmed'")
+                .unwrap();
+            stmt.query_map([], |row| {
+                let s: String = row.get(0)?;
+                Ok(s.parse::<PeerId>().unwrap())
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+        };
+
+        assert!(confirmed_peers.contains(&confirmed));
+        assert!(!confirmed_peers.contains(&timed_out));
+    }
+
+    #[test]
+    fn test_failure_count_reload() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = create_test_db(temp_file.path());
+
+        let peer_a = PeerId::random();
+        let peer_b = PeerId::random();
+        let peer_c = PeerId::random();
+
+        for _ in 0..3 {
+            db.execute(
+                "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+                params![peer_a.to_string(), B256::random().to_string(), "timeout", 1000],
+            ).unwrap();
+        }
+
+        db.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![peer_b.to_string(), B256::random().to_string(), "timeout", 2000],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![peer_b.to_string(), B256::random().to_string(), "confirmed", 3000],
+        )
+        .unwrap();
+
+        db.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![peer_c.to_string(), B256::random().to_string(), "confirmed", 4000],
+        )
+        .unwrap();
+
+        let failure_counts: HashMap<PeerId, u32> = {
+            let mut stmt = db.prepare("SELECT peer_id, COUNT(*) FROM peer_tests WHERE result = 'timeout' GROUP BY peer_id").unwrap();
+            stmt.query_map([], |row| {
+                let s: String = row.get(0)?;
+                let count: u32 = row.get(1)?;
+                Ok((s.parse::<PeerId>().unwrap(), count))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+        };
+
+        let confirmed_peers: HashSet<PeerId> = {
+            let mut stmt = db
+                .prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result = 'confirmed'")
+                .unwrap();
+            stmt.query_map([], |row| {
+                let s: String = row.get(0)?;
+                Ok(s.parse::<PeerId>().unwrap())
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+        };
+
+        assert_eq!(failure_counts.get(&peer_a), Some(&3));
+        assert_eq!(failure_counts.get(&peer_b), Some(&1));
+        assert_eq!(failure_counts.get(&peer_c), None);
+
+        assert!(!confirmed_peers.contains(&peer_a));
+        assert!(confirmed_peers.contains(&peer_b));
+        assert!(confirmed_peers.contains(&peer_c));
+    }
+
+    #[test]
+    fn test_sqlite_multiple_results_per_peer() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = create_test_db(temp_file.path());
 
         let peer_id = PeerId::random();
         let tx_hash1 = B256::random();
         let tx_hash2 = B256::random();
 
         db.execute(
-            "INSERT INTO tested_peers (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
-            params![peer_id.to_string(), tx_hash1.to_string(), "confirmed", 1111111],
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![peer_id.to_string(), tx_hash1.to_string(), "timeout", 1111111],
         )
         .unwrap();
 
-        let result = db.execute(
-            "INSERT INTO tested_peers (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
-            params![peer_id.to_string(), tx_hash2.to_string(), "timeout", 2222222],
-        );
+        db.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![peer_id.to_string(), tx_hash2.to_string(), "confirmed", 2222222],
+        )
+        .unwrap();
 
-        assert!(result.is_err());
+        let mut stmt = db.prepare("SELECT COUNT(*) FROM peer_tests WHERE peer_id = ?1").unwrap();
+        let count: i64 = stmt.query_row(params![peer_id.to_string()], |row| row.get(0)).unwrap();
+        assert_eq!(count, 2);
     }
 }
