@@ -118,7 +118,7 @@ where
 
         db.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])?;
 
-        db.execute("PRAGMA journal_mode=WAL", [])?;
+        db.pragma_update(None, "journal_mode", "WAL")?;
 
         let confirmed_peers: HashSet<PeerId> = {
             let mut stmt =
