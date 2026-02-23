@@ -2,6 +2,7 @@
 //!
 //! Built on Reth SDK with Ethereum compatibility plus Prague1 hardfork for minimum base fee.
 
+pub mod args;
 pub mod chainspec;
 pub mod consensus;
 pub mod engine;
@@ -11,6 +12,7 @@ pub mod hardforks;
 pub mod node;
 pub mod pool;
 pub mod primitives;
+pub mod proof_of_gossip;
 pub mod rpc;
 pub mod transaction;
 pub mod version;
