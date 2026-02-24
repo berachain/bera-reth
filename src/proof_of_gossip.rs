@@ -131,6 +131,7 @@ where
 struct ActiveCanary {
     tx_hash: TxHash,
     peer_id: PeerId,
+    nonce: u64,
     sent_at: Instant,
 }
 
@@ -165,10 +166,7 @@ fn pog_metrics() -> &'static PoGMetrics {
 
 fn load_pog_signer(private_key_path: &Path) -> PogResult<PrivateKeySigner> {
     let private_key = fs::read_to_string(private_key_path).map_err(|err| {
-        eyre::eyre!(
-            "Failed to read PoG private key file {}: {err}",
-            private_key_path.display()
-        )
+        eyre::eyre!("Failed to read PoG private key file {}: {err}", private_key_path.display())
     })?;
     let private_key = private_key.trim();
 
@@ -185,6 +183,10 @@ fn load_pog_signer(private_key_path: &Path) -> PogResult<PrivateKeySigner> {
             private_key_path.display()
         ))
     })
+}
+
+const fn normalize_reputation_penalty(input: i32) -> i32 {
+    if input > 0 { -input } else { input }
 }
 
 pub struct ProofOfGossipService<Network, Provider> {
@@ -307,7 +309,7 @@ where
             db,
             confirmed_peers,
             failure_counts,
-            reputation_penalty: -(args.pog_reputation_penalty.abs()),
+            reputation_penalty: normalize_reputation_penalty(args.pog_reputation_penalty),
             active: None,
             timed_out_canaries: HashMap::new(),
             nonce: 0,
@@ -340,6 +342,7 @@ where
 
     async fn tick(&mut self) -> PogResult<()> {
         self.reconcile_late_confirmations()?;
+        self.drop_invalidated_active_canary()?;
 
         if self.network.is_syncing() {
             if !self.warned_syncing {
@@ -432,12 +435,26 @@ where
             if let Some(peer) = eligible.choose(&mut rand::thread_rng()) {
                 let peer_id = peer.remote_id;
                 self.refresh_nonce()?;
-                let base_fee = self.provider.latest_base_fee()?;
+                let base_fee = match self.provider.latest_base_fee() {
+                    Ok(base_fee) => base_fee,
+                    Err(err) => {
+                        warn!(
+                            target: "bera_reth::pog",
+                            peer_id = %peer_id,
+                            error = %err,
+                            fallback_base_fee = CANARY_PRIORITY_FEE_WEI,
+                            "Failed to fetch base fee, using fallback"
+                        );
+                        CANARY_PRIORITY_FEE_WEI
+                    }
+                };
                 let canary_tx =
                     create_canary_tx(&self.signer, self.nonce, self.chain_id, base_fee)?;
                 let tx_hash = *canary_tx.hash();
+                let canary_nonce = self.nonce;
 
                 self.network.send_canary(peer_id, canary_tx);
+                self.nonce = self.nonce.saturating_add(1);
                 pog_metrics().canaries_sent_total.increment(1);
                 pog_metrics().inflight_canaries.set(1.0);
 
@@ -445,11 +462,16 @@ where
                     target: "bera_reth::pog",
                     peer_id = %peer_id,
                     tx_hash = %tx_hash,
-                    nonce = self.nonce,
+                    nonce = canary_nonce,
                     "Sent canary transaction to peer"
                 );
 
-                self.active = Some(ActiveCanary { tx_hash, peer_id, sent_at: Instant::now() });
+                self.active = Some(ActiveCanary {
+                    tx_hash,
+                    peer_id,
+                    nonce: canary_nonce,
+                    sent_at: Instant::now(),
+                });
             }
         }
 
@@ -459,7 +481,19 @@ where
     fn check_funding(&mut self) -> PogResult<bool> {
         let address = self.signer.address();
         let balance = self.provider.account_balance(&address)?;
-        let base_fee = self.provider.latest_base_fee().unwrap_or(CANARY_PRIORITY_FEE_WEI);
+        let base_fee = match self.provider.latest_base_fee() {
+            Ok(base_fee) => base_fee,
+            Err(err) => {
+                warn!(
+                    target: "bera_reth::pog",
+                    address = %address,
+                    error = %err,
+                    fallback_base_fee = CANARY_PRIORITY_FEE_WEI,
+                    "Failed to fetch base fee for funding check, using fallback"
+                );
+                CANARY_PRIORITY_FEE_WEI
+            }
+        };
         let max_fee = (base_fee * MAX_FEE_BUFFER_MULTIPLIER).max(CANARY_PRIORITY_FEE_WEI + 1);
         let min_balance =
             U256::from(CANARY_GAS_LIMIT) * U256::from(max_fee) + U256::from(MAX_CANARY_VALUE);
@@ -488,6 +522,31 @@ where
                 Ok(false)
             }
         }
+    }
+
+    fn drop_invalidated_active_canary(&mut self) -> PogResult<()> {
+        let Some(active) = self.active.as_ref() else {
+            return Ok(());
+        };
+
+        let Some(on_chain_nonce) = self.provider.account_nonce(&self.signer.address())? else {
+            return Ok(());
+        };
+
+        if on_chain_nonce > active.nonce {
+            info!(
+                target: "bera_reth::pog",
+                tx_hash = %active.tx_hash,
+                active_nonce = active.nonce,
+                on_chain_nonce = on_chain_nonce,
+                "Discarding in-flight canary invalidated by nonce advance"
+            );
+            self.active = None;
+            self.nonce = on_chain_nonce;
+            pog_metrics().inflight_canaries.set(0.0);
+        }
+
+        Ok(())
     }
 
     fn refresh_nonce(&mut self) -> PogResult<()> {
@@ -649,6 +708,14 @@ mod tests {
         let key_file = write_key_file("not-a-private-key");
         let err = load_pog_signer(key_file.path()).unwrap_err();
         assert!(err.to_string().contains("Invalid PoG private key in"));
+    }
+
+    #[test]
+    fn test_normalize_reputation_penalty_handles_i32_min() {
+        assert_eq!(normalize_reputation_penalty(100), -100);
+        assert_eq!(normalize_reputation_penalty(-100), -100);
+        assert_eq!(normalize_reputation_penalty(0), 0);
+        assert_eq!(normalize_reputation_penalty(i32::MIN), i32::MIN);
     }
 
     #[test]
@@ -888,6 +955,7 @@ mod tests {
         nonce: Option<u64>,
         balance: Option<U256>,
         base_fee: u128,
+        fail_base_fee: bool,
     }
 
     struct MockProvider {
@@ -902,6 +970,7 @@ mod tests {
                     nonce: Some(nonce),
                     balance: Some(balance),
                     base_fee,
+                    fail_base_fee: false,
                 }),
             }
         }
@@ -912,6 +981,14 @@ mod tests {
 
         fn set_balance(&self, balance: U256) {
             self.state.lock().unwrap().balance = Some(balance);
+        }
+
+        fn set_nonce(&self, nonce: u64) {
+            self.state.lock().unwrap().nonce = Some(nonce);
+        }
+
+        fn set_base_fee_error(&self, fail: bool) {
+            self.state.lock().unwrap().fail_base_fee = fail;
         }
     }
 
@@ -929,7 +1006,11 @@ mod tests {
         }
 
         fn latest_base_fee(&self) -> PogResult<u128> {
-            Ok(self.state.lock().unwrap().base_fee)
+            let state = self.state.lock().unwrap();
+            if state.fail_base_fee {
+                return Err(eyre::eyre!("mock base fee error").into());
+            }
+            Ok(state.base_fee)
         }
     }
 
@@ -1079,6 +1160,46 @@ mod tests {
         assert_eq!(canaries.len(), 1);
         assert_eq!(canaries[0].0, peer);
         assert!(service.active.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_tick_discards_invalidated_active_canary_without_penalty() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let peer = PeerId::random();
+        let network = MockNetwork::new(vec![peer]);
+        let provider = MockProvider::new(7, ONE_BERA, 1_000_000_000);
+        let mut service = make_service(network, provider, temp_file.path());
+
+        service.tick().await.unwrap();
+        let active = service.active.as_ref().unwrap();
+        assert_eq!(active.nonce, 7);
+        assert_eq!(service.nonce, 8);
+
+        service.provider.set_nonce(9);
+        service.tick().await.unwrap();
+
+        let active = service.active.as_ref().unwrap();
+        assert_eq!(active.nonce, 9);
+        assert_eq!(service.nonce, 10);
+        assert_eq!(service.network.sent_canaries().len(), 2);
+        assert!(service.network.reputation_changes().is_empty());
+        assert!(service.network.disconnected_peers().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_tick_uses_base_fee_fallback_when_provider_errors() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let peer = PeerId::random();
+        let network = MockNetwork::new(vec![peer]);
+        let provider = MockProvider::new(0, ONE_BERA, 1_000_000_000);
+        let mut service = make_service(network, provider, temp_file.path());
+        service.provider.set_base_fee_error(true);
+
+        service.tick().await.unwrap();
+
+        let canaries = service.network.sent_canaries();
+        assert_eq!(canaries.len(), 1);
+        assert_eq!(canaries[0].0, peer);
     }
 
     #[tokio::test]
