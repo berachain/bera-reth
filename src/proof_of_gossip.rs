@@ -9,8 +9,8 @@ use rand::seq::SliceRandom;
 use reth::providers::{BlockReaderIdExt, StateProviderFactory};
 use reth_eth_wire_types::NetworkPrimitives;
 use reth_metrics::{
-    metrics::{Counter, Gauge},
     Metrics, metrics,
+    metrics::{Counter, Gauge},
 };
 use reth_network::NetworkHandle;
 use reth_network_api::{NetworkInfo, PeerInfo, Peers, ReputationChangeKind};
