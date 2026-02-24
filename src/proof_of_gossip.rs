@@ -3,8 +3,7 @@ use alloy_consensus::{EthereumTxEnvelope, SignableTransaction, TxEip1559};
 use alloy_primitives::{Address, Bytes, TxHash, U256};
 use alloy_signer::SignerSync;
 use alloy_signer_local::PrivateKeySigner;
-use rand::Rng;
-use rand::seq::SliceRandom;
+use rand::{Rng, seq::SliceRandom};
 use reth::providers::{BlockReaderIdExt, StateProviderFactory};
 use reth_eth_wire_types::NetworkPrimitives;
 use reth_metrics::{

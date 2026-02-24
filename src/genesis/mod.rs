@@ -98,12 +98,12 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                     (Some(prague1_config), Some(prague2_config)) => {
                         // Both configured - validate Prague2 comes at or after Prague1
                         if prague2_config.time < prague1_config.time {
-                            return Err(BerachainConfigError::InvalidConfig(
-                                serde_json::Error::io(std::io::Error::new(
+                            return Err(BerachainConfigError::InvalidConfig(serde_json::Error::io(
+                                std::io::Error::new(
                                     std::io::ErrorKind::InvalidData,
                                     "Prague2 hardfork must activate at or after Prague1 hardfork",
-                                )),
-                            ));
+                                ),
+                            )));
                         }
                     }
                     _ => {

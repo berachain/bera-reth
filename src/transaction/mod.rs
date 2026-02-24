@@ -138,13 +138,13 @@ impl PoLTx {
     }
 
     fn rlp_payload_length(&self) -> usize {
-        self.chain_id.length()
-            + self.from.length()
-            + self.to.length()
-            + self.nonce.length()
-            + self.gas_limit.length()
-            + self.gas_price.length()
-            + self.input.length()
+        self.chain_id.length() +
+            self.from.length() +
+            self.to.length() +
+            self.nonce.length() +
+            self.gas_limit.length() +
+            self.gas_price.length() +
+            self.input.length()
     }
 
     fn rlp_encoded_length(&self) -> usize {
