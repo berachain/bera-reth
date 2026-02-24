@@ -3,7 +3,6 @@ use alloy_consensus::{EthereumTxEnvelope, SignableTransaction, TxEip1559};
 use alloy_primitives::{Address, Bytes, TxHash, U256};
 use alloy_signer::SignerSync;
 use alloy_signer_local::PrivateKeySigner;
-use eyre::Result;
 use rand::Rng;
 use rand::seq::SliceRandom;
 use reth::providers::{BlockReaderIdExt, StateProviderFactory};
@@ -23,6 +22,7 @@ use std::{
     sync::{Arc, OnceLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use thiserror::Error;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
@@ -36,9 +36,30 @@ const LATE_CONFIRMATION_TRACK_WINDOW_SECS: u64 = 900;
 const MIN_FUNDING_BACKOFF_SECS: u64 = 30;
 const MAX_FUNDING_BACKOFF_SECS: u64 = 86400;
 
+#[derive(Debug, Error)]
+pub enum PogError {
+    #[error(transparent)]
+    Report(#[from] eyre::Report),
+}
+
+pub type PogResult<T> = std::result::Result<T, PogError>;
+
+trait IntoPogResult<T> {
+    fn into_pog(self) -> PogResult<T>;
+}
+
+impl<T, E> IntoPogResult<T> for std::result::Result<T, E>
+where
+    E: Into<eyre::Report>,
+{
+    fn into_pog(self) -> PogResult<T> {
+        self.map_err(|err| PogError::from(err.into()))
+    }
+}
+
 pub trait NetworkOps: Send + Sync {
     fn is_syncing(&self) -> bool;
-    fn get_all_peers(&self) -> impl Future<Output = Result<Vec<PeerInfo>>> + Send;
+    fn get_all_peers(&self) -> impl Future<Output = PogResult<Vec<PeerInfo>>> + Send;
     fn reputation_change(&self, peer_id: PeerId, kind: ReputationChangeKind);
     fn disconnect_peer(&self, peer: PeerId);
     fn send_canary(&self, peer_id: PeerId, tx: crate::transaction::BerachainTxEnvelope);
@@ -51,8 +72,8 @@ impl<N: NetworkPrimitives<BroadcastedTransaction = crate::transaction::Berachain
         NetworkInfo::is_syncing(self)
     }
 
-    async fn get_all_peers(&self) -> Result<Vec<PeerInfo>> {
-        Ok(Peers::get_all_peers(self).await?)
+    async fn get_all_peers(&self) -> PogResult<Vec<PeerInfo>> {
+        Peers::get_all_peers(self).await.into_pog()
     }
 
     fn reputation_change(&self, peer_id: PeerId, kind: ReputationChangeKind) {
@@ -69,10 +90,10 @@ impl<N: NetworkPrimitives<BroadcastedTransaction = crate::transaction::Berachain
 }
 
 pub trait PogProvider: Send + Sync {
-    fn receipt_exists(&self, hash: TxHash) -> Result<bool>;
-    fn account_nonce(&self, address: &Address) -> Result<Option<u64>>;
-    fn account_balance(&self, address: &Address) -> Result<Option<U256>>;
-    fn latest_base_fee(&self) -> Result<u128>;
+    fn receipt_exists(&self, hash: TxHash) -> PogResult<bool>;
+    fn account_nonce(&self, address: &Address) -> PogResult<Option<u64>>;
+    fn account_balance(&self, address: &Address) -> PogResult<Option<U256>>;
+    fn latest_base_fee(&self) -> PogResult<u128>;
 }
 
 impl<P> PogProvider for P
@@ -82,21 +103,22 @@ where
         + Send
         + Sync,
 {
-    fn receipt_exists(&self, hash: TxHash) -> Result<bool> {
-        Ok(self.receipt_by_hash(hash)?.is_some())
+    fn receipt_exists(&self, hash: TxHash) -> PogResult<bool> {
+        Ok(self.receipt_by_hash(hash).into_pog()?.is_some())
     }
 
-    fn account_nonce(&self, address: &Address) -> Result<Option<u64>> {
-        Ok(self.latest()?.account_nonce(address)?)
+    fn account_nonce(&self, address: &Address) -> PogResult<Option<u64>> {
+        Ok(self.latest().into_pog()?.account_nonce(address).into_pog()?)
     }
 
-    fn account_balance(&self, address: &Address) -> Result<Option<U256>> {
-        Ok(self.latest()?.account_balance(address)?)
+    fn account_balance(&self, address: &Address) -> PogResult<Option<U256>> {
+        Ok(self.latest().into_pog()?.account_balance(address).into_pog()?)
     }
 
-    fn latest_base_fee(&self) -> Result<u128> {
+    fn latest_base_fee(&self) -> PogResult<u128> {
         let header = self
-            .latest_header()?
+            .latest_header()
+            .into_pog()?
             .ok_or_else(|| eyre::eyre!("Failed to fetch latest block header"))?
             .into_header();
         let base_fee = header
@@ -120,19 +142,19 @@ struct TimedOutCanary {
 #[derive(Metrics)]
 #[metrics(scope = "bera_reth.pog")]
 struct PoGMetrics {
-    #[metric(describe = "Number of canary transactions sent")]
+    #[metric(describe = "Canary transactions sent")]
     canaries_sent_total: Counter,
-    #[metric(describe = "Number of canary transactions confirmed before timeout")]
+    #[metric(describe = "Canaries confirmed before timeout")]
     canary_confirmed_total: Counter,
-    #[metric(describe = "Number of canary transactions that timed out")]
+    #[metric(describe = "Canaries timed out")]
     canary_timeout_total: Counter,
-    #[metric(describe = "Number of timed-out canaries that later confirmed")]
+    #[metric(describe = "Timed-out canaries later confirmed")]
     canary_late_confirmed_total: Counter,
-    #[metric(describe = "Number of reputation penalties applied")]
+    #[metric(describe = "Reputation penalties applied")]
     penalties_total: Counter,
-    #[metric(describe = "Number of peer bans/disconnect actions applied")]
+    #[metric(describe = "Peer bans/disconnects")]
     bans_total: Counter,
-    #[metric(describe = "Number of currently active canaries")]
+    #[metric(describe = "Active canaries")]
     inflight_canaries: Gauge,
 }
 
@@ -170,16 +192,16 @@ where
         chain_id: u64,
         datadir: PathBuf,
         args: &BerachainArgs,
-    ) -> Result<Option<Self>> {
+    ) -> PogResult<Option<Self>> {
         let Some(private_key_hex) = &args.pog_private_key else {
             return Ok(None);
         };
 
-        let signer = private_key_hex.parse::<PrivateKeySigner>()?;
+        let signer = private_key_hex.parse::<PrivateKeySigner>().into_pog()?;
         let address = signer.address();
 
         let db_path = datadir.join("proof_of_gossip.db");
-        let db = Connection::open(&db_path)?;
+        let db = Connection::open(&db_path).into_pog()?;
 
         db.execute(
             "CREATE TABLE IF NOT EXISTS peer_tests (
@@ -190,16 +212,20 @@ where
                 tested_at INTEGER NOT NULL
             )",
             [],
-        )?;
+        )
+        .into_pog()?;
 
-        db.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])?;
+        db.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])
+            .into_pog()?;
 
-        db.pragma_update(None, "journal_mode", "WAL")?;
+        db.pragma_update(None, "journal_mode", "WAL").into_pog()?;
 
         let confirmed_peers: HashSet<PeerId> = {
-            let mut stmt = db.prepare(
+            let mut stmt = db
+                .prepare(
                 "SELECT DISTINCT peer_id FROM peer_tests WHERE result IN ('confirmed', 'late_confirmed')",
-            )?;
+            )
+                .into_pog()?;
             stmt.query_map([], |row| {
                 let peer_id_str: String = row.get(0)?;
                 peer_id_str.parse::<PeerId>().map_err(|e| {
@@ -209,14 +235,18 @@ where
                         Box::new(e),
                     )
                 })
-            })?
-            .collect::<Result<_, _>>()?
+            })
+            .into_pog()?
+            .collect::<Result<_, _>>()
+            .into_pog()?
         };
 
         let failure_counts: HashMap<PeerId, u32> = {
-            let mut stmt = db.prepare(
+            let mut stmt = db
+                .prepare(
                 "SELECT peer_id, COUNT(*) FROM peer_tests WHERE result = 'timeout' GROUP BY peer_id",
-            )?;
+            )
+                .into_pog()?;
             stmt.query_map([], |row| {
                 let peer_id_str: String = row.get(0)?;
                 let count: u32 = row.get(1)?;
@@ -230,8 +260,10 @@ where
                     })?,
                     count,
                 ))
-            })?
-            .collect::<Result<_, _>>()?
+            })
+            .into_pog()?
+            .collect::<Result<_, _>>()
+            .into_pog()?
         };
 
         info!(
@@ -282,7 +314,7 @@ where
         }
     }
 
-    async fn tick(&mut self) -> Result<()> {
+    async fn tick(&mut self) -> PogResult<()> {
         self.reconcile_late_confirmations()?;
 
         if self.network.is_syncing() {
@@ -400,7 +432,7 @@ where
         Ok(())
     }
 
-    fn check_funding(&mut self) -> Result<bool> {
+    fn check_funding(&mut self) -> PogResult<bool> {
         let address = self.signer.address();
         let balance = self.provider.account_balance(&address)?;
         let base_fee = self.provider.latest_base_fee().unwrap_or(CANARY_PRIORITY_FEE_WEI);
@@ -434,7 +466,7 @@ where
         }
     }
 
-    fn refresh_nonce(&mut self) -> Result<()> {
+    fn refresh_nonce(&mut self) -> PogResult<()> {
         let address = self.signer.address();
         self.nonce = self.provider.account_nonce(&address)?.ok_or_else(|| {
             eyre::eyre!("PoG wallet {address} not found in state - is it funded?")
@@ -442,7 +474,7 @@ where
         Ok(())
     }
 
-    fn reconcile_late_confirmations(&mut self) -> Result<()> {
+    fn reconcile_late_confirmations(&mut self) -> PogResult<()> {
         if self.timed_out_canaries.is_empty() {
             return Ok(());
         }
@@ -473,13 +505,14 @@ where
         Ok(())
     }
 
-    fn persist_result(&mut self, peer_id: &PeerId, tx_hash: TxHash, result: &str) -> Result<()> {
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+    fn persist_result(&mut self, peer_id: &PeerId, tx_hash: TxHash, result: &str) -> PogResult<()> {
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).into_pog()?.as_secs() as i64;
 
         self.db.execute(
             "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
             params![peer_id.to_string(), tx_hash.to_string(), result, timestamp],
-        )?;
+        )
+        .into_pog()?;
 
         Ok(())
     }
@@ -491,7 +524,7 @@ pub fn new_pog_service<Network, Provider>(
     chain_id: u64,
     datadir: PathBuf,
     args: &BerachainArgs,
-) -> Result<Option<ProofOfGossipService<Network, Provider>>>
+) -> PogResult<Option<ProofOfGossipService<Network, Provider>>>
 where
     Network: NetworkOps + 'static,
     Provider: PogProvider + 'static,
@@ -504,7 +537,7 @@ pub fn create_canary_tx(
     nonce: u64,
     chain_id: u64,
     base_fee: u128,
-) -> Result<crate::transaction::BerachainTxEnvelope> {
+) -> PogResult<crate::transaction::BerachainTxEnvelope> {
     let to = signer.address();
     let value = rand::thread_rng().gen_range(MIN_CANARY_VALUE..=MAX_CANARY_VALUE);
     let max_priority_fee_per_gas = CANARY_PRIORITY_FEE_WEI;
@@ -522,7 +555,7 @@ pub fn create_canary_tx(
         input: Bytes::default(),
     };
 
-    let signature = signer.sign_hash_sync(&tx.signature_hash())?;
+    let signature = signer.sign_hash_sync(&tx.signature_hash()).into_pog()?;
     let signed = tx.into_signed(signature);
     let eth_envelope = EthereumTxEnvelope::Eip1559(signed);
 
@@ -811,19 +844,19 @@ mod tests {
     }
 
     impl PogProvider for MockProvider {
-        fn receipt_exists(&self, hash: TxHash) -> Result<bool> {
+        fn receipt_exists(&self, hash: TxHash) -> PogResult<bool> {
             Ok(self.state.lock().unwrap().receipts.contains(&hash))
         }
 
-        fn account_nonce(&self, _address: &Address) -> Result<Option<u64>> {
+        fn account_nonce(&self, _address: &Address) -> PogResult<Option<u64>> {
             Ok(self.state.lock().unwrap().nonce)
         }
 
-        fn account_balance(&self, _address: &Address) -> Result<Option<U256>> {
+        fn account_balance(&self, _address: &Address) -> PogResult<Option<U256>> {
             Ok(self.state.lock().unwrap().balance)
         }
 
-        fn latest_base_fee(&self) -> Result<u128> {
+        fn latest_base_fee(&self) -> PogResult<u128> {
             Ok(self.state.lock().unwrap().base_fee)
         }
     }
@@ -877,7 +910,7 @@ mod tests {
             self.state.lock().unwrap().syncing
         }
 
-        async fn get_all_peers(&self) -> Result<Vec<PeerInfo>> {
+        async fn get_all_peers(&self) -> PogResult<Vec<PeerInfo>> {
             Ok(self.state.lock().unwrap().peers.clone())
         }
 
