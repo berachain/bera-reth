@@ -23,11 +23,11 @@ use tracing::warn;
 
 const CANARY_GAS_LIMIT: u64 = 21000;
 const MAX_FEE_BUFFER_MULTIPLIER: u128 = 2;
+const CANARY_PRIORITY_FEE_WEI: u128 = 1_000_000_000;
 const MIN_CANARY_VALUE: u64 = 1;
 const MAX_CANARY_VALUE: u64 = 1000;
 const LOOP_TICK_INTERVAL_SECS: u64 = 10;
 const LATE_CONFIRMATION_TRACK_WINDOW_SECS: u64 = 900;
-const STARTUP_DELAY_SECS: u64 = 60;
 
 pub trait NetworkOps: Peers + NetworkInfo {
     type Primitives: NetworkPrimitives;
@@ -76,7 +76,6 @@ pub struct ProofOfGossipService<Network, P> {
     nonce: u64,
     timeout: Duration,
     warned_syncing: bool,
-    started_at: Instant,
 }
 
 impl<Network, P> ProofOfGossipService<Network, P>
@@ -187,7 +186,6 @@ where
             nonce: 0,
             timeout: Duration::from_secs(args.pog_timeout),
             warned_syncing: false,
-            started_at: Instant::now(),
         }))
     }
 
@@ -204,10 +202,6 @@ where
     }
 
     async fn tick(&mut self) -> Result<()> {
-        if self.started_at.elapsed() < Duration::from_secs(STARTUP_DELAY_SECS) {
-            return Ok(());
-        }
-
         self.reconcile_late_confirmations()?;
 
         if self.network.is_syncing() {
@@ -367,14 +361,17 @@ where
         let base_fee = latest_block
             .base_fee_per_gas
             .ok_or_else(|| eyre::eyre!("Latest block has no base fee - pre-EIP-1559 chain?"))?;
-        let max_fee_per_gas = (base_fee as u128) * MAX_FEE_BUFFER_MULTIPLIER;
+        let max_priority_fee_per_gas = CANARY_PRIORITY_FEE_WEI;
+        // Ensure EIP-1559 invariants: max_fee_per_gas must be >= max_priority_fee_per_gas.
+        let max_fee_per_gas =
+            ((base_fee as u128) * MAX_FEE_BUFFER_MULTIPLIER).max(max_priority_fee_per_gas + 1);
 
         let tx = TxEip1559 {
             chain_id: self.chain_id,
             nonce: self.nonce,
             gas_limit: CANARY_GAS_LIMIT,
             max_fee_per_gas,
-            max_priority_fee_per_gas: 1_000_000_000,
+            max_priority_fee_per_gas,
             to: alloy_primitives::TxKind::Call(to),
             value: U256::from(value),
             access_list: Default::default(),
@@ -435,14 +432,15 @@ pub fn create_canary_tx(
 ) -> Result<crate::transaction::BerachainTxEnvelope> {
     let to = signer.address();
     let value = rand::thread_rng().gen_range(MIN_CANARY_VALUE..=MAX_CANARY_VALUE);
-    let max_fee_per_gas = base_fee * MAX_FEE_BUFFER_MULTIPLIER;
+    let max_priority_fee_per_gas = CANARY_PRIORITY_FEE_WEI;
+    let max_fee_per_gas = (base_fee * MAX_FEE_BUFFER_MULTIPLIER).max(max_priority_fee_per_gas + 1);
 
     let tx = TxEip1559 {
         chain_id,
         nonce,
         gas_limit: CANARY_GAS_LIMIT,
         max_fee_per_gas,
-        max_priority_fee_per_gas: 1_000_000_000,
+        max_priority_fee_per_gas,
         to: alloy_primitives::TxKind::Call(to),
         value: U256::from(value),
         access_list: Default::default(),
