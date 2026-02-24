@@ -226,16 +226,16 @@ impl TransactionBuilder<BerachainNetwork> for TransactionRequest {
     }
 
     fn can_submit(&self) -> bool {
-        self.from.is_some() &&
-            self.to.is_some() &&
-            self.gas.is_some() &&
-            (self.gas_price.is_some() || self.max_fee_per_gas.is_some())
+        self.from.is_some()
+            && self.to.is_some()
+            && self.gas.is_some()
+            && (self.gas_price.is_some() || self.max_fee_per_gas.is_some())
     }
 
     fn can_build(&self) -> bool {
-        self.to.is_some() &&
-            self.gas.is_some() &&
-            (self.gas_price.is_some() || self.max_fee_per_gas.is_some())
+        self.to.is_some()
+            && self.gas.is_some()
+            && (self.gas_price.is_some() || self.max_fee_per_gas.is_some())
     }
 
     fn output_tx_type(&self) -> <BerachainNetwork as Network>::TxType {

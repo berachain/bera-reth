@@ -6,13 +6,12 @@ use alloy_signer_local::PrivateKeySigner;
 use eyre::Result;
 use rand::Rng;
 use rand::seq::SliceRandom;
-use reth_metrics::{
-    Metrics,
-    metrics,
-    metrics::{Counter, Gauge},
-};
 use reth::providers::{BlockReaderIdExt, StateProviderFactory};
 use reth_eth_wire_types::NetworkPrimitives;
+use reth_metrics::{
+    Metrics, metrics,
+    metrics::{Counter, Gauge},
+};
 use reth_network::NetworkHandle;
 use reth_network_api::{NetworkInfo, PeerInfo, Peers, ReputationChangeKind};
 use reth_network_peers::PeerId;
@@ -193,10 +192,7 @@ where
             [],
         )?;
 
-        db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)",
-            [],
-        )?;
+        db.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])?;
 
         db.pragma_update(None, "journal_mode", "WAL")?;
 
@@ -351,8 +347,10 @@ where
                     self.failure_counts.entry(peer_id).and_modify(|c| *c += 1).or_insert(1);
                 let failure_count = *failure_count;
 
-                self.network
-                    .reputation_change(peer_id, ReputationChangeKind::Other(self.reputation_penalty));
+                self.network.reputation_change(
+                    peer_id,
+                    ReputationChangeKind::Other(self.reputation_penalty),
+                );
                 self.network.disconnect_peer(peer_id);
                 pog_metrics().penalties_total.increment(1);
                 pog_metrics().bans_total.increment(1);
@@ -406,8 +404,7 @@ where
         let address = self.signer.address();
         let balance = self.provider.account_balance(&address)?;
         let base_fee = self.provider.latest_base_fee().unwrap_or(CANARY_PRIORITY_FEE_WEI);
-        let max_fee =
-            (base_fee * MAX_FEE_BUFFER_MULTIPLIER).max(CANARY_PRIORITY_FEE_WEI + 1);
+        let max_fee = (base_fee * MAX_FEE_BUFFER_MULTIPLIER).max(CANARY_PRIORITY_FEE_WEI + 1);
         let min_balance =
             U256::from(CANARY_GAS_LIMIT) * U256::from(max_fee) + U256::from(MAX_CANARY_VALUE);
 
@@ -422,7 +419,8 @@ where
                 } else {
                     (self.funding_backoff_secs * 2).min(MAX_FUNDING_BACKOFF_SECS)
                 };
-                self.funding_backoff = Some(Instant::now() + Duration::from_secs(self.funding_backoff_secs));
+                self.funding_backoff =
+                    Some(Instant::now() + Duration::from_secs(self.funding_backoff_secs));
 
                 warn!(
                     target: "bera_reth::pog",
@@ -438,10 +436,9 @@ where
 
     fn refresh_nonce(&mut self) -> Result<()> {
         let address = self.signer.address();
-        self.nonce = self
-            .provider
-            .account_nonce(&address)?
-            .ok_or_else(|| eyre::eyre!("PoG wallet {address} not found in state - is it funded?"))?;
+        self.nonce = self.provider.account_nonce(&address)?.ok_or_else(|| {
+            eyre::eyre!("PoG wallet {address} not found in state - is it funded?")
+        })?;
         Ok(())
     }
 
@@ -898,8 +895,7 @@ mod tests {
 
     fn make_peer_info(id: PeerId) -> PeerInfo {
         use reth_eth_wire_types::{
-            Capability, EthVersion, UnifiedStatus,
-            capability::Capabilities,
+            Capability, EthVersion, UnifiedStatus, capability::Capabilities,
         };
         PeerInfo {
             capabilities: Arc::new(Capabilities::from(vec![Capability::eth(EthVersion::Eth68)])),
@@ -924,9 +920,7 @@ mod tests {
     ) -> ProofOfGossipService<MockNetwork, MockProvider> {
         let db = create_test_db(db_path);
         let signer: PrivateKeySigner =
-            "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-                .parse()
-                .unwrap();
+            "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef".parse().unwrap();
 
         ProofOfGossipService {
             network,

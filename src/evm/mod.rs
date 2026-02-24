@@ -403,14 +403,14 @@ mod tests {
         assert!(result_without_tracer.is_ok());
 
         // Both should have gas_used = 0
-        if let Ok(result) = &result_with_tracer &&
-            let ExecutionResult::Success { gas_used, .. } = &result.result
+        if let Ok(result) = &result_with_tracer
+            && let ExecutionResult::Success { gas_used, .. } = &result.result
         {
             assert_eq!(*gas_used, 0);
         }
 
-        if let Ok(result) = &result_without_tracer &&
-            let ExecutionResult::Success { gas_used, .. } = &result.result
+        if let Ok(result) = &result_without_tracer
+            && let ExecutionResult::Success { gas_used, .. } = &result.result
         {
             assert_eq!(*gas_used, 0);
         }
