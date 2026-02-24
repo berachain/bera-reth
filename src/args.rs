@@ -24,8 +24,7 @@ pub struct BerachainArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::error::ErrorKind;
-    use clap::Parser;
+    use clap::{Parser, error::ErrorKind};
     use std::path::PathBuf;
 
     #[derive(Parser)]
