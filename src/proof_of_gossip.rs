@@ -9,8 +9,8 @@ use rand::seq::SliceRandom;
 use reth::providers::{BlockReaderIdExt, StateProviderFactory};
 use reth_eth_wire_types::NetworkPrimitives;
 use reth_metrics::{
-    Metrics, metrics,
     metrics::{Counter, Gauge},
+    Metrics, metrics,
 };
 use reth_network::NetworkHandle;
 use reth_network_api::{NetworkInfo, PeerInfo, Peers, ReputationChangeKind};
@@ -120,19 +120,19 @@ struct TimedOutCanary {
 #[derive(Metrics)]
 #[metrics(scope = "bera_reth.pog")]
 struct PoGMetrics {
-    /// Number of canary transactions sent.
+    #[metric(describe = "Number of canary transactions sent")]
     canaries_sent_total: Counter,
-    /// Number of canary transactions confirmed before timeout.
+    #[metric(describe = "Number of canary transactions confirmed before timeout")]
     canary_confirmed_total: Counter,
-    /// Number of canary transactions that timed out.
+    #[metric(describe = "Number of canary transactions that timed out")]
     canary_timeout_total: Counter,
-    /// Number of timed-out canaries that later confirmed.
+    #[metric(describe = "Number of timed-out canaries that later confirmed")]
     canary_late_confirmed_total: Counter,
-    /// Number of reputation penalties applied.
+    #[metric(describe = "Number of reputation penalties applied")]
     penalties_total: Counter,
-    /// Number of peer bans/disconnect actions applied.
+    #[metric(describe = "Number of peer bans/disconnect actions applied")]
     bans_total: Counter,
-    /// Number of currently active canaries.
+    #[metric(describe = "Number of currently active canaries")]
     inflight_canaries: Gauge,
 }
 
@@ -538,13 +538,19 @@ mod tests {
     use tempfile::NamedTempFile;
 
     const ONE_BERA: U256 = U256::from_limbs([1_000_000_000_000_000_000, 0, 0, 0]);
+    const TEST_CHAIN_ID: u64 = 80094;
+    const TEST_TIMEOUT_SECS: u64 = 120;
+    const TEST_REPUTATION_PENALTY: i32 = -25600;
+
+    fn test_signer() -> PrivateKeySigner {
+        format!("0x{:064x}", 1u64).parse().unwrap()
+    }
 
     #[test]
     fn test_canary_tx_construction() {
-        let private_key = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-        let signer: PrivateKeySigner = private_key.parse().unwrap();
+        let signer = test_signer();
         let nonce = 42;
-        let chain_id = 80094;
+        let chain_id = TEST_CHAIN_ID;
         let base_fee = 1_000_000_000;
 
         let tx = create_canary_tx(&signer, nonce, chain_id, base_fee).unwrap();
@@ -771,8 +777,6 @@ mod tests {
         assert_eq!(count, 2);
     }
 
-    // --- Mock types for tick() testing ---
-
     #[derive(Default)]
     struct MockProviderState {
         receipts: HashSet<TxHash>,
@@ -919,22 +923,21 @@ mod tests {
         db_path: &std::path::Path,
     ) -> ProofOfGossipService<MockNetwork, MockProvider> {
         let db = create_test_db(db_path);
-        let signer: PrivateKeySigner =
-            "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef".parse().unwrap();
+        let signer = test_signer();
 
         ProofOfGossipService {
             network,
             provider,
             signer,
-            chain_id: 80094,
+            chain_id: TEST_CHAIN_ID,
             db,
             confirmed_peers: HashSet::new(),
             failure_counts: HashMap::new(),
-            reputation_penalty: -25600,
+            reputation_penalty: TEST_REPUTATION_PENALTY,
             active: None,
             timed_out_canaries: HashMap::new(),
             nonce: 0,
-            timeout: Duration::from_secs(120),
+            timeout: Duration::from_secs(TEST_TIMEOUT_SECS),
             warned_syncing: false,
             funding_backoff: None,
             funding_backoff_secs: 0,
@@ -1012,7 +1015,7 @@ mod tests {
         let penalties = service.network.reputation_changes();
         assert_eq!(penalties.len(), 1);
         assert_eq!(penalties[0].0, peer);
-        assert_eq!(penalties[0].1, -25600);
+        assert_eq!(penalties[0].1, TEST_REPUTATION_PENALTY);
 
         let disconnected = service.network.disconnected_peers();
         assert_eq!(disconnected, vec![peer]);
