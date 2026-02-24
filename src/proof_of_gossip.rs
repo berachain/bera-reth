@@ -108,11 +108,11 @@ where
     }
 
     fn account_nonce(&self, address: &Address) -> PogResult<Option<u64>> {
-        Ok(self.latest().into_pog()?.account_nonce(address).into_pog()?)
+        self.latest().into_pog()?.account_nonce(address).into_pog()
     }
 
     fn account_balance(&self, address: &Address) -> PogResult<Option<U256>> {
-        Ok(self.latest().into_pog()?.account_balance(address).into_pog()?)
+        self.latest().into_pog()?.account_balance(address).into_pog()
     }
 
     fn latest_base_fee(&self) -> PogResult<u128> {
