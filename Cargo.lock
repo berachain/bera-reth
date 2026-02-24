@@ -1500,6 +1500,7 @@ dependencies = [
  "reth-ethereum-primitives",
  "reth-evm",
  "reth-evm-ethereum",
+ "reth-metrics",
  "reth-network",
  "reth-network-api",
  "reth-network-peers",

@@ -10,7 +10,6 @@ alloy-eips = "1.0.41"
 alloy-genesis = "1.0.41"
 alloy-network = "1.0.41"
 alloy-primitives = "1.4.1"
-alloy-provider = "1.0.41"
 alloy-rlp = "0.3.10"
 alloy-rpc-types = "1.0.41"
 alloy-rpc-types-eth = "1.0.41"
@@ -54,6 +53,7 @@ reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", t
 reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-metrics = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
 reth-network = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
 reth-network-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
 reth-network-peers = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
