@@ -56,10 +56,9 @@ fn main() {
                     node.provider.chain_spec().chain().id(),
                     node.config.datadir().data_dir().to_path_buf(),
                     &args,
-                )
-                .await?
-                {
-                    node.task_executor.spawn(Box::pin(service.run()));
+                )? {
+                    node.task_executor
+                        .spawn_with_graceful_shutdown_signal(|shutdown| service.run(shutdown));
                 }
 
                 node_exit_future.await
