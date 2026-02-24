@@ -16,8 +16,9 @@ use reth_network_peers::PeerId;
 use rusqlite::{Connection, params};
 use std::{
     collections::{HashMap, HashSet},
+    fs,
     future::Future,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, OnceLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -162,6 +163,30 @@ fn pog_metrics() -> &'static PoGMetrics {
     METRICS.get_or_init(PoGMetrics::default)
 }
 
+fn load_pog_signer(private_key_path: &Path) -> PogResult<PrivateKeySigner> {
+    let private_key = fs::read_to_string(private_key_path).map_err(|err| {
+        eyre::eyre!(
+            "Failed to read PoG private key file {}: {err}",
+            private_key_path.display()
+        )
+    })?;
+    let private_key = private_key.trim();
+
+    if private_key.is_empty() {
+        return Err(PogError::from(eyre::eyre!(
+            "PoG private key file {} is empty",
+            private_key_path.display()
+        )));
+    }
+
+    private_key.parse::<PrivateKeySigner>().map_err(|err| {
+        PogError::from(eyre::eyre!(
+            "Invalid PoG private key in {}: {err}",
+            private_key_path.display()
+        ))
+    })
+}
+
 pub struct ProofOfGossipService<Network, Provider> {
     network: Network,
     provider: Provider,
@@ -192,11 +217,11 @@ where
         datadir: PathBuf,
         args: &BerachainArgs,
     ) -> PogResult<Option<Self>> {
-        let Some(private_key_hex) = &args.pog_private_key else {
+        let Some(private_key_path) = &args.pog_private_key_file else {
             return Ok(None);
         };
 
-        let signer = private_key_hex.parse::<PrivateKeySigner>().into_pog()?;
+        let signer = load_pog_signer(private_key_path)?;
         let address = signer.address();
 
         let db_path = datadir.join("proof_of_gossip.db");
@@ -566,7 +591,7 @@ mod tests {
     use super::*;
     use alloy_consensus::Transaction;
     use alloy_primitives::B256;
-    use std::sync::Mutex;
+    use std::{fs, sync::Mutex};
     use tempfile::NamedTempFile;
 
     const ONE_BERA: U256 = U256::from_limbs([1_000_000_000_000_000_000, 0, 0, 0]);
@@ -576,6 +601,54 @@ mod tests {
 
     fn test_signer() -> PrivateKeySigner {
         format!("0x{:064x}", 1u64).parse().unwrap()
+    }
+
+    fn write_key_file(contents: &str) -> NamedTempFile {
+        let key_file = NamedTempFile::new().unwrap();
+        fs::write(key_file.path(), contents).unwrap();
+        key_file
+    }
+
+    #[test]
+    fn test_load_pog_signer_from_file_with_0x_prefix() {
+        let key_file = write_key_file(&format!("0x{:064x}", 1u64));
+        let signer = load_pog_signer(key_file.path()).unwrap();
+        assert_eq!(signer.address(), test_signer().address());
+    }
+
+    #[test]
+    fn test_load_pog_signer_from_file_without_0x_prefix() {
+        let key_file = write_key_file(&format!("{:064x}", 1u64));
+        let signer = load_pog_signer(key_file.path()).unwrap();
+        assert_eq!(signer.address(), test_signer().address());
+    }
+
+    #[test]
+    fn test_load_pog_signer_trims_whitespace() {
+        let key_file = write_key_file(&format!("\n\t  0x{:064x}  \n", 1u64));
+        let signer = load_pog_signer(key_file.path()).unwrap();
+        assert_eq!(signer.address(), test_signer().address());
+    }
+
+    #[test]
+    fn test_load_pog_signer_missing_file_errors() {
+        let missing_path = std::env::temp_dir().join(format!("pog-missing-{}", B256::random()));
+        let err = load_pog_signer(&missing_path).unwrap_err();
+        assert!(err.to_string().contains("Failed to read PoG private key file"));
+    }
+
+    #[test]
+    fn test_load_pog_signer_empty_file_errors() {
+        let key_file = write_key_file("   \n\t  ");
+        let err = load_pog_signer(key_file.path()).unwrap_err();
+        assert!(err.to_string().contains("is empty"));
+    }
+
+    #[test]
+    fn test_load_pog_signer_malformed_key_errors() {
+        let key_file = write_key_file("not-a-private-key");
+        let err = load_pog_signer(key_file.path()).unwrap_err();
+        assert!(err.to_string().contains("Invalid PoG private key in"));
     }
 
     #[test]
