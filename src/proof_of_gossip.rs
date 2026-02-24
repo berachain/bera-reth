@@ -52,8 +52,8 @@ impl<N: NetworkPrimitives<BroadcastedTransaction = crate::transaction::Berachain
         NetworkInfo::is_syncing(self)
     }
 
-    fn get_all_peers(&self) -> impl Future<Output = Result<Vec<PeerInfo>>> + Send {
-        async { Ok(Peers::get_all_peers(self).await?) }
+    async fn get_all_peers(&self) -> Result<Vec<PeerInfo>> {
+        Ok(Peers::get_all_peers(self).await?)
     }
 
     fn reputation_change(&self, peer_id: PeerId, kind: ReputationChangeKind) {
@@ -206,13 +206,13 @@ where
             )?;
             stmt.query_map([], |row| {
                 let peer_id_str: String = row.get(0)?;
-                Ok(peer_id_str.parse::<PeerId>().map_err(|e| {
+                peer_id_str.parse::<PeerId>().map_err(|e| {
                     rusqlite::Error::FromSqlConversionFailure(
                         0,
                         rusqlite::types::Type::Text,
                         Box::new(e),
                     )
-                })?)
+                })
             })?
             .collect::<Result<_, _>>()?
         };
@@ -369,19 +369,14 @@ where
                     "Re-queried on-chain nonce after timeout"
                 );
             }
-        } else {
-            if !self.check_funding()? {
-                return Ok(());
-            }
-
+        } else if self.check_funding()? {
             let all_peers = self.network.get_all_peers().await?;
 
             let eligible: Vec<_> =
                 all_peers.iter().filter(|p| !self.confirmed_peers.contains(&p.remote_id)).collect();
 
-            let chosen_peer = eligible.choose(&mut rand::thread_rng()).map(|p| p.remote_id);
-
-            if let Some(peer_id) = chosen_peer {
+            if let Some(peer) = eligible.choose(&mut rand::thread_rng()) {
+                let peer_id = peer.remote_id;
                 self.refresh_nonce()?;
                 let base_fee = self.provider.latest_base_fee()?;
                 let canary_tx =
@@ -401,13 +396,6 @@ where
                 );
 
                 self.active = Some(ActiveCanary { tx_hash, peer_id, sent_at: Instant::now() });
-            } else {
-                info!(
-                    target: "bera_reth::pog",
-                    connected_peers = all_peers.len(),
-                    confirmed_peers = self.confirmed_peers.len(),
-                    "No untested peers available"
-                );
             }
         }
 
@@ -673,7 +661,7 @@ mod tests {
 
         let confirmed_peers: HashSet<PeerId> = {
             let mut stmt = db
-                .prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result = 'confirmed'")
+                .prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result IN ('confirmed', 'late_confirmed')")
                 .unwrap();
             stmt.query_map([], |row| {
                 let s: String = row.get(0)?;
@@ -740,7 +728,7 @@ mod tests {
 
         let confirmed_peers: HashSet<PeerId> = {
             let mut stmt = db
-                .prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result = 'confirmed'")
+                .prepare("SELECT DISTINCT peer_id FROM peer_tests WHERE result IN ('confirmed', 'late_confirmed')")
                 .unwrap();
             stmt.query_map([], |row| {
                 let s: String = row.get(0)?;
