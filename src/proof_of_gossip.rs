@@ -534,6 +534,9 @@ where
         };
 
         if on_chain_nonce > active.nonce {
+            if self.provider.receipt_exists(active.tx_hash)? {
+                return Ok(());
+            }
             info!(
                 target: "bera_reth::pog",
                 tx_hash = %active.tx_hash,
@@ -1214,6 +1217,7 @@ mod tests {
         let tx_hash = service.active.as_ref().unwrap().tx_hash;
 
         service.provider.add_receipt(tx_hash);
+        service.provider.set_nonce(1);
         service.tick().await.unwrap();
 
         assert!(service.active.is_none());
