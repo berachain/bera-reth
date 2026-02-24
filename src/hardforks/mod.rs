@@ -34,8 +34,8 @@ pub trait BerachainHardforks: EthereumHardforks {
     /// Checks if Prague3 hardfork is active at given timestamp
     /// Prague3 is active between its activation time and Prague4 activation
     fn is_prague3_active_at_timestamp(&self, timestamp: u64) -> bool {
-        self.berachain_fork_activation(BerachainHardfork::Prague3).active_at_timestamp(timestamp)
-            && !self.is_prague4_active_at_timestamp(timestamp)
+        self.berachain_fork_activation(BerachainHardfork::Prague3).active_at_timestamp(timestamp) &&
+            !self.is_prague4_active_at_timestamp(timestamp)
     }
 
     /// Checks if Prague4 hardfork is active at given timestamp

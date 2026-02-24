@@ -154,8 +154,8 @@ where
         payload_or_attrs: PayloadOrAttributes<'_, Types::ExecutionData, Types::PayloadAttributes>,
     ) -> Result<(), EngineObjectValidationError> {
         // Validate execution requests if present in the payload
-        if let PayloadOrAttributes::ExecutionPayload(payload) = &payload_or_attrs
-            && let Some(requests) = payload.sidecar.requests()
+        if let PayloadOrAttributes::ExecutionPayload(payload) = &payload_or_attrs &&
+            let Some(requests) = payload.sidecar.requests()
         {
             validate_execution_requests(requests)?;
         }
