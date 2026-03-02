@@ -11,6 +11,7 @@ use crate::{
 };
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
+use alloy_evm::block::state_changes::{balance_increment_state, post_block_balance_increments};
 use alloy_primitives::Bytes;
 use reth::{
     chainspec::{EthereumHardfork, EthereumHardforks},
@@ -21,6 +22,7 @@ use reth::{
             Block as _,
             result::{ExecutionResult, Output, ResultAndState, SuccessReason},
         },
+        database_interface::DatabaseCommitExt,
     },
 };
 use reth_evm::{
@@ -34,7 +36,6 @@ use reth_evm::{
         dao_fork, eip6110,
         receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
     },
-    state_change::{balance_increment_state, post_block_balance_increments},
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
@@ -349,6 +350,10 @@ where
 
     fn evm(&self) -> &Self::Evm {
         &self.evm
+    }
+
+    fn receipts(&self) -> &[Self::Receipt] {
+        &self.receipts
     }
 }
 

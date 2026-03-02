@@ -1,7 +1,8 @@
 use crate::{
     chainspec::BerachainChainSpec,
-    primitives::{BerachainBlock, BerachainPrimitives, header::BlsPublicKey},
+    primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
 };
+use alloy_consensus::BlockHeader;
 use alloy_eips::{
     eip4895::{Withdrawal, Withdrawals},
     eip7685::Requests,
@@ -22,7 +23,7 @@ use reth_engine_local::LocalPayloadAttributesBuilder;
 use reth_ethereum_engine_primitives::{BlobSidecars, BuiltPayloadConversionError};
 use reth_node_ethereum::engine::EthPayloadAttributes;
 use reth_payload_primitives::BuiltPayload;
-use reth_primitives_traits::{NodePrimitives, SealedBlock};
+use reth_primitives_traits::{NodePrimitives, SealedBlock, SealedHeader};
 use std::{convert::Infallible, sync::Arc};
 
 /// Berachain-specific payload attributes
@@ -137,10 +138,17 @@ impl BerachainPayloadBuilderAttributes {
 }
 
 /// Implementation for LocalPayloadAttributesBuilder to build BerachainPayloadAttributes
-impl PayloadAttributesBuilder<BerachainPayloadAttributes>
+impl PayloadAttributesBuilder<BerachainPayloadAttributes, BerachainHeader>
     for LocalPayloadAttributesBuilder<BerachainChainSpec>
 {
-    fn build(&self, timestamp: u64) -> BerachainPayloadAttributes {
+    fn build(&self, parent: &SealedHeader<BerachainHeader>) -> BerachainPayloadAttributes {
+        let mut timestamp =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+
+        if self.enforce_increasing_timestamp {
+            timestamp = std::cmp::max(parent.timestamp().saturating_add(1), timestamp);
+        }
+
         BerachainPayloadAttributes {
             inner: EthPayloadAttributes {
                 timestamp,

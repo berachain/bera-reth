@@ -102,8 +102,10 @@ where
 
     fn local_payload_attributes_builder(
         chain_spec: &Self::ChainSpec,
-    ) -> impl PayloadAttributesBuilder<<<Self as NodeTypes>::Payload as PayloadTypes>::PayloadAttributes>
-    {
+    ) -> impl PayloadAttributesBuilder<
+        <<Self as NodeTypes>::Payload as PayloadTypes>::PayloadAttributes,
+        BerachainHeader,
+    > {
         LocalPayloadAttributesBuilder::new(Arc::new(chain_spec.clone()))
     }
 }
