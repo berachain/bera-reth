@@ -11,7 +11,10 @@ use crate::{
 };
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
-use alloy_evm::block::state_changes::{balance_increment_state, post_block_balance_increments};
+use alloy_evm::{
+    RecoveredTx,
+    block::state_changes::{balance_increment_state, post_block_balance_increments},
+};
 use alloy_primitives::Bytes;
 use reth::{
     chainspec::{EthereumHardfork, EthereumHardforks},
@@ -30,7 +33,7 @@ use reth_evm::{
     block::{
         BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor,
         BlockValidationError, ExecutableTx, StateChangePostBlockSource, StateChangeSource,
-        SystemCaller,
+        SystemCaller, TxResult,
     },
     eth::{
         dao_fork, eip6110,
@@ -38,6 +41,20 @@ use reth_evm::{
     },
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
+
+#[derive(Debug)]
+pub struct BerachainTxResult<H> {
+    pub result: ResultAndState<H>,
+    pub blob_gas_used: u64,
+    pub tx_type: BerachainTxType,
+}
+
+impl<H> TxResult for BerachainTxResult<H> {
+    type HaltReason = H;
+    fn result(&self) -> &ResultAndState<H> {
+        &self.result
+    }
+}
 
 #[derive(Debug)]
 pub struct BerachainBlockExecutor<'a, Evm> {
@@ -122,11 +139,9 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             Ok(result_and_state) => {
                 tracing::debug!(target: "executor", ?result_and_state, "POL transaction executed successfully");
 
-                // Use the already-created POL envelope for receipt generation
-
                 // Build receipt manually for the system call
                 let receipt = self.receipt_builder.build_receipt(ReceiptBuilderCtx {
-                    tx: &pol_envelope,
+                    tx_type: BerachainTxType::Berachain,
                     evm: &self.evm,
                     result: result_and_state.result,
                     state: &result_and_state.state,
@@ -169,6 +184,7 @@ where
     type Transaction = BerachainTxEnvelope;
     type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>;
     type Evm = E;
+    type Result = BerachainTxResult<E::HaltReason>;
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
         // Set state clear flag if the block is after the Spurious Dragon hardfork.
@@ -188,19 +204,26 @@ where
     fn execute_transaction_without_commit(
         &mut self,
         tx: impl ExecutableTx<Self>,
-    ) -> Result<ResultAndState<<Self::Evm as Evm>::HaltReason>, BlockExecutionError> {
+    ) -> Result<Self::Result, BlockExecutionError> {
+        let (tx_env, recovered) = tx.into_parts();
+        let consensus_tx = recovered.tx();
+
         // For PoL txs, we simply populate a dummy result and state as it is ultimately ignored
         // during commit_transaction.
-        if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
-            return Ok(ResultAndState {
-                result: ExecutionResult::Success {
-                    reason: SuccessReason::Stop,
-                    gas_used: 0,
-                    gas_refunded: 0,
-                    logs: Vec::new(),
-                    output: Output::Call(Bytes::default()),
+        if let BerachainTxEnvelope::Berachain(_) = consensus_tx {
+            return Ok(BerachainTxResult {
+                result: ResultAndState {
+                    result: ExecutionResult::Success {
+                        reason: SuccessReason::Stop,
+                        gas_used: 0,
+                        gas_refunded: 0,
+                        logs: Vec::new(),
+                        output: Output::Call(Bytes::default()),
+                    },
+                    state: HashMap::default(),
                 },
-                state: HashMap::default(),
+                blob_gas_used: 0,
+                tx_type: BerachainTxType::Berachain,
             });
         }
 
@@ -208,30 +231,34 @@ where
         // must be no greater than the block's gasLimit.
         let block_available_gas = self.evm.block().gas_limit() - self.gas_used;
 
-        if tx.tx().gas_limit() > block_available_gas {
+        if consensus_tx.gas_limit() > block_available_gas {
             return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
-                transaction_gas_limit: tx.tx().gas_limit(),
+                transaction_gas_limit: consensus_tx.gas_limit(),
                 block_available_gas,
             }
             .into());
         }
 
+        let blob_gas_used = consensus_tx.blob_gas_used().unwrap_or_default();
+        let tx_type = consensus_tx.tx_type();
+        let tx_hash = consensus_tx.trie_hash();
+
         // Execute transaction and return the result
-        self.evm.transact(&tx).map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))
+        let result =
+            self.evm.transact_raw(tx_env).map_err(|err| BlockExecutionError::evm(err, tx_hash))?;
+
+        Ok(BerachainTxResult { result, blob_gas_used, tx_type })
     }
 
-    fn commit_transaction(
-        &mut self,
-        output: ResultAndState<<Self::Evm as Evm>::HaltReason>,
-        tx: impl ExecutableTx<Self>,
-    ) -> Result<u64, BlockExecutionError> {
-        // Skip commit for POL transactions at it's already been applied in
+    fn commit_transaction(&mut self, output: Self::Result) -> Result<u64, BlockExecutionError> {
+        // Skip commit for POL transactions as it's already been applied in
         // apply_pre_execution_changes
-        if let BerachainTxEnvelope::Berachain(_) = tx.tx() {
+        if output.tx_type == BerachainTxType::Berachain {
             return Ok(0);
         }
 
-        let ResultAndState { result, state } = output;
+        let BerachainTxResult { result: ResultAndState { result, state }, blob_gas_used, tx_type } =
+            output;
 
         self.system_caller.on_state(StateChangeSource::Transaction(self.receipts.len()), &state);
 
@@ -242,13 +269,12 @@ where
 
         // only determine cancun fields when active
         if self.spec.is_cancun_active_at_timestamp(self.evm.block().timestamp().saturating_to()) {
-            let tx_blob_gas_used = tx.tx().blob_gas_used().unwrap_or_default();
-            self.blob_gas_used = self.blob_gas_used.saturating_add(tx_blob_gas_used);
+            self.blob_gas_used = self.blob_gas_used.saturating_add(blob_gas_used);
         }
 
         // Push transaction changeset and calculate header bloom filter for receipt.
         self.receipts.push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
-            tx: tx.tx(),
+            tx_type,
             evm: &self.evm,
             result,
             state: &state,

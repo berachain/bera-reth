@@ -5,8 +5,6 @@ use reth_evm::{
     eth::receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
 };
 
-/// A builder that operates on Reth primitive types, specifically `TransactionSigned` and
-/// `Receipt`.
 #[derive(Debug, Clone, Copy, Default)]
 #[non_exhaustive]
 pub struct BerachainReceiptBuilder;
@@ -17,13 +15,11 @@ impl ReceiptBuilder for BerachainReceiptBuilder {
 
     fn build_receipt<E: Evm>(
         &self,
-        ctx: ReceiptBuilderCtx<'_, Self::Transaction, E>,
+        ctx: ReceiptBuilderCtx<'_, BerachainTxType, E>,
     ) -> Self::Receipt {
-        let ReceiptBuilderCtx { tx, result, cumulative_gas_used, .. } = ctx;
+        let ReceiptBuilderCtx { tx_type, result, cumulative_gas_used, .. } = ctx;
         Receipt {
-            tx_type: tx.tx_type(),
-            // Success flag was added in `EIP-658: Embedding transaction status code in
-            // receipts`.
+            tx_type,
             success: result.is_success(),
             cumulative_gas_used,
             logs: result.into_logs(),

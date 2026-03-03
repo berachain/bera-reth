@@ -446,6 +446,7 @@ where
 
     async fn send_transaction(
         &self,
+        origin: TransactionOrigin,
         tx: reth_primitives_traits::WithEncoded<
             reth_primitives_traits::Recovered<reth_transaction_pool::PoolPooledTx<Self::Pool>>,
         >,
@@ -457,9 +458,8 @@ where
 
         let pool_transaction = <Self::Pool as TransactionPool>::Transaction::from_pooled(recovered);
 
-        // submit the transaction to the pool with a `Local` origin
         let AddedTransactionOutcome { hash, .. } =
-            self.pool().add_transaction(TransactionOrigin::Local, pool_transaction).await?;
+            self.pool().add_transaction(origin, pool_transaction).await?;
 
         Ok(hash)
     }
