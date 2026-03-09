@@ -22,7 +22,7 @@ use reth::{
     },
 };
 use reth_chain_state::BlockState;
-use reth_optimism_flashblocks::{FlashBlockBuildInfo, FlashblocksListeners, PendingFlashBlock};
+use reth_optimism_flashblocks::FlashblocksListeners;
 use reth_primitives_traits::{BlockBody, Recovered, RecoveredBlock, WithEncoded};
 use reth_rpc_eth_api::{
     EthApiTypes, FromEthApiError, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
@@ -38,8 +38,7 @@ use reth_rpc_eth_types::{
 };
 use reth_storage_api::{BlockIdReader, BlockReader, StateProviderBox, StateProviderFactory};
 use reth_transaction_pool::PoolPooledTx;
-use std::{sync::Arc, time::Duration};
-use tokio::time;
+use std::sync::Arc;
 
 impl fmt::Display for BerachainTxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -340,67 +339,21 @@ pub struct BerachainApi<N: RpcNodeCore, Rpc: RpcConvert> {
     pub flashblocks: Option<Arc<FlashblocksListeners<N::Primitives, BerachainFlashblockPayload>>>,
 }
 
-/// Maximum duration to wait for a fresh flashblock when one is being built.
-const MAX_FLASHBLOCK_WAIT_DURATION: Duration = Duration::from_millis(50);
-
-impl<N: RpcNodeCore, Rpc: RpcConvert> BerachainApi<N, Rpc> {
-    /// Returns information about the flashblock currently being built, if any.
-    fn flashblock_build_info(&self) -> Option<FlashBlockBuildInfo> {
-        self.flashblocks.as_ref().and_then(|f| *f.in_progress_rx.borrow())
-    }
-
-    /// Extracts pending block if it matches the expected parent hash.
-    fn extract_matching_block(
-        &self,
-        block: Option<&PendingFlashBlock<N::Primitives>>,
-        parent_hash: B256,
-    ) -> Option<PendingBlock<N::Primitives>> {
-        block.filter(|b| b.block().parent_hash() == parent_hash).map(|b| b.pending.clone())
-    }
-
-    /// Returns a [`PendingBlock`] that is built out of flashblocks.
+impl<N: RpcNodeCore, Rpc: RpcConvert> BerachainApi<N, Rpc>
+where
+    N::Provider: BlockReaderIdExt,
+{
+    /// Returns the current pending block from the flashblock stream, if any.
     ///
-    /// If flashblocks receiver is not set, then it always returns `None`.
-    ///
-    /// It may wait up to 50ms for a fresh flashblock if one is currently being built.
-    pub async fn pending_flashblock(&self) -> eyre::Result<Option<PendingBlock<N::Primitives>>>
-    where
-        // OpEthApiError: FromEvmError<N::Evm>,
-        Rpc: RpcConvert<Primitives = N::Primitives>,
-    {
-        let Some(latest) = self.provider().latest_header()? else {
-            return Ok(None);
-        };
+    /// Only returns a block whose parent hash matches the latest canonical header,
+    /// ensuring stale flashblocks are not served during reorgs.
+    pub fn pending_flashblock(&self) -> Option<PendingBlock<N::Primitives>> {
+        let latest_hash = self.provider().latest_header().ok().flatten()?.hash();
 
-        self.flashblock(latest.hash()).await
-    }
-
-    /// Awaits a fresh flashblock if one is being built, otherwise returns current.
-    async fn flashblock(
-        &self,
-        parent_hash: B256,
-    ) -> eyre::Result<Option<PendingBlock<N::Primitives>>> {
-        let Some(rx) = self.flashblocks.as_ref().as_ref().map(|f| &f.pending_block_rx) else {
-            return Ok(None)
-        };
-
-        // Check if a flashblock is being built
-        if let Some(build_info) = self.flashblock_build_info() {
-            let current_index = rx.borrow().as_ref().map(|b| b.last_flashblock_index);
-
-            // Check if this is the first flashblock or the next consecutive index
-            let is_next_index = current_index.is_none_or(|idx| build_info.index == idx + 1);
-
-            // Wait only for relevant flashblocks: matching parent and next in sequence
-            if build_info.parent_hash == parent_hash && is_next_index {
-                let mut rx_clone = rx.clone();
-                // Wait up to MAX_FLASHBLOCK_WAIT_DURATION for a new flashblock to arrive
-                let _ = time::timeout(MAX_FLASHBLOCK_WAIT_DURATION, rx_clone.changed()).await;
-            }
-        }
-
-        // Fall back to current block
-        Ok(self.extract_matching_block(rx.borrow().as_ref(), parent_hash))
+        self.flashblocks
+            .as_ref()
+            .and_then(|f| f.pending_block_rx.borrow().as_ref().map(|b| b.pending.clone()))
+            .filter(|pending| pending.block().parent_hash() == latest_hash)
     }
 }
 
@@ -537,7 +490,7 @@ where
 
             if tx_receipt.is_none() {
                 // if flashblocks are supported, attempt to find id from the pending block
-                if let Ok(Some(pending_block)) = this.pending_flashblock().await &&
+                if let Some(pending_block) = this.pending_flashblock() &&
                     let Some(Ok(receipt)) = pending_block
                         .find_and_convert_transaction_receipt(hash, this.converter())
                 {
@@ -589,7 +542,7 @@ where
     ) -> impl Future<Output = Result<Option<usize>, Self::Error>> + Send {
         async move {
             if (block_id.is_latest() || block_id.is_pending()) &&
-                let Ok(Some(pending)) = self.pending_flashblock().await
+                let Some(pending) = self.pending_flashblock()
             {
                 return Ok(Some(pending.block().body().transaction_count()));
             }
@@ -640,7 +593,7 @@ where
         async move {
             // Serve flashblock for both "latest" and "pending" when available
             if block_id.is_latest() || block_id.is_pending() {
-                if self.pending_flashblock().await.ok().flatten().is_some() {
+                if self.pending_flashblock().is_some() {
                     if let Some(pending) = self.local_pending_block().await? {
                         return Ok(Some(pending.block));
                     }
@@ -793,7 +746,7 @@ where
         async move {
             let suggested_tip = LoadFee::suggested_priority_fee(self).await?;
 
-            let base_fee = if let Ok(Some(pending)) = self.pending_flashblock().await {
+            let base_fee = if let Some(pending) = self.pending_flashblock() {
                 pending.block().base_fee_per_gas().unwrap_or_default()
             } else {
                 self.provider()
@@ -829,28 +782,41 @@ where
         self.inner.pending_block_kind()
     }
 
+    /// Returns the pending state built on top of the latest flashblock.
+    ///
+    /// If the flashblock's parent block hasn't been imported into the DB yet, falls back to
+    /// canonical state via `Ok(None)`.
     async fn local_pending_state(&self) -> Result<Option<StateProviderBox>, Self::Error>
     where
         Self: SpawnBlocking,
     {
-        let Ok(Some(pending_block)) = self.pending_flashblock().await else {
+        let Some(pending_block) = self.pending_flashblock() else {
+            tracing::info!("no pending flashblock available, falling back to canonical state");
             return Ok(None);
         };
 
-        let latest_historical = self
+        let parent_hash = pending_block.block().parent_hash();
+
+        let Ok(latest_historical) = self
             .provider()
-            .history_by_block_hash(pending_block.block().parent_hash())
-            .map_err(Into::<EthApiError>::into)?;
+            .history_by_block_hash(parent_hash)
+            .map_err(Into::<EthApiError>::into)
+        else {
+            tracing::info!(
+                %parent_hash,
+                "parent block not imported yet, falling back to canonical state"
+            );
+            return Ok(None);
+        };
 
         let state = BlockState::from(pending_block);
-
         Ok(Some(Box::new(state.state_provider(latest_historical)) as StateProviderBox))
     }
 
     async fn local_pending_block(
         &self,
     ) -> Result<Option<BlockAndReceipts<Self::Primitives>>, Self::Error> {
-        if let Ok(Some(pending)) = self.pending_flashblock().await {
+        if let Some(pending) = self.pending_flashblock() {
             return Ok(Some(pending.into_block_and_receipts()));
         }
 
