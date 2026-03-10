@@ -619,7 +619,10 @@ where
     async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
         let mut caps = self.inner.capabilities().list();
         for &cap in BERACHAIN_ADDITIONAL_CAPABILITIES {
-            caps.push(cap.to_string());
+            let s = cap.to_string();
+            if !caps.contains(&s) {
+                caps.push(s);
+            }
         }
         Ok(caps)
     }
