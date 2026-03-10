@@ -1,9 +1,3 @@
-//! End-to-end integration tests for Bera-Reth node
-//!
-//! These tests follow Reth's e2e testing patterns, using NodeTestContext
-//! for comprehensive integration testing with real RPC servers and full
-//! blockchain state.
-
 use alloy_primitives::{Address, B256};
 use alloy_signer_local::PrivateKeySigner;
 use bera_reth::{
@@ -11,7 +5,7 @@ use bera_reth::{
     engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes},
     primitives::header::BlsPublicKey,
 };
-use reth::tasks::TaskManager;
+use reth::tasks::Runtime;
 use reth_cli::chainspec::parse_genesis;
 use reth_ethereum_engine_primitives::EthPayloadAttributes;
 use reth_payload_primitives::PayloadBuilderAttributes;
@@ -27,16 +21,16 @@ const TEST_PRIVATE_KEY: &str = "0xfffdbb37105441e14b0ee6330d855d8504ff39e705c3af
 /// PoL distributor contract address - shared across all e2e tests
 pub const POL_DISTRIBUTOR_ADDRESS: &str = "0x4200000000000000000000000000000000000042";
 
-/// Setup test node boilerplate - returns TaskManager and chain spec for individual test setup
-pub async fn setup_test_boilerplate() -> eyre::Result<(TaskManager, Arc<BerachainChainSpec>)> {
-    let tasks = TaskManager::current();
+/// Setup test node boilerplate - returns Runtime and chain spec for individual test setup
+pub async fn setup_test_boilerplate() -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
+    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
 
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path).expect("Failed to read genesis file");
     let genesis = parse_genesis(&genesis_json).expect("Failed to parse genesis");
     let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
 
-    Ok((tasks, chain_spec))
+    Ok((runtime, chain_spec))
 }
 
 /// Create a test signer from the constant private key

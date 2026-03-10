@@ -129,6 +129,7 @@ impl EngineTypes for BerachainEngineTypes {
     type ExecutionPayloadEnvelopeV3 = ExecutionPayloadEnvelopeV3;
     type ExecutionPayloadEnvelopeV4 = ExecutionPayloadEnvelopeV4;
     type ExecutionPayloadEnvelopeV5 = ExecutionPayloadEnvelopeV5;
+    type ExecutionPayloadEnvelopeV6 = ExecutionPayloadEnvelopeV5;
 }
 
 /// Berachain-specific Prague payload fields that extend the standard Prague fields

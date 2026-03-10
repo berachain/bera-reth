@@ -14,7 +14,7 @@ use alloy_sol_macro::sol;
 use bera_reth::{
     chainspec::BerachainChainSpec, node::BerachainNode, transaction::BerachainTxEnvelope,
 };
-use reth::{rpc::api::EthApiServer, tasks::TaskManager};
+use reth::{rpc::api::EthApiServer, tasks::Runtime};
 use reth_cli::chainspec::parse_genesis;
 use reth_e2e_test_utils::node::NodeTestContext;
 use reth_node_builder::{NodeBuilder, NodeHandle};
@@ -39,8 +39,8 @@ sol! {
 }
 
 async fn setup_test_with_gas_boundary_pol_contract()
--> eyre::Result<(TaskManager, Arc<BerachainChainSpec>)> {
-    let tasks = TaskManager::current();
+-> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
+    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
 
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path)?;
@@ -59,20 +59,19 @@ async fn setup_test_with_gas_boundary_pol_contract()
     }
 
     let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
-    Ok((tasks, chain_spec))
+    Ok((runtime, chain_spec))
 }
 
 #[tokio::test]
 async fn test_pol_gas_limit_is_30_million() -> eyre::Result<()> {
-    let (tasks, chain_spec) = setup_test_with_gas_boundary_pol_contract().await?;
-    let executor = tasks.executor();
+    let (runtime, chain_spec) = setup_test_with_gas_boundary_pol_contract().await?;
 
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
         .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
 
     let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
-        .testing_node(executor.clone())
+        .testing_node(runtime.clone())
         .node(BerachainNode::default())
         .launch()
         .await?;

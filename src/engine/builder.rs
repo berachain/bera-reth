@@ -253,6 +253,7 @@ where
         .unwrap_or(protocol_max_blob_count);
 
     let is_osaka = chain_spec.is_osaka_active_at_timestamp(attributes.timestamp);
+    let withdrawals_rlp_length = attributes.withdrawals().length();
 
     // Check if Prague3 is active and skip all transactions if so
     if chain_spec.is_prague3_active_at_timestamp(attributes.timestamp()) {
@@ -282,11 +283,10 @@ where
 
         // convert tx to a signed transaction
         let tx = pool_tx.to_consensus();
+        let tx_rlp_len = tx.inner().length();
 
-        let estimated_block_size_with_tx = block_transactions_rlp_length +
-            tx.inner().length() +
-            attributes.withdrawals().length() +
-            1024; // 1Kb of overhead for the block header
+        let estimated_block_size_with_tx =
+            block_transactions_rlp_length + tx_rlp_len + withdrawals_rlp_length + 1024;
 
         if is_osaka && estimated_block_size_with_tx > MAX_RLP_BLOCK_SIZE {
             best_txs.mark_invalid(
@@ -388,7 +388,7 @@ where
             }
         }
 
-        block_transactions_rlp_length += tx.inner().length();
+        block_transactions_rlp_length += tx_rlp_len;
 
         // update and add to total fees
         let miner_fee =

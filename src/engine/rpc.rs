@@ -617,9 +617,14 @@ where
     }
 
     async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
-        let mut capabilities = self.inner.capabilities().clone();
-        BERACHAIN_ADDITIONAL_CAPABILITIES.iter().for_each(|&cap| capabilities.add_capability(cap));
-        Ok(capabilities.list())
+        let mut caps = self.inner.capabilities().list();
+        for &cap in BERACHAIN_ADDITIONAL_CAPABILITIES {
+            let s = cap.to_string();
+            if !caps.contains(&s) {
+                caps.push(s);
+            }
+        }
+        Ok(caps)
     }
 
     async fn get_blobs_v1(

@@ -21,15 +21,14 @@ use std::str::FromStr;
 
 #[tokio::test]
 async fn test_eip1559_transaction_via_rpc_is_accepted() -> eyre::Result<()> {
-    let (tasks, chain_spec) = setup_test_boilerplate().await?;
-    let executor = tasks.executor();
+    let (runtime, chain_spec) = setup_test_boilerplate().await?;
 
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
         .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
 
     let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
-        .testing_node(executor.clone())
+        .testing_node(runtime.clone())
         .node(BerachainNode::default())
         .launch()
         .await?;
@@ -102,15 +101,14 @@ async fn test_pol_transaction_rpc_injection_fails() -> eyre::Result<()> {
     use alloy_eips::eip2718::Encodable2718;
     use reth_rpc_eth_types::EthApiError;
 
-    let (tasks, chain_spec) = setup_test_boilerplate().await?;
-    let executor = tasks.executor();
+    let (runtime, chain_spec) = setup_test_boilerplate().await?;
 
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
         .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
 
     let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
-        .testing_node(executor.clone())
+        .testing_node(runtime.clone())
         .node(BerachainNode::default())
         .launch()
         .await?;
@@ -146,15 +144,14 @@ async fn test_pol_transaction_mempool_insertion_fails() -> eyre::Result<()> {
     use reth_primitives_traits::SignedTransaction;
     use reth_transaction_pool::TransactionOrigin;
 
-    let (tasks, chain_spec) = setup_test_boilerplate().await?;
-    let executor = tasks.executor();
+    let (runtime, chain_spec) = setup_test_boilerplate().await?;
 
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
         .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
 
     let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
-        .testing_node(executor.clone())
+        .testing_node(runtime.clone())
         .node(BerachainNode::default())
         .launch()
         .await?;
@@ -193,15 +190,14 @@ async fn test_pol_transaction_mempool_insertion_fails() -> eyre::Result<()> {
 
 #[tokio::test]
 async fn test_pol_transaction_auto_inclusion() -> eyre::Result<()> {
-    let (tasks, chain_spec) = setup_test_boilerplate().await?;
-    let executor = tasks.executor();
+    let (runtime, chain_spec) = setup_test_boilerplate().await?;
 
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
         .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
 
     let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
-        .testing_node(executor.clone())
+        .testing_node(runtime.clone())
         .node(BerachainNode::default())
         .launch()
         .await?;
