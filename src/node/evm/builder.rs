@@ -66,10 +66,15 @@ fn fix_pol_senders(
     let timestamp = outcome.block.header().timestamp();
     let is_prague1 = chain_spec.is_prague1_active_at_timestamp(timestamp);
 
-    let has_mismatch = num_txs > num_senders;
+    if num_senders > num_txs {
+        return Err(BlockExecutionError::msg(format!(
+            "more senders ({num_senders}) than transactions ({num_txs}) at timestamp \
+             {timestamp}"
+        )));
+    }
 
     if !is_prague1 {
-        if has_mismatch {
+        if num_txs != num_senders {
             return Err(BlockExecutionError::msg(format!(
                 "transaction/sender mismatch pre-Prague1: {num_txs} txs vs {num_senders} \
                  senders at timestamp {timestamp}"
@@ -78,7 +83,7 @@ fn fix_pol_senders(
         return Ok(());
     }
 
-    if !has_mismatch {
+    if num_txs == num_senders {
         return Err(BlockExecutionError::msg(format!(
             "no transaction/sender mismatch post-Prague1: {num_txs} txs vs {num_senders} \
              senders at timestamp {timestamp}. PoL injection should always occur"
