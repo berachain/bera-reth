@@ -94,55 +94,48 @@ where
         let timestamp = outcome.block.header().timestamp();
         let is_prague1 = self.chain_spec.is_prague1_active_at_timestamp(timestamp);
 
-        match (num_txs > num_senders, is_prague1) {
-            // Pre-Prague1 with mismatch = bug
-            (true, false) => {
+        let has_mismatch = num_txs > num_senders;
+
+        if !is_prague1 {
+            if has_mismatch {
                 return Err(BlockExecutionError::msg(format!(
-                    "transaction/sender mismatch pre-Prague1: {} txs vs {} senders at timestamp {}. \
-                     This should never happen before PoL injection is active",
-                    num_txs, num_senders, timestamp
+                    "transaction/sender mismatch pre-Prague1: {num_txs} txs vs {num_senders} \
+                     senders at timestamp {timestamp}"
                 )));
             }
-            // Post-Prague1 with mismatch = expected, fix it
-            (true, true) => {
-                // There should only be 1 injected tx -> assert this?
-                let num_injected = num_txs - num_senders;
-                let mut fixed_senders = Vec::with_capacity(num_txs);
-
-                for tx in outcome.block.body().transactions.iter().take(num_injected) {
-                    match tx {
-                        BerachainTxEnvelope::Berachain(pol) => {
-                            fixed_senders.push(pol.from);
-                        }
-                        _ => {
-                            return Err(BlockExecutionError::msg(format!(
-                                "transaction/sender mismatch post-Prague1: found {} extra \
-                                 transactions but transaction is not PoL (type {:?}). \
-                                 Only PoL transactions should be injected",
-                                num_injected,
-                                tx.tx_type()
-                            )));
-                        }
-                    }
-                }
-
-                fixed_senders.extend(outcome.block.senders().iter().copied());
-
-                let fixed_block =
-                    RecoveredBlock::new_unhashed(outcome.block.clone_block(), fixed_senders);
-                outcome.block = fixed_block;
-            }
-            // Post-Prague1 without mismatch = bug (PoL injection should always occur)
-            (false, true) => {
-                return Err(BlockExecutionError::msg(format!(
-                    "no transaction/sender mismatch post-Prague1: {} txs vs {} senders at timestamp {}. \
-                     PoL injection should always occur after Prague1",
-                    num_txs, num_senders, timestamp
-                )));
-            }
-            // Pre-Prague1 without mismatch = expected
-            (false, false) => {}
+            return Ok(outcome);
         }
+
+        if !has_mismatch {
+            return Err(BlockExecutionError::msg(format!(
+                "no transaction/sender mismatch post-Prague1: {num_txs} txs vs {num_senders} \
+                 senders at timestamp {timestamp}. PoL injection should always occur"
+            )));
+        }
+
+        let num_injected = num_txs - num_senders;
+        if num_injected != 1 {
+            return Err(BlockExecutionError::msg(format!(
+                "expected exactly 1 injected PoL transaction, found {num_injected}"
+            )));
+        }
+
+        let pol_tx = &outcome.block.body().transactions[0];
+        let pol_sender = match pol_tx {
+            BerachainTxEnvelope::Berachain(pol) => pol.from,
+            _ => {
+                return Err(BlockExecutionError::msg(format!(
+                    "first transaction is not PoL (type {:?})",
+                    pol_tx.tx_type()
+                )));
+            }
+        };
+
+        let mut fixed_senders = Vec::with_capacity(num_txs);
+        fixed_senders.push(pol_sender);
+        fixed_senders.extend(outcome.block.senders().iter().copied());
+
+        outcome.block = RecoveredBlock::new_unhashed(outcome.block.clone_block(), fixed_senders);
 
         Ok(outcome)
     }
