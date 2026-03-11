@@ -57,6 +57,61 @@ where
     }
 }
 
+fn fix_pol_senders(
+    outcome: &mut BlockBuilderOutcome<BerachainPrimitives>,
+    chain_spec: &BerachainChainSpec,
+) -> Result<(), BlockExecutionError> {
+    let num_txs = outcome.block.body().transactions.len();
+    let num_senders = outcome.block.senders().len();
+    let timestamp = outcome.block.header().timestamp();
+    let is_prague1 = chain_spec.is_prague1_active_at_timestamp(timestamp);
+
+    let has_mismatch = num_txs > num_senders;
+
+    if !is_prague1 {
+        if has_mismatch {
+            return Err(BlockExecutionError::msg(format!(
+                "transaction/sender mismatch pre-Prague1: {num_txs} txs vs {num_senders} \
+                 senders at timestamp {timestamp}"
+            )));
+        }
+        return Ok(());
+    }
+
+    if !has_mismatch {
+        return Err(BlockExecutionError::msg(format!(
+            "no transaction/sender mismatch post-Prague1: {num_txs} txs vs {num_senders} \
+             senders at timestamp {timestamp}. PoL injection should always occur"
+        )));
+    }
+
+    let num_injected = num_txs - num_senders;
+    if num_injected != 1 {
+        return Err(BlockExecutionError::msg(format!(
+            "expected exactly 1 injected PoL transaction, found {num_injected}"
+        )));
+    }
+
+    let pol_tx = &outcome.block.body().transactions[0];
+    let pol_sender = match pol_tx {
+        BerachainTxEnvelope::Berachain(pol) => pol.from,
+        _ => {
+            return Err(BlockExecutionError::msg(format!(
+                "first transaction is not PoL (type {:?})",
+                pol_tx.tx_type()
+            )));
+        }
+    };
+
+    let mut fixed_senders = Vec::with_capacity(num_txs);
+    fixed_senders.push(pol_sender);
+    fixed_senders.extend(outcome.block.senders().iter().copied());
+
+    outcome.block = RecoveredBlock::new_unhashed(outcome.block.clone_block(), fixed_senders);
+
+    Ok(())
+}
+
 impl<B> BlockBuilder for BerachainBlockBuilder<B>
 where
     B: BlockBuilder<Primitives = BerachainPrimitives>,
@@ -88,55 +143,7 @@ where
         state_provider: impl StateProvider,
     ) -> Result<BlockBuilderOutcome<Self::Primitives>, BlockExecutionError> {
         let mut outcome = self.inner.finish(state_provider)?;
-
-        let num_txs = outcome.block.body().transactions.len();
-        let num_senders = outcome.block.senders().len();
-        let timestamp = outcome.block.header().timestamp();
-        let is_prague1 = self.chain_spec.is_prague1_active_at_timestamp(timestamp);
-
-        let has_mismatch = num_txs > num_senders;
-
-        if !is_prague1 {
-            if has_mismatch {
-                return Err(BlockExecutionError::msg(format!(
-                    "transaction/sender mismatch pre-Prague1: {num_txs} txs vs {num_senders} \
-                     senders at timestamp {timestamp}"
-                )));
-            }
-            return Ok(outcome);
-        }
-
-        if !has_mismatch {
-            return Err(BlockExecutionError::msg(format!(
-                "no transaction/sender mismatch post-Prague1: {num_txs} txs vs {num_senders} \
-                 senders at timestamp {timestamp}. PoL injection should always occur"
-            )));
-        }
-
-        let num_injected = num_txs - num_senders;
-        if num_injected != 1 {
-            return Err(BlockExecutionError::msg(format!(
-                "expected exactly 1 injected PoL transaction, found {num_injected}"
-            )));
-        }
-
-        let pol_tx = &outcome.block.body().transactions[0];
-        let pol_sender = match pol_tx {
-            BerachainTxEnvelope::Berachain(pol) => pol.from,
-            _ => {
-                return Err(BlockExecutionError::msg(format!(
-                    "first transaction is not PoL (type {:?})",
-                    pol_tx.tx_type()
-                )));
-            }
-        };
-
-        let mut fixed_senders = Vec::with_capacity(num_txs);
-        fixed_senders.push(pol_sender);
-        fixed_senders.extend(outcome.block.senders().iter().copied());
-
-        outcome.block = RecoveredBlock::new_unhashed(outcome.block.clone_block(), fixed_senders);
-
+        fix_pol_senders(&mut outcome, &self.chain_spec)?;
         Ok(outcome)
     }
 
@@ -150,5 +157,159 @@ where
 
     fn into_executor(self) -> Self::Executor {
         self.inner.into_executor()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        primitives::{BerachainBlock, BerachainBlockBody, BerachainHeader},
+        test_utils::bepolia_chainspec,
+        transaction::PoLTx,
+    };
+    use alloy_consensus::{BlockBody, Signed, TxLegacy};
+    use alloy_evm::block::BlockExecutionResult;
+    use alloy_primitives::{Address, Bytes, Sealed, Signature, address};
+    use reth_trie_common::{HashedPostState, updates::TrieUpdates};
+
+    const SYSTEM_ADDR: Address = address!("fffffffffffffffffffffffffffffffffffffffe");
+    const USER_ADDR: Address = address!("1111111111111111111111111111111111111111");
+
+    fn make_pol_tx(from: Address) -> BerachainTxEnvelope {
+        BerachainTxEnvelope::Berachain(Sealed::new(PoLTx {
+            chain_id: 1,
+            from,
+            to: Address::ZERO,
+            nonce: 0,
+            gas_limit: 30_000_000,
+            gas_price: 1000,
+            input: Bytes::new(),
+        }))
+    }
+
+    fn make_eth_tx() -> BerachainTxEnvelope {
+        use alloy_consensus::EthereumTxEnvelope;
+        let signed = Signed::new_unhashed(TxLegacy::default(), Signature::test_signature());
+        BerachainTxEnvelope::Ethereum(EthereumTxEnvelope::Legacy(signed))
+    }
+
+    fn make_outcome(
+        txs: Vec<BerachainTxEnvelope>,
+        senders: Vec<Address>,
+        timestamp: u64,
+    ) -> BlockBuilderOutcome<BerachainPrimitives> {
+        let header = BerachainHeader { timestamp, ..Default::default() };
+        let body = BerachainBlockBody { transactions: txs, ..BlockBody::default() };
+        let block = BerachainBlock { header, body };
+        let recovered = RecoveredBlock::new_unhashed(block, senders);
+
+        BlockBuilderOutcome {
+            execution_result: BlockExecutionResult::default(),
+            hashed_state: HashedPostState::default(),
+            trie_updates: TrieUpdates::default(),
+            block: recovered,
+        }
+    }
+
+    fn pre_prague1_timestamp() -> u64 {
+        0
+    }
+
+    fn post_prague1_timestamp(chain_spec: &BerachainChainSpec) -> u64 {
+        use crate::hardforks::BerachainHardfork;
+        chain_spec
+            .inner
+            .hardforks
+            .fork(BerachainHardfork::Prague1)
+            .as_timestamp()
+            .expect("Prague1 must have a timestamp on bepolia")
+    }
+
+    #[test]
+    fn pre_prague1_equal_counts_ok() {
+        let chain_spec = bepolia_chainspec();
+        let ts = pre_prague1_timestamp();
+        assert!(!chain_spec.is_prague1_active_at_timestamp(ts));
+
+        let mut outcome = make_outcome(vec![], vec![], ts);
+        assert!(fix_pol_senders(&mut outcome, &chain_spec).is_ok());
+
+        let eth_tx = make_eth_tx();
+        let mut outcome = make_outcome(vec![eth_tx], vec![USER_ADDR], ts);
+        assert!(fix_pol_senders(&mut outcome, &chain_spec).is_ok());
+    }
+
+    #[test]
+    fn pre_prague1_mismatch_errors() {
+        let chain_spec = bepolia_chainspec();
+        let ts = pre_prague1_timestamp();
+
+        let eth_tx = make_eth_tx();
+        let mut outcome = make_outcome(vec![eth_tx], vec![], ts);
+        let err = fix_pol_senders(&mut outcome, &chain_spec).unwrap_err();
+        assert!(err.to_string().contains("transaction/sender mismatch pre-Prague1"));
+    }
+
+    #[test]
+    fn post_prague1_one_injection_fixes_senders() {
+        let chain_spec = bepolia_chainspec();
+        let ts = post_prague1_timestamp(&chain_spec);
+
+        let pol_tx = make_pol_tx(SYSTEM_ADDR);
+        let eth_tx = make_eth_tx();
+        let mut outcome = make_outcome(vec![pol_tx, eth_tx], vec![USER_ADDR], ts);
+
+        assert!(fix_pol_senders(&mut outcome, &chain_spec).is_ok());
+        assert_eq!(outcome.block.senders().len(), 2);
+        assert_eq!(outcome.block.senders()[0], SYSTEM_ADDR);
+        assert_eq!(outcome.block.senders()[1], USER_ADDR);
+    }
+
+    #[test]
+    fn post_prague1_no_mismatch_errors() {
+        let chain_spec = bepolia_chainspec();
+        let ts = post_prague1_timestamp(&chain_spec);
+
+        let eth_tx = make_eth_tx();
+        let mut outcome = make_outcome(vec![eth_tx], vec![USER_ADDR], ts);
+        let err = fix_pol_senders(&mut outcome, &chain_spec).unwrap_err();
+        assert!(err.to_string().contains("no transaction/sender mismatch post-Prague1"));
+    }
+
+    #[test]
+    fn post_prague1_multiple_injections_errors() {
+        let chain_spec = bepolia_chainspec();
+        let ts = post_prague1_timestamp(&chain_spec);
+
+        let pol1 = make_pol_tx(SYSTEM_ADDR);
+        let pol2 = make_pol_tx(SYSTEM_ADDR);
+        let eth_tx = make_eth_tx();
+        let mut outcome = make_outcome(vec![pol1, pol2, eth_tx], vec![USER_ADDR], ts);
+        let err = fix_pol_senders(&mut outcome, &chain_spec).unwrap_err();
+        assert!(err.to_string().contains("expected exactly 1 injected PoL transaction, found 2"));
+    }
+
+    #[test]
+    fn post_prague1_non_pol_at_index_zero_errors() {
+        let chain_spec = bepolia_chainspec();
+        let ts = post_prague1_timestamp(&chain_spec);
+
+        let eth_tx = make_eth_tx();
+        let mut outcome = make_outcome(vec![eth_tx], vec![], ts);
+        let err = fix_pol_senders(&mut outcome, &chain_spec).unwrap_err();
+        assert!(err.to_string().contains("first transaction is not PoL"));
+    }
+
+    #[test]
+    fn post_prague1_pol_only_block() {
+        let chain_spec = bepolia_chainspec();
+        let ts = post_prague1_timestamp(&chain_spec);
+
+        let pol_tx = make_pol_tx(SYSTEM_ADDR);
+        let mut outcome = make_outcome(vec![pol_tx], vec![], ts);
+        assert!(fix_pol_senders(&mut outcome, &chain_spec).is_ok());
+        assert_eq!(outcome.block.senders().len(), 1);
+        assert_eq!(outcome.block.senders()[0], SYSTEM_ADDR);
     }
 }
