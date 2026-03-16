@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30  # 20 transactions * 15s + generous buffer
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1

@@ -30,9 +30,9 @@ jobs:
     runs-on: ubuntu-latest-large
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Checkout hive tests
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: berachain/hive
           ref: master
@@ -146,7 +146,7 @@ jobs:
     name: run ${{ matrix.scenario.sim }}${{ matrix.scenario.limit && format(' - {0}', matrix.scenario.limit) }}
     runs-on: ubuntu-latest-large
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Download hive assets
         uses: actions/download-artifact@v5
@@ -169,7 +169,7 @@ jobs:
           chmod +x /usr/local/bin/hive
 
       - name: Checkout hive tests
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: berachain/hive
           ref: master
