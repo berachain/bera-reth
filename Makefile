@@ -60,6 +60,10 @@ docker-build-push-nightly: ## Build and push cross-arch Docker image tagged with
 docker-build-push-nightly-profiling: ## Build and push cross-arch Docker image with profiling profile tagged with nightly-profiling.
 	$(call docker_build_push,nightly-profiling,nightly-profiling)
 
+.PHONY: docker-build-push-nightly-sequencer
+docker-build-push-nightly-sequencer: ## Build and push cross-arch Docker image latest sequencer-dev commit tagged with sequencer-dev.
+	$(call docker_build_push,sequencer-dev,sequencer-dev)
+
 # Create a cross-arch Docker image with the given tags and push it
 define docker_build_push
 	docker buildx build --file ./Dockerfile . \

@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: 'release'
+      ref:
+        description: 'Git ref to checkout'
+        required: false
+        type: string
+        default: ''
 
 env:
   IMAGE_NAME: ${{ github.repository_owner }}/bera-reth
@@ -29,6 +34,8 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
