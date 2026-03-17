@@ -1,0 +1,17 @@
+name: Docker Nightly Sequencer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  docker-nightly-sequencer:
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      make-target: docker-build-push-nightly-sequencer
+      profile: maxperf
+      ref: sequencer-dev
