@@ -28,15 +28,3 @@ jobs:
     with:
       make-target: docker-build-push-nightly-profiling
       profile: profiling
-
-  docker-nightly-sequencer:
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
-    uses: ./.github/workflows/docker-build.yml
-    with:
-      make-target: docker-build-push-nightly-sequencer
-      profile: maxperf
-      ref: sequencer-dev
