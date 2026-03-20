@@ -680,9 +680,7 @@ impl From<Genesis> for BerachainChainSpec {
             genesis.config.deposit_contract_address.map(|address| DepositContract {
                 address,
                 block: 0,
-                // This value is copied from Reth mainnet. Berachain's deposit contract topic is
-                // different but also unused.
-                topic: b256!("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5"),
+                topic: b256!("0x68af751683498a9f9be59fe8b0d52a64dd155255d85cdb29fea30b1e3f891d46"),
             });
 
         let hardforks = ChainHardforks::new(hardforks);
