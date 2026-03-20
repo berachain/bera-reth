@@ -1,3 +1,9 @@
+// Berachain uses a custom deposit contract with a different event signature than
+// the standard EIP-6110 deposit contract. This module replaces the default
+// reth_evm::primitives::eip6110 deposit parsing while preserving the same
+// EIP-6110 convention: deposits are parsed from transaction logs and included
+// directly as deposit requests in the execution payload's requests list
+// (request type 0x00 per EIP-6110).
 use alloy_consensus::TxReceipt;
 use alloy_primitives::{Address, Bytes, Log};
 use alloy_sol_types::{SolEvent, sol};
