@@ -42,22 +42,36 @@ const MOCK_AMOUNT_GWEI: u64 = 32_000_000_000;
 //   sig data      = [0;96]
 const DEPOSIT_EMITTER_BYTECODE: &str = concat!(
     // head[0] = 0xa0 at mem[0]
-    "7f00000000000000000000000000000000000000000000000000000000000000a0", "6000", "52",
+    "7f00000000000000000000000000000000000000000000000000000000000000a0",
+    "6000",
+    "52",
     // head[1] = 0x100 at mem[32]
-    "7f0000000000000000000000000000000000000000000000000000000000000100", "6020", "52",
+    "7f0000000000000000000000000000000000000000000000000000000000000100",
+    "6020",
+    "52",
     // head[2] = 0x773594000 (32_000_000_000) at mem[64]
-    "7f0000000000000000000000000000000000000000000000000000000773594000", "6040", "52",
+    "7f0000000000000000000000000000000000000000000000000000000773594000",
+    "6040",
+    "52",
     // head[3] = 0x140 at mem[96]
-    "7f0000000000000000000000000000000000000000000000000000000000000140", "6060", "52",
+    "7f0000000000000000000000000000000000000000000000000000000000000140",
+    "6060",
+    "52",
     // head[4] = 0 (index) at mem[128] — zero, memory already zeroed, skip MSTORE
     // pubkey length = 48 at mem[160=0xa0]
-    "6030", "60a0", "52",
+    "6030",
+    "60a0",
+    "52",
     // pubkey data [0;64] at mem[192..256] — zero, skip
     // credentials length = 32 at mem[256=0x100]
-    "6020", "610100", "52",
+    "6020",
+    "610100",
+    "52",
     // credentials data [0;32] at mem[288..320] — zero, skip
     // signature length = 96 at mem[320=0x140]
-    "6060", "610140", "52",
+    "6060",
+    "610140",
+    "52",
     // signature data [0;96] at mem[352..448] — zero, skip
     // LOG1(offset=0, size=448=0x01c0, topic=0x68af...)
     "7f68af751683498a9f9be59fe8b0d52a64dd155255d85cdb29fea30b1e3f891d46",
@@ -65,7 +79,9 @@ const DEPOSIT_EMITTER_BYTECODE: &str = concat!(
     "5f",     // PUSH0 (offset = 0)
     "a1",     // LOG1
     // RETURN
-    "5f", "5f", "f3",
+    "5f",
+    "5f",
+    "f3",
 );
 
 async fn setup_deposit_test() -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
@@ -79,7 +95,11 @@ async fn setup_deposit_test() -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)
         .alloc
         .entry(DEPOSIT_CONTRACT)
         .and_modify(|a| a.code = Some(bytecode.clone()))
-        .or_insert_with(|| GenesisAccount { code: Some(bytecode), nonce: Some(1), ..Default::default() });
+        .or_insert_with(|| GenesisAccount {
+            code: Some(bytecode),
+            nonce: Some(1),
+            ..Default::default()
+        });
     let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
     Ok((runtime, chain_spec))
 }
