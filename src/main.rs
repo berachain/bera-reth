@@ -25,6 +25,13 @@ fn main() {
     // Initialize Bera-Reth version metadata
     init_bera_version().expect("Failed to initialize Bera-Reth version metadata");
 
+    // Override bera-reth recommended defaults
+    reth_node_core::args::DefaultEngineValues::default()
+        .with_persistence_threshold(0)
+        .with_memory_block_buffer_target(0)
+        .try_init()
+        .expect("engine defaults must be set before CLI parsing");
+
     // Enable backtraces unless a RUST_BACKTRACE value has already been explicitly provided.
     if std::env::var_os("RUST_BACKTRACE").is_none() {
         unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
