@@ -2,6 +2,7 @@ use crate::{
     chainspec::BerachainChainSpec,
     engine::BerachainExecutionData,
     evm::BerachainEvmFactory,
+    flashblocks::BerachainFlashblockPayloadBase,
     node::evm::{
         assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,
         builder::BerachainBlockBuilder, receipt::BerachainReceiptBuilder,
@@ -37,7 +38,7 @@ use reth_primitives_traits::{
 use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
 use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 
-const BERACHAIN_BLOCK_TIME_SECONDS: u64 = 2;
+pub const BERACHAIN_BLOCK_TIME_SECONDS: u64 = 2;
 
 #[derive(Debug, Clone)]
 pub struct BerachainEvmConfig {
@@ -363,5 +364,20 @@ impl ConfigureEngineEvm<BerachainExecutionData> for BerachainEvmConfig {
             let signer = tx.try_recover().map_err(AnyError::new)?;
             Ok::<_, AnyError>(tx.with_signer(signer))
         }))
+    }
+}
+
+impl From<BerachainFlashblockPayloadBase> for BerachainNextBlockEnvAttributes {
+    fn from(value: BerachainFlashblockPayloadBase) -> Self {
+        Self {
+            timestamp: value.timestamp,
+            suggested_fee_recipient: value.fee_recipient,
+            prev_randao: value.prev_randao,
+            gas_limit: value.gas_limit,
+            parent_beacon_block_root: Some(value.parent_beacon_block_root),
+            withdrawals: None,
+            prev_proposer_pubkey: value.prev_proposer_pubkey,
+            extra_data: Default::default(),
+        }
     }
 }
