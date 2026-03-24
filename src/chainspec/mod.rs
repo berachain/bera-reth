@@ -680,6 +680,8 @@ impl From<Genesis> for BerachainChainSpec {
             genesis.config.deposit_contract_address.map(|address| DepositContract {
                 address,
                 block: 0,
+                // This value is unique to Berachain's deposit event in its deposit contract.
+                // This is different from Eth mainnet's deposit event signature.
                 topic: b256!("0x68af751683498a9f9be59fe8b0d52a64dd155255d85cdb29fea30b1e3f891d46"),
             });
 
