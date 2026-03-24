@@ -6,12 +6,14 @@ pub mod chainspec;
 pub mod consensus;
 pub mod engine;
 pub mod evm;
+pub mod flashblocks;
 pub mod genesis;
 pub mod hardforks;
 pub mod node;
 pub mod pool;
 pub mod primitives;
 pub mod rpc;
+pub mod sequencer;
 pub mod transaction;
 pub mod version;
 
