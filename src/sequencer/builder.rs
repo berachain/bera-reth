@@ -33,6 +33,7 @@ use reth_basic_payload_builder::{
     BuildArguments, BuildOutcome, MissingPayloadBehaviour, PayloadBuilder, PayloadConfig,
 };
 use reth_chainspec::{ChainSpecProvider, EthChainSpec};
+use reth_ethereum_engine_primitives::BlobSidecars;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_ethereum_primitives::Receipt;
 use reth_evm::{
@@ -45,7 +46,7 @@ use reth_payload_primitives::PayloadBuilderAttributes;
 use reth_primitives_traits::transaction::error::InvalidTransactionError;
 use reth_transaction_pool::{
     BestTransactions, BestTransactionsAttributes, ValidPoolTransaction,
-    error::InvalidPoolTransactionError,
+    error::{Eip4844PoolTransactionError, InvalidPoolTransactionError},
 };
 use std::{
     sync::{
@@ -253,7 +254,7 @@ impl FlashblockExecutionTracker {
 fn build_flashblock_payload<Client, Pool, F>(
     evm_config: BerachainEvmConfig,
     client: Client,
-    _pool: Pool,
+    pool: Pool,
     builder_config: EthereumBuilderConfig,
     sequencer_config: SequencerConfig,
     publisher: Arc<WebSocketPublisher>,
@@ -347,6 +348,7 @@ where
     let withdrawals: Vec<Withdrawal> = attributes.withdrawals().to_vec();
 
     let mut tracker = FlashblockExecutionTracker::new();
+    let mut blob_sidecars = BlobSidecars::Empty;
     let mut flashblock_index = 0u64;
     let mut last_flashblock_time = Instant::now();
     let interval = sequencer_config.interval;
@@ -440,6 +442,25 @@ where
         let tx = pool_tx.to_consensus();
         let tx_hash = *tx.hash();
 
+        // Fetch blob sidecar before execution so we can skip the tx if it's missing
+        let mut blob_tx_sidecar = None;
+        if tx.as_eip4844().is_some() {
+            match pool.get_blob(tx_hash).map_err(PayloadBuilderError::other)? {
+                Some(sidecar) => {
+                    blob_tx_sidecar = Some(sidecar);
+                }
+                None => {
+                    best_txs.mark_invalid(
+                        &pool_tx,
+                        &InvalidPoolTransactionError::Eip4844(
+                            Eip4844PoolTransactionError::MissingEip4844BlobSidecar,
+                        ),
+                    );
+                    continue;
+                }
+            }
+        }
+
         // Execute the transaction and capture the result
         let mut execution_logs = Vec::new();
         let mut tx_success = false;
@@ -482,6 +503,10 @@ where
             logs: execution_logs,
         };
         tracker.receipts.push(receipt);
+
+        if let Some(sidecar) = blob_tx_sidecar {
+            blob_sidecars.push_sidecar_variant(sidecar.as_ref().clone());
+        }
 
         // Encode transaction
         let tx_bytes = Bytes::from(tx.inner().encoded_2718());
@@ -527,7 +552,8 @@ where
     );
 
     let payload =
-        BerachainBuiltPayload::new(payload_id, sealed_block, tracker.total_fees, requests);
+        BerachainBuiltPayload::new(payload_id, sealed_block, tracker.total_fees, requests)
+            .with_sidecars(blob_sidecars);
 
     Ok(BuildOutcome::Better { payload, cached_reads })
 }
