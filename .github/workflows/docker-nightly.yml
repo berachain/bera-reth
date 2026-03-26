@@ -11,20 +11,16 @@ jobs:
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
-      make-target: docker-build-push-nightly
+      tags: nightly
       profile: maxperf
 
   docker-nightly-profiling:
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
-      make-target: docker-build-push-nightly-profiling
+      tags: nightly-profiling
       profile: profiling
