@@ -1,10 +1,5 @@
 # syntax=docker.io/docker/dockerfile:1.7-labs
 
-# Support setting various labels on the final image
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
-
 FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 
