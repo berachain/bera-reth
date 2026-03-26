@@ -1,4 +1,4 @@
-name: Docker Nightly Sequencer
+name: Docker Nightly Preconf
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  docker-nightly-sequencer:
+  docker-nightly-preconf:
     permissions:
       contents: read
       packages: write
@@ -14,6 +14,6 @@ jobs:
       id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
-      make-target: docker-build-push-nightly-sequencer
+      make-target: docker-build-push-nightly-preconf
       profile: maxperf
-      ref: sequencer-dev
+      ref: preconf-dev

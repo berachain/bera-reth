@@ -60,9 +60,9 @@ docker-build-push-nightly: ## Build and push cross-arch Docker image tagged with
 docker-build-push-nightly-profiling: ## Build and push cross-arch Docker image with profiling profile tagged with nightly-profiling.
 	$(call docker_build_push,nightly-profiling,nightly-profiling)
 
-.PHONY: docker-build-push-nightly-sequencer
-docker-build-push-nightly-sequencer: ## Build and push a cross-arch Docker image for the latest `sequencer-dev` commit, tagged as `sequencer-dev-nightly`.
-	$(call docker_build_push,sequencer-dev-nightly,sequencer-dev-nightly)
+.PHONY: docker-build-push-nightly-preconf
+docker-build-push-nightly-preconf: ## Build and push a cross-arch Docker image for the latest `preconf-dev` commit, tagged as `preconf-nightly`.
+	$(call docker_build_push,preconf-nightly,preconf-nightly)
 
 # Create a cross-arch Docker image with the given tags and push it
 define docker_build_push
