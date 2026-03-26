@@ -5,7 +5,7 @@
 // directly as deposit requests in the execution payload's requests list
 // (request type 0x00 per EIP-6110).
 use alloy_consensus::TxReceipt;
-use alloy_primitives::{Address, Bytes, Log};
+use alloy_primitives::{Address, B256, Bytes, Log, b256};
 use alloy_sol_types::{SolEvent, sol};
 use reth_evm::block::BlockValidationError;
 
@@ -18,6 +18,14 @@ sol! {
         uint64 index
     );
 }
+
+/// keccak256("Deposit(bytes,bytes,uint64,bytes,uint64)")
+///
+/// Berachain uses a 5-field Deposit event that differs from Ethereum mainnet's
+/// deposit contract. This constant must stay in sync with the `sol!` definition
+/// above; see the `deposit_event_signature_matches_sol_type` test.
+pub const DEPOSIT_EVENT_SIGNATURE: B256 =
+    b256!("68af751683498a9f9be59fe8b0d52a64dd155255d85cdb29fea30b1e3f891d46");
 
 const DEPOSIT_BYTES_SIZE: usize = 48 + 32 + 8 + 96 + 8;
 
@@ -53,4 +61,18 @@ where
         }
     }
     Ok(out.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deposit_event_signature_matches_sol_type() {
+        assert_eq!(
+            DEPOSIT_EVENT_SIGNATURE,
+            Deposit::SIGNATURE_HASH,
+            "DEPOSIT_EVENT_SIGNATURE must match the keccak256 of the sol! Deposit event"
+        );
+    }
 }
