@@ -65,8 +65,8 @@ jobs:
             FEATURES=${{ inputs.features }}
           provenance: false
           outputs: type=image,name=${{ env.DOCKER_IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ matrix.arch }}-${{ inputs.profile }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ inputs.profile }}
+          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE_NAME }}:cache-${{ matrix.arch }}-${{ inputs.profile }}
+          cache-to: type=registry,mode=max,ref=${{ env.DOCKER_IMAGE_NAME }}:cache-${{ matrix.arch }}-${{ inputs.profile }}
 
       - name: Export digest
         run: |
