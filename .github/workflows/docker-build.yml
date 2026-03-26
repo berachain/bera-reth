@@ -40,6 +40,12 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version tag
+        id: version
+        run: echo "tag=$(git describe --tags --abbrev=0 2>/dev/null || echo dev)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -60,7 +66,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           build-args: |
             COMMIT=${{ github.sha }}
-            VERSION=${{ github.ref_name }}
+            VERSION=${{ steps.version.outputs.tag }}
             BUILD_PROFILE=${{ inputs.profile }}
             FEATURES=${{ inputs.features }}
           provenance: false
