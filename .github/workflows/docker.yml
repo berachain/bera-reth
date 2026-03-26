@@ -11,19 +11,15 @@ jobs:
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
-      make-target: docker-build-push
+      tags: ${{ github.ref_name }}
 
   docker-latest:
     if: ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') && !contains(github.ref, '+') && !contains(github.ref, '_') }}
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     uses: ./.github/workflows/docker-build.yml
     with:
-      make-target: docker-build-push-latest
+      tags: ${{ github.ref_name }},latest
