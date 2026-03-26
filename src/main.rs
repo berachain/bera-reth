@@ -18,12 +18,22 @@ use reth_node_builder::NodeHandle;
 use std::sync::Arc;
 use tracing::info;
 
+/// Persist every canonical block to disk immediately rather than buffering.
+/// Upstream reth defaults to 2, but Berachain's faster block times benefit from
+/// eager persistence to keep the in-memory block window minimal.
+const BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD: u64 = 0;
+
 fn main() {
     // Install signal handler for better crash reporting
     reth_cli_util::sigsegv_handler::install();
 
     // Initialize Bera-Reth version metadata
     init_bera_version().expect("Failed to initialize Bera-Reth version metadata");
+
+    reth_node_core::args::DefaultEngineValues::default()
+        .with_persistence_threshold(BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD)
+        .try_init()
+        .expect("engine defaults must be set before CLI parsing");
 
     // Enable backtraces unless a RUST_BACKTRACE value has already been explicitly provided.
     if std::env::var_os("RUST_BACKTRACE").is_none() {
