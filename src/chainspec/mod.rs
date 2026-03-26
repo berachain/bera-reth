@@ -677,12 +677,10 @@ impl From<Genesis> for BerachainChainSpec {
         // have the deployment block in the genesis file, so we use block zero. We use the same
         // deposit topic as the mainnet contract if we have the deposit contract address in the
         // genesis json.
-        let deposit_contract =
-            genesis.config.deposit_contract_address.map(|address| DepositContract {
-                address,
-                block: 0,
-                topic: DEPOSIT_EVENT_SIGNATURE,
-            });
+        let deposit_contract = genesis
+            .config
+            .deposit_contract_address
+            .map(|address| DepositContract { address, block: 0, topic: DEPOSIT_EVENT_SIGNATURE });
 
         let hardforks = ChainHardforks::new(hardforks);
 
