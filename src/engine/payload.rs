@@ -1,5 +1,6 @@
 use crate::{
     chainspec::BerachainChainSpec,
+    node::evm::config::BERACHAIN_BLOCK_TIME_SECONDS,
     primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
 };
 use alloy_consensus::BlockHeader;
@@ -142,13 +143,7 @@ impl PayloadAttributesBuilder<BerachainPayloadAttributes, BerachainHeader>
     for LocalPayloadAttributesBuilder<BerachainChainSpec>
 {
     fn build(&self, parent: &SealedHeader<BerachainHeader>) -> BerachainPayloadAttributes {
-        let mut timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-
-        if self.enforce_increasing_timestamp {
-            timestamp = std::cmp::max(parent.timestamp().saturating_add(1), timestamp);
-        }
-
+        let timestamp = parent.timestamp() + BERACHAIN_BLOCK_TIME_SECONDS;
         BerachainPayloadAttributes {
             inner: EthPayloadAttributes {
                 timestamp,

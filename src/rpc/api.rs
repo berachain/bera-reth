@@ -1,10 +1,11 @@
 use crate::{
+    flashblocks::{BerachainFlashblockPayload, FlashblocksListeners},
     primitives::BerachainHeader,
     rpc::receipt::BerachainReceiptEnvelope,
     transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE},
 };
-use alloy_consensus::Transaction;
-use alloy_eips::eip2930::AccessList;
+use alloy_consensus::{BlockHeader, Transaction};
+use alloy_eips::{BlockId, BlockNumberOrTag, eip2930::AccessList};
 use alloy_network::{
     BuildResult, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
 };
@@ -13,16 +14,17 @@ use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
 use reth::{
-    providers::ProviderHeader,
+    providers::{BlockReaderIdExt, ProviderHeader},
     rpc::compat::RpcConvert,
     tasks::{
         TaskSpawner,
         pool::{BlockingTaskGuard, BlockingTaskPool},
     },
-    transaction_pool::{PoolTransaction, TransactionPool},
 };
+use reth_chain_state::BlockState;
+use reth_primitives_traits::{BlockBody, RecoveredBlock};
 use reth_rpc_eth_api::{
-    EthApiTypes, RpcNodeCore, RpcNodeCoreExt,
+    EthApiTypes, FromEthApiError, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
     helpers::{
         Call, EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, LoadBlock,
         LoadFee, LoadPendingBlock, LoadReceipt, LoadState, LoadTransaction, SpawnBlocking, Trace,
@@ -31,9 +33,13 @@ use reth_rpc_eth_api::{
 };
 use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
-    builder::config::PendingBlockKind, error::FromEvmError,
+    block::BlockAndReceipts, builder::config::PendingBlockKind, error::FromEvmError,
 };
-use reth_transaction_pool::{AddedTransactionOutcome, TransactionOrigin};
+use reth_storage_api::{BlockIdReader, BlockReader, StateProviderBox, StateProviderFactory};
+use reth_transaction_pool::{
+    AddedTransactionOutcome, PoolTransaction, TransactionOrigin, TransactionPool,
+};
+use std::sync::Arc;
 
 impl fmt::Display for BerachainTxType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -327,6 +333,29 @@ pub struct BerachainApi<N: RpcNodeCore, Rpc: RpcConvert> {
     /// All nested fields bundled together.
     #[deref]
     pub(super) inner: reth_rpc::EthApi<N, Rpc>,
+
+    /// Flashblocks listeners.
+    ///
+    /// If set, provides receivers for pending blocks, flashblock sequences, and build status.
+    pub flashblocks: Option<Arc<FlashblocksListeners<N::Primitives, BerachainFlashblockPayload>>>,
+}
+
+impl<N: RpcNodeCore, Rpc: RpcConvert> BerachainApi<N, Rpc>
+where
+    N::Provider: BlockReaderIdExt,
+{
+    /// Returns the current pending block from the flashblock stream, if any.
+    ///
+    /// Only returns a block whose parent hash matches the latest canonical header,
+    /// ensuring stale flashblocks are not served during reorgs.
+    pub fn pending_flashblock(&self) -> Option<PendingBlock<N::Primitives>> {
+        let latest_hash = self.provider().latest_header().ok().flatten()?.hash();
+
+        self.flashblocks
+            .as_ref()
+            .and_then(|f| f.pending_block_rx.borrow().as_ref().map(|b| b.pending.clone()))
+            .filter(|pending| pending.block().parent_hash() == latest_hash)
+    }
 }
 
 impl<N, Rpc> Clone for BerachainApi<N, Rpc>
@@ -335,7 +364,7 @@ where
     Rpc: RpcConvert,
 {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
+        Self { inner: self.inner.clone(), flashblocks: self.flashblocks.clone() }
     }
 }
 
@@ -453,18 +482,35 @@ where
     ) -> Result<B256, Self::Error> {
         let (raw_tx, recovered) = tx.split();
 
-        // broadcast raw transaction to subscribers if there is any.
         self.broadcast_raw_transaction(raw_tx);
 
         let pool_transaction = <Self::Pool as TransactionPool>::Transaction::from_pooled(recovered);
 
-        // Upstream reth v1.11.1 changed eth_sendRawTransaction to pass External origin,
-        // but Berachain treats all RPC-submitted transactions as Local to bypass pool
-        // capacity limits and ensure consistent block gas utilization.
         let AddedTransactionOutcome { hash, .. } =
             self.pool().add_transaction(TransactionOrigin::Local, pool_transaction).await?;
 
         Ok(hash)
+    }
+
+    fn transaction_receipt(
+        &self,
+        hash: B256,
+    ) -> impl Future<Output = Result<Option<RpcReceipt<Self::NetworkTypes>>, Self::Error>> + Send
+    {
+        let this = self.clone();
+        async move {
+            let tx_receipt = this.load_transaction_and_receipt(hash).await?;
+
+            if tx_receipt.is_none() &&
+                let Some(pending_block) = this.pending_flashblock() &&
+                let Some(Ok(receipt)) =
+                    pending_block.find_and_convert_transaction_receipt(hash, this.converter())
+            {
+                return Ok(Some(receipt));
+            }
+            let Some((tx, meta, receipt)) = tx_receipt else { return Ok(None) };
+            this.build_transaction_receipt(tx, meta, receipt).await.map(Some)
+        }
     }
 }
 
@@ -500,6 +546,43 @@ where
     EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
+    #[allow(clippy::manual_async_fn)]
+    fn block_transaction_count(
+        &self,
+        block_id: BlockId,
+    ) -> impl Future<Output = Result<Option<usize>, Self::Error>> + Send {
+        async move {
+            if (block_id.is_latest() || block_id.is_pending()) &&
+                let Some(pending) = self.pending_flashblock()
+            {
+                return Ok(Some(pending.block().body().transaction_count()));
+            }
+
+            if block_id.is_pending() {
+                return Ok(self
+                    .provider()
+                    .pending_block()
+                    .map_err(Into::<EthApiError>::into)?
+                    .map(|block| block.body().transaction_count()));
+            }
+
+            let block_hash = match self
+                .provider()
+                .block_hash_for_id(block_id)
+                .map_err(Into::<EthApiError>::into)?
+            {
+                Some(block_hash) => block_hash,
+                None => return Ok(None),
+            };
+
+            Ok(self
+                .cache()
+                .get_recovered_block(block_hash)
+                .await
+                .map_err(Into::<EthApiError>::into)?
+                .map(|b| b.body().transaction_count()))
+        }
+    }
 }
 
 impl<N, Rpc> LoadBlock for BerachainApi<N, Rpc>
@@ -508,6 +591,52 @@ where
     N: RpcNodeCore,
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
+    #[allow(clippy::manual_async_fn, clippy::collapsible_if)]
+    fn recovered_block(
+        &self,
+        block_id: BlockId,
+    ) -> impl Future<
+        Output = Result<
+            Option<Arc<RecoveredBlock<<Self::Provider as BlockReader>::Block>>>,
+            Self::Error,
+        >,
+    > + Send {
+        async move {
+            // Serve flashblock for both "latest" and "pending" when available
+            if block_id.is_latest() || block_id.is_pending() {
+                if self.pending_flashblock().is_some() {
+                    if let Some(pending) = self.local_pending_block().await? {
+                        return Ok(Some(pending.block));
+                    }
+                }
+            }
+
+            // Default pending fallback: CL-provided block, then locally built
+            if block_id.is_pending() {
+                if let Some(pending_block) =
+                    self.provider().pending_block().map_err(Self::Error::from_eth_err)?
+                {
+                    return Ok(Some(Arc::new(pending_block)));
+                }
+
+                return match self.local_pending_block().await? {
+                    Some(pending) => Ok(Some(pending.block)),
+                    None => Ok(None),
+                };
+            }
+
+            let block_hash = match self
+                .provider()
+                .block_hash_for_id(block_id)
+                .map_err(Self::Error::from_eth_err)?
+            {
+                Some(block_hash) => block_hash,
+                None => return Ok(None),
+            };
+
+            self.cache().get_recovered_block(block_hash).await.map_err(Self::Error::from_eth_err)
+        }
+    }
 }
 
 impl<N, Rpc> EthCall for BerachainApi<N, Rpc>
@@ -582,6 +711,30 @@ where
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
     Self: LoadPendingBlock,
 {
+    #[allow(clippy::manual_async_fn, clippy::collapsible_if)]
+    fn state_at_block_id_or_latest(
+        &self,
+        block_id: Option<BlockId>,
+    ) -> impl Future<Output = Result<StateProviderBox, Self::Error>> + Send
+    where
+        Self: SpawnBlocking,
+    {
+        async move {
+            let should_use_flashblock = block_id.is_none_or(|id| id.is_latest() || id.is_pending());
+
+            if should_use_flashblock {
+                if let Ok(Some(state)) = self.local_pending_state().await {
+                    return Ok(state);
+                }
+            }
+
+            if let Some(block_id) = block_id {
+                self.state_at_block_id(block_id).await
+            } else {
+                Ok(self.latest_state()?)
+            }
+        }
+    }
 }
 
 impl<N, Rpc> LoadFee for BerachainApi<N, Rpc>
@@ -598,6 +751,25 @@ where
     #[inline]
     fn fee_history_cache(&self) -> &FeeHistoryCache<ProviderHeader<N::Provider>> {
         self.inner.fee_history_cache()
+    }
+
+    #[allow(clippy::manual_async_fn)]
+    fn gas_price(&self) -> impl Future<Output = Result<U256, Self::Error>> + Send {
+        async move {
+            let suggested_tip = LoadFee::suggested_priority_fee(self).await?;
+
+            let base_fee = if let Some(pending) = self.pending_flashblock() {
+                pending.block().base_fee_per_gas().unwrap_or_default()
+            } else {
+                self.provider()
+                    .latest_header()
+                    .map_err(Into::<EthApiError>::into)?
+                    .and_then(|h| h.base_fee_per_gas())
+                    .unwrap_or_default()
+            };
+
+            Ok(suggested_tip + U256::from(base_fee))
+        }
     }
 }
 
@@ -620,5 +792,55 @@ where
     #[inline]
     fn pending_block_kind(&self) -> PendingBlockKind {
         self.inner.pending_block_kind()
+    }
+
+    /// Returns the pending state built on top of the latest flashblock.
+    ///
+    /// If the flashblock's parent block hasn't been imported into the DB yet, falls back to
+    /// canonical state via `Ok(None)`.
+    async fn local_pending_state(&self) -> Result<Option<StateProviderBox>, Self::Error>
+    where
+        Self: SpawnBlocking,
+    {
+        let Some(pending_block) = self.pending_flashblock() else {
+            tracing::info!("no pending flashblock available, falling back to canonical state");
+            return Ok(None);
+        };
+
+        let parent_hash = pending_block.block().parent_hash();
+
+        let Ok(latest_historical) =
+            self.provider().history_by_block_hash(parent_hash).map_err(Into::<EthApiError>::into)
+        else {
+            tracing::info!(
+                %parent_hash,
+                "parent block not imported yet, falling back to canonical state"
+            );
+            return Ok(None);
+        };
+
+        let state = BlockState::from(pending_block);
+        Ok(Some(Box::new(state.state_provider(latest_historical)) as StateProviderBox))
+    }
+
+    async fn local_pending_block(
+        &self,
+    ) -> Result<Option<BlockAndReceipts<Self::Primitives>>, Self::Error> {
+        if let Some(pending) = self.pending_flashblock() {
+            return Ok(Some(pending.into_block_and_receipts()));
+        }
+
+        let latest = self
+            .provider()
+            .latest_header()?
+            .ok_or(EthApiError::HeaderNotFound(BlockNumberOrTag::Latest.into()))?;
+
+        let latest = self
+            .cache()
+            .get_block_and_receipts(latest.hash())
+            .await
+            .map_err(Into::<EthApiError>::into)?
+            .map(|(block, receipts)| BlockAndReceipts { block, receipts });
+        Ok(latest)
     }
 }

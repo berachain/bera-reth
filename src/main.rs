@@ -8,20 +8,50 @@ use bera_reth::{
     consensus::BerachainBeaconConsensus,
     evm::BerachainEvmFactory,
     node::{BerachainNode, evm::config::BerachainEvmConfig},
+    rpc::{BerachainAddOns, BerachainEthApiBuilder},
+    sequencer::{
+        FlashblockPayloadServiceBuilder, FlashblockSigner, SequencerConfig, WebSocketPublisher,
+    },
     version::init_bera_version,
 };
 use clap::Parser;
+use jsonrpsee::client_transport::ws::Url;
 use reth::CliRunner;
-use reth_cli_commands::node::NoArgs;
+use reth_chainspec::EthChainSpec;
 use reth_ethereum_cli::Cli;
-use reth_node_builder::NodeHandle;
-use std::sync::Arc;
+use reth_node_builder::{Node, NodeHandle, components::BasicPayloadServiceBuilder};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 /// Persist every canonical block to disk immediately rather than buffering.
 /// Upstream reth defaults to 2, but Berachain's faster block times benefit from
 /// eager persistence to keep the in-memory block window minimal.
 const BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD: u64 = 0;
+
+/// Sequencer-specific CLI arguments
+#[derive(Debug, Clone, clap::Args)]
+pub struct SequencerArgs {
+    /// Enable sequencer mode for flashblock production
+    #[arg(long, default_value = "false")]
+    pub sequencer_enabled: bool,
+
+    /// Flashblock emission interval in milliseconds
+    #[arg(long, default_value = "200")]
+    pub flashblock_interval_ms: u64,
+
+    /// WebSocket address for flashblock publishing
+    #[arg(long, default_value = "0.0.0.0:8548")]
+    pub flashblock_ws_addr: SocketAddr,
+
+    /// Path to BLS secret key file for signing flashblocks (hex-encoded 32-byte key)
+    #[arg(long)]
+    pub flashblock_signing_key: Option<PathBuf>,
+
+    /// WebSocket URL for subscribing to flashblocks from a sequencer (e.g., ws://sequencer:8548)
+    #[arg(long)]
+    pub flashblocks_url: Option<Url>,
+}
 
 fn main() {
     // Install signal handler for better crash reporting
@@ -47,16 +77,87 @@ fn main() {
         )
     };
 
-    if let Err(err) = Cli::<BerachainChainSpecParser, NoArgs>::parse()
+    if let Err(err) = Cli::<BerachainChainSpecParser, SequencerArgs>::parse()
         .with_runner_and_components::<BerachainNode>(
             CliRunner::try_default_runtime().expect("Failed to create default runtime"),
             cli_components_builder,
-            async move |builder, _| {
-                info!(target: "reth::cli", "Launching Berachain node");
-                let NodeHandle { node: _node, node_exit_future } =
-                    builder.node(BerachainNode::default()).launch_with_debug_capabilities().await?;
+            async move |builder, extra_args| {
+                if extra_args.sequencer_enabled {
+                    // Signing key is required in sequencer mode
+                    let chain_id = builder.config().chain.chain().id();
+                    let key_path = extra_args.flashblock_signing_key.ok_or_else(|| {
+                        eyre::eyre!("--flashblock-signing-key is required in sequencer mode")
+                    })?;
+                    let signer = FlashblockSigner::from_file(&key_path, chain_id)
+                        .map_err(|e| eyre::eyre!("failed to load signing key from {:?}: {}", key_path, e))?;
 
-                node_exit_future.await
+                    info!(
+                        target: "reth::cli",
+                        interval_ms = extra_args.flashblock_interval_ms,
+                        ws_addr = %extra_args.flashblock_ws_addr,
+                        pubkey = %hex::encode(signer.public_key_bytes()),
+                        "Launching Berachain node in SEQUENCER mode"
+                    );
+
+                    let config = SequencerConfig::new(
+                        extra_args.flashblock_interval_ms,
+                        extra_args.flashblock_ws_addr,
+                        signer,
+                    );
+
+                    let publisher = Arc::new(WebSocketPublisher::new(config.ws_addr));
+                    let ws_cancel = CancellationToken::new();
+
+                    // Bind WebSocket server before launching node
+                    let ws_listener = publisher.bind().await?;
+
+                    // Spawn WebSocket server
+                    let ws_publisher = publisher.clone();
+                    let ws_cancel_token = ws_cancel.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = ws_publisher.run(ws_listener, ws_cancel_token).await {
+                            tracing::error!(target: "sequencer::publisher", error = %e, "WebSocket server error");
+                        }
+                    });
+
+                    // Build node with flashblock payload builder
+                    let berachain_node = BerachainNode::default();
+                    let flashblock_builder = FlashblockPayloadServiceBuilder::new(config, publisher);
+
+                    let NodeHandle { node: _node, node_exit_future } = builder
+                        .with_types::<BerachainNode>()
+                        .with_components(
+                            berachain_node
+                                .components_builder()
+                                .payload(BasicPayloadServiceBuilder::new(flashblock_builder)),
+                        )
+                        .with_add_ons(berachain_node.add_ons())
+                        .launch_with_debug_capabilities()
+                        .await?;
+
+                    let result = node_exit_future.await;
+                    ws_cancel.cancel();
+                    result
+                } else {
+                    if let Some(ref url) = extra_args.flashblocks_url {
+                        info!(target: "reth::cli", %url, "Launching Berachain node with flashblocks");
+                    } else {
+                        info!(target: "reth::cli", "Launching Berachain node");
+                    }
+
+                    let eth_api_builder = BerachainEthApiBuilder::default()
+                        .with_flashblocks_url(extra_args.flashblocks_url);
+                    let berachain_node = BerachainNode::default();
+
+                    let NodeHandle { node: _node, node_exit_future } = builder
+                        .with_types::<BerachainNode>()
+                        .with_components(berachain_node.components_builder())
+                        .with_add_ons(BerachainAddOns::new(eth_api_builder))
+                        .launch_with_debug_capabilities()
+                        .await?;
+
+                    node_exit_future.await
+                }
             },
         )
     {
