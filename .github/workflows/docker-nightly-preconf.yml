@@ -1,0 +1,19 @@
+name: Docker Nightly Preconf
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  docker-nightly-preconf:
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      tags: nightly-preconf
+      profile: maxperf
+      ref: preconf-dev

@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: 'jemalloc asm-keccak min-debug-logs'
+      ref:
+        description: 'Git ref to checkout'
+        required: false
+        type: string
+        default: ''
 
 env:
   DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/bera-reth
@@ -42,6 +47,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ inputs.ref }}
 
       - name: Resolve version tag
         id: version
