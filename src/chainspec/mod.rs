@@ -565,8 +565,8 @@ impl From<Genesis> for BerachainChainSpec {
         }
 
         // Validate Prague3 ordering if configured (Prague3 must come at or after Prague2)
-        if let Some(prague3_config) = prague3_config_opt.as_ref()
-            && prague3_config.time < prague2_config.time
+        if let Some(prague3_config) = prague3_config_opt.as_ref() &&
+            prague3_config.time < prague2_config.time
         {
             panic!(
                 "Prague3 hardfork must activate at or after Prague2 hardfork. Prague2 time: {}, Prague3 time: {}.",
