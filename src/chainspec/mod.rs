@@ -348,10 +348,12 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn bootnodes(&self) -> Option<Vec<reth_network_peers::node_record::NodeRecord>> {
-        if self.inner.chain_id() == Berachain as u64 {
-            Some(bootnodes::BERACHAIN_MAINNET_BOOTNODES.clone())
-        } else {
-            self.inner.bootnodes()
+        match self.inner.chain_id() {
+            id if id == Berachain as u64 => Some(bootnodes::BERACHAIN_MAINNET_BOOTNODES.clone()),
+            id if id == BerachainBepolia as u64 => {
+                Some(bootnodes::BERACHAIN_BEPOLIA_BOOTNODES.clone())
+            }
+            _ => self.inner.bootnodes(),
         }
     }
 
