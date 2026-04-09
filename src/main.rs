@@ -18,10 +18,7 @@ use reth_node_builder::NodeHandle;
 use std::sync::Arc;
 use tracing::info;
 
-/// Production engine defaults: persist canonical blocks immediately and do not
-/// retain an extra in-memory window behind the head (`memory_block_buffer_target`).
-/// Upstream reth uses a higher persistence threshold; Berachain's block times
-/// favor minimal in-memory buffering.
+const BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD: u64 = 0;
 const BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD: u64 = 0;
 const BERACHAIN_DEFAULT_MEMORY_BLOCK_BUFFER_TARGET: u64 = 0;
 
