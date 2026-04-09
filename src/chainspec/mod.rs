@@ -26,12 +26,18 @@ use reth_chainspec::{
     NamedChain::Berachain, make_genesis_header,
 };
 use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
-use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
 /// Default minimum base fee when Prague1 is not active.
 const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
+const BERACHAIN_MAINNET: &str = "mainnet";
+const BERACHAIN_BEPOLIA: &str = "bepolia";
+const BERACHAIN_SUPPORTED_CHAINS: &[&str] = &[BERACHAIN_MAINNET, BERACHAIN_BEPOLIA];
+const MAINNET_ETH_GENESIS_JSON: &str =
+    include_str!(concat!(env!("OUT_DIR"), "/mainnet-eth-genesis.json"));
+const BEPOLIA_ETH_GENESIS_JSON: &str =
+    include_str!(concat!(env!("OUT_DIR"), "/bepolia-eth-genesis.json"));
 
 /// Berachain chain specification wrapping Reth's ChainSpec with Berachain hardforks
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
@@ -424,10 +430,19 @@ pub struct BerachainChainSpecParser;
 impl ChainSpecParser for BerachainChainSpecParser {
     type ChainSpec = BerachainChainSpec;
 
-    const SUPPORTED_CHAINS: &'static [&'static str] = SUPPORTED_CHAINS;
+    const SUPPORTED_CHAINS: &'static [&'static str] = BERACHAIN_SUPPORTED_CHAINS;
+
+    fn default_value() -> Option<&'static str> {
+        Some(BERACHAIN_MAINNET)
+    }
 
     fn parse(s: &str) -> eyre::Result<Arc<Self::ChainSpec>> {
-        Ok(Arc::new(parse_genesis(s)?.into()))
+        let genesis = match s {
+            BERACHAIN_MAINNET => serde_json::from_str(MAINNET_ETH_GENESIS_JSON)?,
+            BERACHAIN_BEPOLIA => serde_json::from_str(BEPOLIA_ETH_GENESIS_JSON)?,
+            _ => parse_genesis(s)?,
+        };
+        Ok(Arc::new(genesis.into()))
     }
 }
 
@@ -550,8 +565,8 @@ impl From<Genesis> for BerachainChainSpec {
         }
 
         // Validate Prague3 ordering if configured (Prague3 must come at or after Prague2)
-        if let Some(prague3_config) = prague3_config_opt.as_ref() &&
-            prague3_config.time < prague2_config.time
+        if let Some(prague3_config) = prague3_config_opt.as_ref()
+            && prague3_config.time < prague2_config.time
         {
             panic!(
                 "Prague3 hardfork must activate at or after Prague2 hardfork. Prague2 time: {}, Prague3 time: {}.",
@@ -1835,6 +1850,24 @@ mod tests {
         genesis.config.extra_fields =
             reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
         let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    fn test_parser_supports_mainnet_and_bepolia() {
+        assert_eq!(
+            BerachainChainSpecParser::SUPPORTED_CHAINS,
+            [BERACHAIN_MAINNET, BERACHAIN_BEPOLIA]
+        );
+        assert_eq!(BerachainChainSpecParser::default_value(), Some(BERACHAIN_MAINNET));
+    }
+
+    #[test]
+    fn test_parser_builtin_mainnet_and_bepolia_parse() {
+        let mainnet = BerachainChainSpecParser::parse(BERACHAIN_MAINNET).unwrap();
+        let bepolia = BerachainChainSpecParser::parse(BERACHAIN_BEPOLIA).unwrap();
+
+        assert_eq!(mainnet.inner.chain.id(), 80094);
+        assert_eq!(bepolia.inner.chain.id(), 80069);
     }
 
     #[test]
