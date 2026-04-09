@@ -18,10 +18,12 @@ use reth_node_builder::NodeHandle;
 use std::sync::Arc;
 use tracing::info;
 
-/// Persist every canonical block to disk immediately rather than buffering.
-/// Upstream reth defaults to 2, but Berachain's faster block times benefit from
-/// eager persistence to keep the in-memory block window minimal.
+/// Production engine defaults: persist canonical blocks immediately and do not
+/// retain an extra in-memory window behind the head (`memory_block_buffer_target`).
+/// Upstream reth uses a higher persistence threshold; Berachain's block times
+/// favor minimal in-memory buffering.
 const BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD: u64 = 0;
+const BERACHAIN_DEFAULT_MEMORY_BLOCK_BUFFER_TARGET: u64 = 0;
 
 fn main() {
     // Install signal handler for better crash reporting
@@ -32,6 +34,7 @@ fn main() {
 
     reth_node_core::args::DefaultEngineValues::default()
         .with_persistence_threshold(BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD)
+        .with_memory_block_buffer_target(BERACHAIN_DEFAULT_MEMORY_BLOCK_BUFFER_TARGET)
         .try_init()
         .expect("engine defaults must be set before CLI parsing");
 
