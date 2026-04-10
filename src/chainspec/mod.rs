@@ -26,7 +26,6 @@ use reth_chainspec::{
     NamedChain::Berachain, make_genesis_header,
 };
 use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
-use reth_ethereum_cli::chainspec::SUPPORTED_CHAINS;
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
@@ -432,7 +431,19 @@ pub struct BerachainChainSpecParser;
 impl ChainSpecParser for BerachainChainSpecParser {
     type ChainSpec = BerachainChainSpec;
 
-    const SUPPORTED_CHAINS: &'static [&'static str] = SUPPORTED_CHAINS;
+    // Berachain does not provide built-in named chain specs (the genesis alloc is too
+    // large to embed). Callers must supply an explicit path via --chain. An empty slice
+    // here prevents Clap from advertising Ethereum chain names (mainnet, sepolia, …) as
+    // valid values when they cannot actually be resolved.
+    const SUPPORTED_CHAINS: &'static [&'static str] = &[];
+
+    // No default: returning None makes --chain a required argument on all subcommands
+    // that use EnvironmentArgs (stage, db, prune, …). This eliminates the previous
+    // broken behaviour where omitting --chain caused Clap to fall back to "mainnet",
+    // which parse_genesis would then try to open as a file path and fail with ENOENT.
+    fn default_value() -> Option<&'static str> {
+        None
+    }
 
     fn parse(s: &str) -> eyre::Result<Arc<Self::ChainSpec>> {
         Ok(Arc::new(parse_genesis(s)?.into()))
