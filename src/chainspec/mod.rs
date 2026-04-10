@@ -29,6 +29,8 @@ use reth_cli::chainspec::{ChainSpecParser, parse_genesis};
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
+mod bootnodes;
+
 /// Default minimum base fee when Prague1 is not active.
 const DEFAULT_MIN_BASE_FEE_WEI: u64 = 0;
 const BERACHAIN_MAINNET: &str = "mainnet";
@@ -352,7 +354,13 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn bootnodes(&self) -> Option<Vec<reth_network_peers::node_record::NodeRecord>> {
-        self.inner.bootnodes()
+        match self.inner.chain_id() {
+            id if id == Berachain as u64 => Some(bootnodes::BERACHAIN_MAINNET_BOOTNODES.clone()),
+            id if id == BerachainBepolia as u64 => {
+                Some(bootnodes::BERACHAIN_BEPOLIA_BOOTNODES.clone())
+            }
+            _ => self.inner.bootnodes(),
+        }
     }
 
     fn final_paris_total_difficulty(&self) -> Option<U256> {
