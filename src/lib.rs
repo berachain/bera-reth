@@ -9,6 +9,7 @@ pub mod evm;
 pub mod genesis;
 pub mod hardforks;
 pub mod node;
+pub mod pog;
 pub mod pool;
 pub mod primitives;
 pub mod rpc;
