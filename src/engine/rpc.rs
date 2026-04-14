@@ -538,6 +538,13 @@ where
                 attrs.timestamp(),
                 attrs.prev_proposer_pubkey(),
             )?;
+
+            if self.chain_spec.is_prague3_active_at_timestamp(attrs.timestamp()) {
+                return Err(EngineApiError::EngineObjectValidationError(
+                    EngineObjectValidationError::UnsupportedFork,
+                )
+                .into());
+            }
         }
 
         Ok(self.inner.fork_choice_updated_v3_metered(fork_choice_state, payload_attributes).await?)

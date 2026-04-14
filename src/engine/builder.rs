@@ -255,150 +255,155 @@ where
     let is_osaka = chain_spec.is_osaka_active_at_timestamp(attributes.timestamp);
     let withdrawals_rlp_length = attributes.withdrawals().length();
 
-    // Check if Prague3 is active and skip all transactions if so
-    if chain_spec.is_prague3_active_at_timestamp(attributes.timestamp()) {
-        warn!(target: "payload_builder", "Prague3 is active, building payload without transactions is not supported");
-        return Err(PayloadBuilderError::Other(Box::from(
-            "Prague 3 block building is not supported",
-        )));
+    let prague3_active = chain_spec.is_prague3_active_at_timestamp(attributes.timestamp());
+    if prague3_active {
+        debug!(target: "payload_builder", "Prague3 is active, building empty block");
     }
-    // Skip all transactions and proceed to finalize the empty block
-    while let Some(pool_tx) = best_txs.next() {
-        // ensure we still have capacity for this transaction
-        if cumulative_gas_used + pool_tx.gas_limit() > block_gas_limit {
-            // we can't fit this transaction into the block, so we need to mark it as invalid
-            // which also removes all dependent transaction from the iterator before we can
-            // continue
-            best_txs.mark_invalid(
-                &pool_tx,
-                &InvalidPoolTransactionError::ExceedsGasLimit(pool_tx.gas_limit(), block_gas_limit),
-            );
-            continue;
-        }
 
-        // check if the job was cancelled, if so we can exit early
-        if cancel.is_cancelled() {
-            return Ok(BuildOutcome::Cancelled);
-        }
-
-        // convert tx to a signed transaction
-        let tx = pool_tx.to_consensus();
-        let tx_rlp_len = tx.inner().length();
-
-        let estimated_block_size_with_tx =
-            block_transactions_rlp_length + tx_rlp_len + withdrawals_rlp_length + 1024;
-
-        if is_osaka && estimated_block_size_with_tx > MAX_RLP_BLOCK_SIZE {
-            best_txs.mark_invalid(
-                &pool_tx,
-                &InvalidPoolTransactionError::OversizedData {
-                    size: estimated_block_size_with_tx,
-                    limit: MAX_RLP_BLOCK_SIZE,
-                },
-            );
-            continue;
-        }
-
-        // There's only limited amount of blob space available per block, so we need to check if
-        // the EIP-4844 can still fit in the block
-        let mut blob_tx_sidecar = None;
-        if let Some(blob_tx) = tx.as_eip4844() {
-            let tx_blob_count = blob_tx.tx().blob_versioned_hashes.len() as u64;
-
-            if block_blob_count + tx_blob_count > max_blob_count {
-                // we can't fit this _blob_ transaction into the block, so we mark it as
-                // invalid, which removes its dependent transactions from
-                // the iterator. This is similar to the gas limit condition
-                // for regular transactions above.
-                trace!(target: "payload_builder", tx=?tx.hash(), ?block_blob_count, "skipping blob transaction because it would exceed the max blob count per block");
+    if !prague3_active {
+        while let Some(pool_tx) = best_txs.next() {
+            // ensure we still have capacity for this transaction
+            if cumulative_gas_used + pool_tx.gas_limit() > block_gas_limit {
+                // we can't fit this transaction into the block, so we need to mark it as invalid
+                // which also removes all dependent transaction from the iterator before we can
+                // continue
                 best_txs.mark_invalid(
                     &pool_tx,
-                    &InvalidPoolTransactionError::Eip4844(
-                        Eip4844PoolTransactionError::TooManyEip4844Blobs {
-                            have: block_blob_count + tx_blob_count,
-                            permitted: max_blob_count,
-                        },
+                    &InvalidPoolTransactionError::ExceedsGasLimit(
+                        pool_tx.gas_limit(),
+                        block_gas_limit,
                     ),
                 );
                 continue;
             }
 
-            let blob_sidecar_result = 'sidecar: {
-                let Some(sidecar) =
-                    pool.get_blob(*tx.hash()).map_err(PayloadBuilderError::other)?
-                else {
-                    break 'sidecar Err(Eip4844PoolTransactionError::MissingEip4844BlobSidecar);
-                };
+            // check if the job was cancelled, if so we can exit early
+            if cancel.is_cancelled() {
+                return Ok(BuildOutcome::Cancelled);
+            }
 
-                if is_osaka {
-                    if sidecar.is_eip7594() {
-                        Ok(sidecar)
-                    } else {
-                        Err(Eip4844PoolTransactionError::UnexpectedEip4844SidecarAfterOsaka)
-                    }
-                } else if sidecar.is_eip4844() {
-                    Ok(sidecar)
-                } else {
-                    Err(Eip4844PoolTransactionError::UnexpectedEip7594SidecarBeforeOsaka)
-                }
-            };
+            // convert tx to a signed transaction
+            let tx = pool_tx.to_consensus();
+            let tx_rlp_len = tx.inner().length();
 
-            blob_tx_sidecar = match blob_sidecar_result {
-                Ok(sidecar) => Some(sidecar),
-                Err(error) => {
-                    best_txs.mark_invalid(&pool_tx, &InvalidPoolTransactionError::Eip4844(error));
-                    continue;
-                }
-            };
-        }
+            let estimated_block_size_with_tx =
+                block_transactions_rlp_length + tx_rlp_len + withdrawals_rlp_length + 1024;
 
-        // Execute the transaction
-        let gas_used = match builder.execute_transaction(tx.clone()) {
-            Ok(gas_used) => gas_used,
-            Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx {
-                error, ..
-            })) => {
-                if error.is_nonce_too_low() {
-                    // if the nonce is too low, we can skip this transaction
-                    trace!(target: "payload_builder", %error, ?tx, "skipping nonce too low transaction");
-                } else {
-                    // if the transaction is invalid, we can skip it and all of its
-                    // descendants
-                    trace!(target: "payload_builder", %error, ?tx, "skipping invalid transaction and its descendants");
-                    best_txs.mark_invalid(
-                        &pool_tx,
-                        &InvalidPoolTransactionError::Consensus(
-                            InvalidTransactionError::TxTypeNotSupported,
-                        ),
-                    );
-                }
+            if is_osaka && estimated_block_size_with_tx > MAX_RLP_BLOCK_SIZE {
+                best_txs.mark_invalid(
+                    &pool_tx,
+                    &InvalidPoolTransactionError::OversizedData {
+                        size: estimated_block_size_with_tx,
+                        limit: MAX_RLP_BLOCK_SIZE,
+                    },
+                );
                 continue;
             }
-            // this is an error that we should treat as fatal for this attempt
-            Err(err) => return Err(PayloadBuilderError::evm(err)),
-        };
 
-        // add to the total blob gas used if the transaction successfully executed
-        if let Some(blob_tx) = tx.as_eip4844() {
-            block_blob_count += blob_tx.tx().blob_versioned_hashes.len() as u64;
+            // There's only limited amount of blob space available per block, so we need to check if
+            // the EIP-4844 can still fit in the block
+            let mut blob_tx_sidecar = None;
+            if let Some(blob_tx) = tx.as_eip4844() {
+                let tx_blob_count = blob_tx.tx().blob_versioned_hashes.len() as u64;
 
-            // if we've reached the max blob count, we can skip blob txs entirely
-            if block_blob_count == max_blob_count {
-                best_txs.skip_blobs();
+                if block_blob_count + tx_blob_count > max_blob_count {
+                    // we can't fit this _blob_ transaction into the block, so we mark it as
+                    // invalid, which removes its dependent transactions from
+                    // the iterator. This is similar to the gas limit condition
+                    // for regular transactions above.
+                    trace!(target: "payload_builder", tx=?tx.hash(), ?block_blob_count, "skipping blob transaction because it would exceed the max blob count per block");
+                    best_txs.mark_invalid(
+                        &pool_tx,
+                        &InvalidPoolTransactionError::Eip4844(
+                            Eip4844PoolTransactionError::TooManyEip4844Blobs {
+                                have: block_blob_count + tx_blob_count,
+                                permitted: max_blob_count,
+                            },
+                        ),
+                    );
+                    continue;
+                }
+
+                let blob_sidecar_result = 'sidecar: {
+                    let Some(sidecar) =
+                        pool.get_blob(*tx.hash()).map_err(PayloadBuilderError::other)?
+                    else {
+                        break 'sidecar Err(Eip4844PoolTransactionError::MissingEip4844BlobSidecar);
+                    };
+
+                    if is_osaka {
+                        if sidecar.is_eip7594() {
+                            Ok(sidecar)
+                        } else {
+                            Err(Eip4844PoolTransactionError::UnexpectedEip4844SidecarAfterOsaka)
+                        }
+                    } else if sidecar.is_eip4844() {
+                        Ok(sidecar)
+                    } else {
+                        Err(Eip4844PoolTransactionError::UnexpectedEip7594SidecarBeforeOsaka)
+                    }
+                };
+
+                blob_tx_sidecar = match blob_sidecar_result {
+                    Ok(sidecar) => Some(sidecar),
+                    Err(error) => {
+                        best_txs
+                            .mark_invalid(&pool_tx, &InvalidPoolTransactionError::Eip4844(error));
+                        continue;
+                    }
+                };
             }
-        }
 
-        block_transactions_rlp_length += tx_rlp_len;
+            // Execute the transaction
+            let gas_used = match builder.execute_transaction(tx.clone()) {
+                Ok(gas_used) => gas_used,
+                Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx {
+                    error,
+                    ..
+                })) => {
+                    if error.is_nonce_too_low() {
+                        // if the nonce is too low, we can skip this transaction
+                        trace!(target: "payload_builder", %error, ?tx, "skipping nonce too low transaction");
+                    } else {
+                        // if the transaction is invalid, we can skip it and all of its
+                        // descendants
+                        trace!(target: "payload_builder", %error, ?tx, "skipping invalid transaction and its descendants");
+                        best_txs.mark_invalid(
+                            &pool_tx,
+                            &InvalidPoolTransactionError::Consensus(
+                                InvalidTransactionError::TxTypeNotSupported,
+                            ),
+                        );
+                    }
+                    continue;
+                }
+                // this is an error that we should treat as fatal for this attempt
+                Err(err) => return Err(PayloadBuilderError::evm(err)),
+            };
 
-        // update and add to total fees
-        let miner_fee =
-            tx.effective_tip_per_gas(base_fee).expect("fee is always valid; execution succeeded");
-        total_fees += U256::from(miner_fee) * U256::from(gas_used);
-        cumulative_gas_used += gas_used;
+            // add to the total blob gas used if the transaction successfully executed
+            if let Some(blob_tx) = tx.as_eip4844() {
+                block_blob_count += blob_tx.tx().blob_versioned_hashes.len() as u64;
 
-        // Add blob tx sidecar to the payload.
-        if let Some(sidecar) = blob_tx_sidecar {
-            blob_sidecars.push_sidecar_variant(sidecar.as_ref().clone());
+                // if we've reached the max blob count, we can skip blob txs entirely
+                if block_blob_count == max_blob_count {
+                    best_txs.skip_blobs();
+                }
+            }
+
+            block_transactions_rlp_length += tx_rlp_len;
+
+            // update and add to total fees
+            let miner_fee = tx
+                .effective_tip_per_gas(base_fee)
+                .expect("fee is always valid; execution succeeded");
+            total_fees += U256::from(miner_fee) * U256::from(gas_used);
+            cumulative_gas_used += gas_used;
+
+            // Add blob tx sidecar to the payload.
+            if let Some(sidecar) = blob_tx_sidecar {
+                blob_sidecars.push_sidecar_variant(sidecar.as_ref().clone());
+            }
         }
     }
 

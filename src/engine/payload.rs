@@ -1,3 +1,4 @@
+use super::BerachainExecutionPayloadEnvelopeV4;
 use crate::{
     chainspec::BerachainChainSpec,
     primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
@@ -11,8 +12,8 @@ use alloy_primitives::{Address, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rpc_types::engine::{
     BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
-    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadFieldV2,
-    ExecutionPayloadV1, ExecutionPayloadV3, PayloadId,
+    ExecutionPayloadEnvelopeV5, ExecutionPayloadFieldV2, ExecutionPayloadV1, ExecutionPayloadV3,
+    PayloadId,
 };
 use reth::{
     api::PayloadAttributes,
@@ -235,10 +236,15 @@ impl BerachainBuiltPayload {
         })
     }
 
-    pub fn try_into_v4(self) -> Result<ExecutionPayloadEnvelopeV4, BuiltPayloadConversionError> {
-        Ok(ExecutionPayloadEnvelopeV4 {
-            execution_requests: self.requests.clone().unwrap_or_default(),
+    pub fn try_into_v4(
+        self,
+    ) -> Result<BerachainExecutionPayloadEnvelopeV4, BuiltPayloadConversionError> {
+        let parent_proposer_pub_key = self.block.prev_proposer_pubkey;
+        let requests = self.requests.clone().unwrap_or_default();
+        Ok(BerachainExecutionPayloadEnvelopeV4 {
+            execution_requests: requests,
             envelope_inner: self.try_into()?,
+            parent_proposer_pub_key,
         })
     }
 }
@@ -274,7 +280,7 @@ impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV3 {
     }
 }
 
-impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV4 {
+impl TryFrom<BerachainBuiltPayload> for BerachainExecutionPayloadEnvelopeV4 {
     type Error = BuiltPayloadConversionError;
 
     fn try_from(value: BerachainBuiltPayload) -> Result<Self, Self::Error> {
