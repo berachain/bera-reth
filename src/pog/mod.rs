@@ -376,6 +376,7 @@ impl SealedBlockRegistry {
     pub fn evict_expired(&mut self) {
         let ttl = self.ttl;
         self.entries.retain(|_, t| t.elapsed() < ttl);
+        self.latest = self.entries.keys().max().copied();
     }
 }
 
@@ -593,8 +594,38 @@ mod tests {
         r.insert(1);
         std::thread::sleep(Duration::from_millis(5));
         assert!(!r.contains(1));
-        // latest() persists even after eviction
-        assert_eq!(r.latest(), Some(1));
+    }
+
+    #[test]
+    fn sealed_block_registry_latest_updates_after_eviction() {
+        let mut r = SealedBlockRegistry::new(Duration::from_millis(1));
+        r.insert(10);
+        r.insert(20);
+        std::thread::sleep(Duration::from_millis(5));
+        r.evict_expired();
+        // After all entries evicted, latest() must reflect reality
+        assert_eq!(r.latest(), None, "latest() must be None when all entries are evicted");
+
+        // Insert a new block after eviction — latest should update
+        r.insert(5);
+        assert_eq!(r.latest(), Some(5));
+    }
+
+    #[test]
+    fn sealed_block_registry_latest_partial_eviction() {
+        // Insert blocks with different TTLs to test partial eviction.
+        // Block 10 inserted first (expires first), block 20 later.
+        let mut r = SealedBlockRegistry::new(Duration::from_millis(50));
+        r.insert(10);
+        std::thread::sleep(Duration::from_millis(30));
+        r.insert(20);
+        // Block 10 is ~30ms old, block 20 is ~0ms old. TTL is 50ms.
+        // After another 25ms, block 10 will be expired but block 20 won't.
+        std::thread::sleep(Duration::from_millis(25));
+        r.evict_expired();
+        assert!(!r.contains(10), "block 10 should be evicted");
+        assert!(r.contains(20), "block 20 should survive");
+        assert_eq!(r.latest(), Some(20), "latest() must reflect surviving entries, not evicted ones");
     }
 
     #[test]
