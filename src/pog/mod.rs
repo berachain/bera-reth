@@ -221,87 +221,79 @@ impl PogCoordinator {
         &self.db_path
     }
 
+    fn lock_inner(&self) -> std::sync::MutexGuard<'_, PogInner> {
+        self.inner.lock().expect("PogCoordinator: mutex poisoned (audit confirms no panic paths)")
+    }
+
     pub fn take_pending(&self) -> Option<PendingPrepare> {
-        self.inner.lock().ok().and_then(|mut g| g.pending.take())
+        self.lock_inner().pending.take()
     }
 
     pub fn set_pending(&self, p: PendingPrepare) {
-        if let Ok(mut g) = self.inner.lock() {
-            g.pending = Some(p);
-        }
+        self.lock_inner().pending = Some(p);
     }
 
     pub fn set_inflight(&self, probe: InflightProbe) {
-        if let Ok(mut g) = self.inner.lock() {
-            g.inflight = Some(probe);
-        }
+        self.lock_inner().inflight = Some(probe);
     }
 
     pub fn clear_inflight(&self) {
-        if let Ok(mut g) = self.inner.lock() {
-            g.inflight = None;
-        }
+        self.lock_inner().inflight = None;
     }
 
     pub fn inflight_snapshot(&self) -> Option<InflightProbe> {
-        self.inner.lock().ok().and_then(|g| g.inflight.clone())
+        self.lock_inner().inflight.clone()
     }
 
     pub fn has_inflight(&self) -> bool {
-        self.inner.lock().map(|g| g.inflight.is_some()).unwrap_or(false)
+        self.lock_inner().inflight.is_some()
     }
 
     pub fn funding_backoff_active(&self) -> Option<Duration> {
-        let g = self.inner.lock().ok()?;
+        let g = self.lock_inner();
         let until = g.funding_backoff_until?;
         let now = Instant::now();
         if now < until { Some(until - now) } else { None }
     }
 
     pub fn record_underfunded(&self) {
-        if let Ok(mut g) = self.inner.lock() {
-            g.funding_backoff_secs = if g.funding_backoff_secs == 0 {
-                MIN_FUNDING_BACKOFF_SECS
-            } else {
-                (g.funding_backoff_secs * 2).min(MAX_FUNDING_BACKOFF_SECS)
-            };
-            g.funding_backoff_until =
-                Some(Instant::now() + Duration::from_secs(g.funding_backoff_secs));
-        }
+        let mut g = self.lock_inner();
+        g.funding_backoff_secs = if g.funding_backoff_secs == 0 {
+            MIN_FUNDING_BACKOFF_SECS
+        } else {
+            (g.funding_backoff_secs * 2).min(MAX_FUNDING_BACKOFF_SECS)
+        };
+        g.funding_backoff_until =
+            Some(Instant::now() + Duration::from_secs(g.funding_backoff_secs));
     }
 
     pub fn clear_funding_backoff(&self) {
-        if let Ok(mut g) = self.inner.lock() {
-            g.funding_backoff_until = None;
-            g.funding_backoff_secs = 0;
-        }
+        let mut g = self.lock_inner();
+        g.funding_backoff_until = None;
+        g.funding_backoff_secs = 0;
     }
 
     pub fn insert_timed_out(&self, tx_hash: TxHash, peer_id: PeerId) {
-        if let Ok(mut g) = self.inner.lock() {
-            g.timed_out.insert(tx_hash, TimedOutTrack { peer_id, timed_out_at: Instant::now() });
-        }
+        self.lock_inner()
+            .timed_out
+            .insert(tx_hash, TimedOutTrack { peer_id, timed_out_at: Instant::now() });
     }
 
     pub fn remove_timed_out(&self, tx_hash: &TxHash) {
-        if let Ok(mut g) = self.inner.lock() {
-            g.timed_out.remove(tx_hash);
-        }
+        self.lock_inner().timed_out.remove(tx_hash);
     }
 
     pub fn timed_out_peer(&self, tx_hash: &TxHash) -> Option<PeerId> {
-        self.inner.lock().ok().and_then(|g| g.timed_out.get(tx_hash).map(|t| t.peer_id))
+        self.lock_inner().timed_out.get(tx_hash).map(|t| t.peer_id)
     }
 
     pub fn timed_out_tx_hashes(&self) -> Vec<TxHash> {
-        self.inner.lock().map(|g| g.timed_out.keys().copied().collect()).unwrap_or_default()
+        self.lock_inner().timed_out.keys().copied().collect()
     }
 
     fn prune_timed_out_window(&self) {
         let window = Duration::from_secs(LATE_CONFIRMATION_TRACK_WINDOW_SECS);
-        if let Ok(mut g) = self.inner.lock() {
-            g.timed_out.retain(|_, t| t.timed_out_at.elapsed() <= window);
-        }
+        self.lock_inner().timed_out.retain(|_, t| t.timed_out_at.elapsed() <= window);
     }
 }
 
@@ -460,8 +452,8 @@ pub async fn run_pog_watcher<P: PogProvider + 'static>(
             }
             _ = tokio::time::sleep(Duration::from_secs(WATCHER_TICK_SECS)) => {
                 coord.prune_timed_out_window();
-                store.provenance.lock().map(|mut p| p.evict_expired()).ok();
-                store.sealed.lock().map(|mut s| s.evict_expired()).ok();
+                store.provenance.lock().expect("provenance mutex poisoned").evict_expired();
+                store.sealed.lock().expect("sealed mutex poisoned").evict_expired();
                 if let Err(e) = watcher_tick(&coord, &provider) {
                     info!(target: "bera_reth::pog_probe", error = %e, "watcher tick error");
                 }
