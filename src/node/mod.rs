@@ -16,9 +16,8 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::{SignableTransaction, error::ValueError};
-use alloy_primitives::Signature;
+use alloy_primitives::{Signature, TxHash};
 use alloy_rpc_types::TransactionRequest;
-use alloy_primitives::TxHash;
 use reth::{
     api::{BlockTy, FullNodeTypes, NodeTypes, PrimitivesTy, TxTy},
     providers::EthStorage,
@@ -26,7 +25,7 @@ use reth::{
 };
 use reth_chainspec::Hardforks;
 use reth_engine_local::LocalPayloadAttributesBuilder;
-use reth_network::{primitives::BasicNetworkPrimitives, NetworkHandle};
+use reth_network::{NetworkHandle, primitives::BasicNetworkPrimitives};
 use reth_network_peers::PeerId;
 use reth_node_api::FullNodeComponents;
 use reth_node_builder::{
@@ -47,7 +46,8 @@ where
         + Unpin
         + 'static,
 {
-    type Network = NetworkHandle<BasicNetworkPrimitives<PrimitivesTy<Node::Types>, PoolPooledTx<Pool>>>;
+    type Network =
+        NetworkHandle<BasicNetworkPrimitives<PrimitivesTy<Node::Types>, PoolPooledTx<Pool>>>;
 
     async fn build_network(
         self,

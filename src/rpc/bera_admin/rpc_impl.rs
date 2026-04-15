@@ -1,5 +1,7 @@
-//! `beradmin` JSON-RPC namespace (WP1): detailed peers, node status, ban/penalize,
-//! sentinel-driven PoG prepare/submit.
+//! `BerAdminImpl` and [`BerAdminApiServer`](super::BerAdminApiServer) implementation.
+
+use super::{helpers::*, types::*};
+use super::BerAdminApiServer;
 
 use crate::{
     chainspec::BerachainChainSpec,
@@ -12,197 +14,16 @@ use crate::{
 };
 use alloy_consensus::{EthereumTxEnvelope, Transaction};
 use alloy_eips::{BlockHashOrNumber, Decodable2718};
-use alloy_primitives::{Address, B256, U256, hex};
+use alloy_primitives::{Address, U256, hex};
 use async_trait::async_trait;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::ErrorObjectOwned};
+use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use reth::providers::{BlockReaderIdExt, ChainSpecProvider};
 use reth_chainspec::{EthChainSpec, Head};
-use reth_eth_wire_types::NetworkPrimitives;
-use reth_network::NetworkHandle;
 use reth_network_api::{FullNetwork, NetworkInfo, Peers, PeersInfo, ReputationChangeKind};
-use reth_network_peers::PeerId;
 use reth_network_types::peers::reputation::BANNED_REPUTATION;
 use reth_primitives_traits::{SignerRecoverable, transaction::TxHashRef};
 use reth_storage_api::{BlockReader, ReceiptProvider};
-use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Instant};
-
-/// Targeted devp2p gossip for signed canary transactions (not broadcast RPC).
-pub trait PogCanarySend: Send + Sync {
-    fn pog_send_canary(&self, peer_id: PeerId, tx: std::sync::Arc<BerachainTxEnvelope>);
-}
-
-impl<N> PogCanarySend for NetworkHandle<N>
-where
-    N: NetworkPrimitives<BroadcastedTransaction = BerachainTxEnvelope> + Send + Sync + 'static,
-{
-    fn pog_send_canary(&self, peer_id: PeerId, tx: std::sync::Arc<BerachainTxEnvelope>) {
-        NetworkHandle::send_transactions(self, peer_id, vec![tx]);
-    }
-}
-
-/// One peer entry from `beradmin_detailedPeers`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DetailedPeer {
-    pub peer_id: String,
-    pub enode: String,
-    pub remote_addr: String,
-    pub direction: String,
-    pub client_version: String,
-    pub chain_id: u64,
-    pub genesis: B256,
-    pub fork_id_hash: String,
-    pub fork_id_next: u64,
-    pub blockhash: B256,
-    pub total_difficulty: Option<alloy_primitives::U256>,
-    pub latest_block: Option<u64>,
-    pub earliest_block: Option<u64>,
-    pub reputation: i32,
-    pub session_duration_mins: u64,
-    pub backed_off: bool,
-    pub severe_backoff_counter: u8,
-    pub connection_state: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub discovery_fork_id_hash: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub discovery_fork_id_next: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pog: Option<PogPeerStatus>,
-}
-
-pub use crate::pog::PogPeerStatus;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NodeStatusResponse {
-    pub chain_id: u64,
-    pub genesis_hash: B256,
-    pub fork_id_hash: String,
-    pub fork_id_next: u64,
-    pub head_number: u64,
-    pub head_hash: B256,
-    pub peer_count_inbound: usize,
-    pub peer_count_outbound: usize,
-    pub peer_count_total: usize,
-    pub syncing: bool,
-    pub client_version: String,
-    pub network_id: u64,
-    pub local_enode: String,
-    pub local_peer_id: String,
-    pub ban_threshold: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TxAttribution {
-    pub tx_hash: B256,
-    pub from_peer_id: Option<String>,
-    /// `(effective_gas_price − base_fee) × gas_used`
-    pub effective_tip_wei: u128,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SealedBlockAttributionResponse {
-    pub block_number: u64,
-    pub transactions: Vec<TxAttribution>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PrepareCanaryResponse {
-    pub peer_id: String,
-    pub enode: String,
-    /// Hex-encoded EIP-1559 signing preimage (`0x02` + RLP) for sentinel to sign.
-    pub unsigned_tx: String,
-    pub nonce: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubmitCanaryResponse {
-    pub tx_hash: B256,
-    pub peer_id: String,
-    pub enode: String,
-}
-
-#[rpc(server, namespace = "beradmin")]
-pub trait BerAdminApi {
-    #[method(name = "detailedPeers")]
-    async fn detailed_peers(&self) -> RpcResult<Vec<DetailedPeer>>;
-
-    #[method(name = "banPeer")]
-    fn ban_peer(&self, peer_id: String) -> RpcResult<()>;
-
-    #[method(name = "penalizePeer")]
-    fn penalize_peer(&self, peer_id: String, value: i32) -> RpcResult<()>;
-
-    #[method(name = "nodeStatus")]
-    async fn node_status(&self) -> RpcResult<NodeStatusResponse>;
-
-    /// Breaking change: `target_peer_id` is now required; the node no longer selects a target.
-    #[method(name = "prepareCanary")]
-    async fn prepare_canary(
-        &self,
-        signer_address: String,
-        target_peer_id: String,
-    ) -> RpcResult<PrepareCanaryResponse>;
-
-    #[method(name = "submitCanary")]
-    async fn submit_canary(&self, signed_tx: String) -> RpcResult<SubmitCanaryResponse>;
-
-    #[method(name = "sealedBlockAttribution")]
-    async fn sealed_block_attribution(
-        &self,
-        block_number: Option<u64>,
-    ) -> RpcResult<SealedBlockAttributionResponse>;
-}
-
-fn parse_peer_id(s: &str) -> RpcResult<PeerId> {
-    s.parse()
-        .map_err(|e| ErrorObjectOwned::owned(-32602, format!("invalid peer_id: {e}"), None::<()>))
-}
-
-fn fork_id_hash_hex(hash: [u8; 4]) -> String {
-    format!("0x{}", hex::encode(hash))
-}
-
-fn peer_to_detailed(
-    info: &reth_network_api::PeerInfo,
-    peer: &reth_network_types::Peer,
-    pog: Option<PogPeerStatus>,
-) -> DetailedPeer {
-    use reth_eth_wire_types::UnifiedStatus;
-    let st: &UnifiedStatus = &info.status;
-    let (disc_hash, disc_next) = match &peer.fork_id {
-        Some(fid) => (Some(fork_id_hash_hex(fid.hash.0)), Some(fid.next)),
-        None => (None, None),
-    };
-    DetailedPeer {
-        peer_id: info.remote_id.to_string(),
-        enode: info.enode.clone(),
-        remote_addr: info.remote_addr.to_string(),
-        direction: info.direction.to_string(),
-        client_version: info.client_version.to_string(),
-        chain_id: st.chain.id(),
-        genesis: st.genesis,
-        fork_id_hash: fork_id_hash_hex(st.forkid.hash.0),
-        fork_id_next: st.forkid.next,
-        blockhash: st.blockhash,
-        total_difficulty: st.total_difficulty,
-        latest_block: st.latest_block,
-        earliest_block: st.earliest_block,
-        reputation: peer.reputation,
-        session_duration_mins: info.session_established.elapsed().as_secs() / 60,
-        backed_off: peer.backed_off,
-        severe_backoff_counter: peer.severe_backoff_counter,
-        connection_state: format!("{:?}", peer.state),
-        discovery_fork_id_hash: disc_hash,
-        discovery_fork_id_next: disc_next,
-        pog,
-    }
-}
 
 pub struct BerAdminImpl<Network, Provider> {
     network: Network,
@@ -211,7 +32,7 @@ pub struct BerAdminImpl<Network, Provider> {
     client_version: String,
     pog: Arc<PogCoordinator>,
     attribution: Arc<PogAttributionStore>,
-    pog_db: Option<Arc<pog::PogDb>>,
+    pog_db: Arc<pog::PogDb>,
 }
 
 impl<Network, Provider> BerAdminImpl<Network, Provider> {
@@ -223,7 +44,7 @@ impl<Network, Provider> BerAdminImpl<Network, Provider> {
         pog: Arc<PogCoordinator>,
         attribution: Arc<PogAttributionStore>,
     ) -> Self {
-        let pog_db = pog::PogDb::open(pog.db_path()).ok().map(Arc::new);
+        let pog_db = pog.pog_db();
         Self { network, provider, chain_spec, client_version, pog, attribution, pog_db }
     }
 }
@@ -246,11 +67,13 @@ where
             .await
             .map_err(|e| ErrorObjectOwned::owned(-32000, e.to_string(), None::<()>))?;
 
-        let pog_statuses = self
-            .pog_db
-            .as_ref()
-            .map(|db| db.all_peer_statuses())
-            .unwrap_or_default();
+        let pog_statuses = self.pog_db.all_peer_statuses().map_err(|e| {
+            ErrorObjectOwned::owned(
+                -32000,
+                format!("pog peer status query failed: {e}"),
+                None::<()>,
+            )
+        })?;
         let handle = self.network.peers_handle();
 
         let mut result = Vec::with_capacity(peers.len());
@@ -419,7 +242,6 @@ where
                     None::<()>,
                 )
             })?;
-
 
         let (tx, value_wei) = build_unsigned_canary(signer, nonce, self.pog.chain_id, base_fee);
         let unsigned_tx = unsigned_tx_hex(&tx);
@@ -678,7 +500,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::U256;
+    use alloy_primitives::{B256, U256};
+    use reth_network_peers::PeerId;
 
     fn make_test_peer(reputation: i32, backed_off: bool) -> DetailedPeer {
         DetailedPeer {

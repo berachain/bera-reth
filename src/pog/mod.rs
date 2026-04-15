@@ -25,7 +25,7 @@ use rusqlite::{Connection, params};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tracing::info;
@@ -41,9 +41,8 @@ pub const MIN_FUNDING_BACKOFF_SECS: u64 = 30;
 pub const MAX_FUNDING_BACKOFF_SECS: u64 = 86400;
 pub const LATE_CONFIRMATION_TRACK_WINDOW_SECS: u64 = 900;
 
-pub fn init_pog_db(db_path: &Path) -> rusqlite::Result<Connection> {
-    let db = Connection::open(db_path)?;
-    db.execute(
+pub(crate) fn ensure_peer_tests_schema(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS peer_tests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 peer_id TEXT NOT NULL,
@@ -53,9 +52,8 @@ pub fn init_pog_db(db_path: &Path) -> rusqlite::Result<Connection> {
             )",
         [],
     )?;
-    db.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])?;
-    db.pragma_update(None, "journal_mode", "WAL")?;
-    Ok(db)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -75,38 +73,48 @@ pub struct PogDb {
 impl PogDb {
     pub fn open(db_path: &Path) -> rusqlite::Result<Self> {
         let conn = Connection::open(db_path)?;
+        ensure_peer_tests_schema(&conn)?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         Ok(Self { conn: Mutex::new(conn) })
     }
 
+    pub fn insert_peer_test(
+        &self,
+        peer_id: &PeerId,
+        tx_hash: TxHash,
+        result: &str,
+    ) -> rusqlite::Result<()> {
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+        conn.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![peer_id.to_string(), tx_hash.to_string(), result, ts],
+        )?;
+        Ok(())
+    }
+
     /// Load PoG status for all peers in a single query. Returns a map keyed by peer_id string.
-    pub fn all_peer_statuses(&self) -> HashMap<String, PogPeerStatus> {
-        let conn = match self.conn.lock() {
-            Ok(c) => c,
-            Err(_) => return HashMap::new(),
-        };
-        let mut stmt = match conn.prepare(
+    pub fn all_peer_statuses(&self) -> rusqlite::Result<HashMap<String, PogPeerStatus>> {
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        let mut stmt = conn.prepare(
             "SELECT peer_id,
                     (SELECT result FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_result,
                     (SELECT tested_at FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_tested_at,
                     SUM(CASE WHEN result = 'timeout' THEN 1 ELSE 0 END) AS failure_count
              FROM peer_tests p1
-             GROUP BY peer_id"
-        ) {
-            Ok(s) => s,
-            Err(_) => return HashMap::new(),
-        };
+             GROUP BY peer_id",
+        )?;
         let rows = stmt.query_map([], |row| {
             let peer_id: String = row.get(0)?;
             let last_result: String = row.get(1)?;
             let last_tested_at: i64 = row.get(2)?;
             let failure_count: u32 = row.get(3)?;
-            Ok((peer_id, PogPeerStatus { last_result, failure_count, last_tested_at: last_tested_at as u64 }))
-        });
-        match rows {
-            Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
-            Err(_) => HashMap::new(),
-        }
+            Ok((
+                peer_id,
+                PogPeerStatus { last_result, failure_count, last_tested_at: last_tested_at as u64 },
+            ))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
     }
 }
 
@@ -145,21 +153,6 @@ pub fn min_balance_for_canary(base_fee: u128) -> U256 {
     U256::from(CANARY_GAS_LIMIT) * U256::from(max_fee) + U256::from(MAX_CANARY_VALUE)
 }
 
-pub fn persist_peer_test(
-    db_path: &Path,
-    peer_id: &PeerId,
-    tx_hash: TxHash,
-    result: &str,
-) -> eyre::Result<()> {
-    let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
-    let db = Connection::open(db_path)?;
-    db.execute(
-        "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
-        params![peer_id.to_string(), tx_hash.to_string(), result, ts],
-    )?;
-    Ok(())
-}
-
 #[derive(Debug, Clone)]
 pub struct PendingPrepare {
     pub peer_id: PeerId,
@@ -188,6 +181,7 @@ struct TimedOutTrack {
 /// Shared PoG coordinator state (prepare/submit correlation + watcher).
 pub struct PogCoordinator {
     db_path: PathBuf,
+    db: Arc<PogDb>,
     pub chain_id: u64,
     pub pog_timeout: Duration,
     inner: Mutex<PogInner>,
@@ -202,9 +196,12 @@ struct PogInner {
 }
 
 impl PogCoordinator {
-    pub fn new(datadir: PathBuf, chain_id: u64) -> Self {
-        Self {
-            db_path: datadir.join("proof_of_gossip.db"),
+    pub fn new(datadir: PathBuf, chain_id: u64) -> rusqlite::Result<Self> {
+        let db_path = datadir.join("proof_of_gossip.db");
+        let db = Arc::new(PogDb::open(&db_path)?);
+        Ok(Self {
+            db_path,
+            db,
             chain_id,
             pog_timeout: Duration::from_secs(DEFAULT_POG_TIMEOUT_SECS),
             inner: Mutex::new(PogInner {
@@ -214,7 +211,11 @@ impl PogCoordinator {
                 funding_backoff_until: None,
                 funding_backoff_secs: 0,
             }),
-        }
+        })
+    }
+
+    pub fn pog_db(&self) -> Arc<PogDb> {
+        Arc::clone(&self.db)
     }
 
     pub fn db_path(&self) -> &Path {
@@ -471,7 +472,7 @@ fn watcher_tick<P: PogProvider>(coord: &PogCoordinator, provider: &P) -> eyre::R
     };
     let tx_hash = inflight.tx_hash;
     if provider.receipt_exists(tx_hash)? {
-        persist_peer_test(coord.db_path(), &inflight.peer_id, tx_hash, "seen")?;
+        coord.pog_db().insert_peer_test(&inflight.peer_id, tx_hash, "seen")?;
         coord.clear_inflight();
         coord.remove_timed_out(&tx_hash);
         info!(
@@ -488,7 +489,7 @@ fn watcher_tick<P: PogProvider>(coord: &PogCoordinator, provider: &P) -> eyre::R
         return Ok(());
     }
     if inflight.sent_at.elapsed() > coord.pog_timeout {
-        persist_peer_test(coord.db_path(), &inflight.peer_id, tx_hash, "timeout")?;
+        coord.pog_db().insert_peer_test(&inflight.peer_id, tx_hash, "timeout")?;
         coord.insert_timed_out(tx_hash, inflight.peer_id);
         coord.clear_inflight();
         info!(
@@ -511,14 +512,13 @@ fn reconcile_late_confirmations<P: PogProvider>(
     coord: &PogCoordinator,
     provider: &P,
 ) -> eyre::Result<()> {
-    let db_path = coord.db_path().to_path_buf();
     let timed_hashes: Vec<TxHash> = coord.timed_out_tx_hashes();
     for tx_hash in timed_hashes {
         if provider.receipt_exists(tx_hash)? {
             let Some(peer_id) = coord.timed_out_peer(&tx_hash) else {
                 continue;
             };
-            persist_peer_test(&db_path, &peer_id, tx_hash, "seen")?;
+            coord.pog_db().insert_peer_test(&peer_id, tx_hash, "seen")?;
             coord.remove_timed_out(&tx_hash);
             info!(
                 target: "bera_reth::pog_probe",
@@ -650,7 +650,11 @@ mod tests {
         r.evict_expired();
         assert!(!r.contains(10), "block 10 should be evicted");
         assert!(r.contains(20), "block 20 should survive");
-        assert_eq!(r.latest(), Some(20), "latest() must reflect surviving entries, not evicted ones");
+        assert_eq!(
+            r.latest(),
+            Some(20),
+            "latest() must reflect surviving entries, not evicted ones"
+        );
     }
 
     #[test]
@@ -669,14 +673,16 @@ mod tests {
     #[test]
     fn sqlite_init_idempotent() {
         let tmp = NamedTempFile::new().unwrap();
-        init_pog_db(tmp.path()).unwrap();
-        init_pog_db(tmp.path()).unwrap();
+        PogDb::open(tmp.path()).unwrap();
+        PogDb::open(tmp.path()).unwrap();
     }
 
     #[test]
     fn pog_db_all_peer_statuses_batch_query() {
         let tmp = NamedTempFile::new().unwrap();
-        let db = init_pog_db(tmp.path()).unwrap();
+        let db = Connection::open(tmp.path()).unwrap();
+        ensure_peer_tests_schema(&db).unwrap();
+        db.pragma_update(None, "journal_mode", "WAL").unwrap();
         let p1 = PeerId::random();
         let p2 = PeerId::random();
         // p1: two timeouts then a seen
@@ -690,11 +696,12 @@ mod tests {
         db.execute(
             "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
             params![p2.to_string(), B256::random().to_string(), "timeout", 10_i64],
-        ).unwrap();
+        )
+        .unwrap();
         drop(db);
 
         let pog_db = PogDb::open(tmp.path()).unwrap();
-        let statuses = pog_db.all_peer_statuses();
+        let statuses = pog_db.all_peer_statuses().unwrap();
         assert_eq!(statuses.len(), 2);
 
         let s1 = &statuses[&p1.to_string()];

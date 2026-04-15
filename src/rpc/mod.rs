@@ -21,7 +21,6 @@ use crate::{
 };
 use alloy_consensus::BlockHeader as _;
 use futures::StreamExt as _;
-use reth_payload_primitives::BuiltPayload as _;
 use reth::{
     api::{FullNodeComponents, HeaderTy, PrimitivesTy},
     chainspec::EthereumHardforks,
@@ -40,6 +39,7 @@ use reth_node_builder::rpc::{
     EthApiBuilder, EthApiCtx, PayloadValidatorBuilder, RethRpcAddOns, RethRpcMiddleware, RpcAddOns,
     RpcHandle,
 };
+use reth_payload_primitives::BuiltPayload as _;
 use reth_rpc_convert::{RpcConvert, RpcConverter};
 use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
 use std::sync::Arc;
@@ -197,10 +197,10 @@ where
         let client_version = std::env::var("BERA_RETH_P2P_CLIENT_VERSION")
             .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
 
-        let pog = Arc::new(crate::pog::PogCoordinator::new(datadir.clone(), chain_id));
-        if let Err(e) = crate::pog::init_pog_db(pog.db_path()) {
-            tracing::warn!("PoG SQLite init failed: {e:#}");
-        }
+        let pog = Arc::new(
+            crate::pog::PogCoordinator::new(datadir.clone(), chain_id)
+                .map_err(|e| eyre::eyre!("PoG database init failed: {e}"))?,
+        );
         let attribution = crate::pog::attribution_store();
         let bera_admin = Arc::new(BerAdminImpl::new(
             network,
