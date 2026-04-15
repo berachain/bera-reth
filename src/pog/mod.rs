@@ -23,7 +23,7 @@ use reth::providers::{BlockReaderIdExt, StateProviderFactory};
 use reth_network_peers::PeerId;
 use rusqlite::{Connection, params};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -56,6 +56,58 @@ pub fn init_pog_db(db_path: &Path) -> rusqlite::Result<Connection> {
     db.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])?;
     db.pragma_update(None, "journal_mode", "WAL")?;
     Ok(db)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PogPeerStatus {
+    pub last_result: String,
+    pub failure_count: u32,
+    pub last_tested_at: u64,
+}
+
+/// Persistent SQLite connection to the PoG peer_tests database.
+/// Opened once, reused across RPC calls.
+pub struct PogDb {
+    conn: Mutex<Connection>,
+}
+
+impl PogDb {
+    pub fn open(db_path: &Path) -> rusqlite::Result<Self> {
+        let conn = Connection::open(db_path)?;
+        conn.pragma_update(None, "journal_mode", "WAL")?;
+        Ok(Self { conn: Mutex::new(conn) })
+    }
+
+    /// Load PoG status for all peers in a single query. Returns a map keyed by peer_id string.
+    pub fn all_peer_statuses(&self) -> HashMap<String, PogPeerStatus> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return HashMap::new(),
+        };
+        let mut stmt = match conn.prepare(
+            "SELECT peer_id,
+                    (SELECT result FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_result,
+                    (SELECT tested_at FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_tested_at,
+                    SUM(CASE WHEN result = 'timeout' THEN 1 ELSE 0 END) AS failure_count
+             FROM peer_tests p1
+             GROUP BY peer_id"
+        ) {
+            Ok(s) => s,
+            Err(_) => return HashMap::new(),
+        };
+        let rows = stmt.query_map([], |row| {
+            let peer_id: String = row.get(0)?;
+            let last_result: String = row.get(1)?;
+            let last_tested_at: i64 = row.get(2)?;
+            let failure_count: u32 = row.get(3)?;
+            Ok((peer_id, PogPeerStatus { last_result, failure_count, last_tested_at: last_tested_at as u64 }))
+        });
+        match rows {
+            Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
+            Err(_) => HashMap::new(),
+        }
+    }
 }
 
 pub fn build_unsigned_canary(
@@ -629,4 +681,38 @@ mod tests {
         init_pog_db(tmp.path()).unwrap();
     }
 
+    #[test]
+    fn pog_db_all_peer_statuses_batch_query() {
+        let tmp = NamedTempFile::new().unwrap();
+        let db = init_pog_db(tmp.path()).unwrap();
+        let p1 = PeerId::random();
+        let p2 = PeerId::random();
+        // p1: two timeouts then a seen
+        for (result, ts) in [("timeout", 1), ("timeout", 2), ("seen", 3)] {
+            db.execute(
+                "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+                params![p1.to_string(), B256::random().to_string(), result, ts as i64],
+            ).unwrap();
+        }
+        // p2: one timeout only
+        db.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![p2.to_string(), B256::random().to_string(), "timeout", 10_i64],
+        ).unwrap();
+        drop(db);
+
+        let pog_db = PogDb::open(tmp.path()).unwrap();
+        let statuses = pog_db.all_peer_statuses();
+        assert_eq!(statuses.len(), 2);
+
+        let s1 = &statuses[&p1.to_string()];
+        assert_eq!(s1.last_result, "seen");
+        assert_eq!(s1.failure_count, 2);
+        assert_eq!(s1.last_tested_at, 3);
+
+        let s2 = &statuses[&p2.to_string()];
+        assert_eq!(s2.last_result, "timeout");
+        assert_eq!(s2.failure_count, 1);
+        assert_eq!(s2.last_tested_at, 10);
+    }
 }

@@ -71,13 +71,7 @@ pub struct DetailedPeer {
     pub pog: Option<PogPeerStatus>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PogPeerStatus {
-    pub last_result: String,
-    pub failure_count: u32,
-    pub last_tested_at: u64,
-}
+pub use crate::pog::PogPeerStatus;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -210,25 +204,6 @@ fn peer_to_detailed(
     }
 }
 
-fn query_pog_peer_status(db_path: &std::path::Path, peer_id: &PeerId) -> Option<PogPeerStatus> {
-    let db = rusqlite::Connection::open(db_path).ok()?;
-    let failure_count: u32 = db
-        .query_row(
-            "SELECT COUNT(*) FROM peer_tests WHERE peer_id = ?1 AND result = 'timeout'",
-            [peer_id.to_string()],
-            |row| row.get(0),
-        )
-        .ok()?;
-    let (last_result, last_tested_at): (String, i64) = db
-        .query_row(
-            "SELECT result, tested_at FROM peer_tests WHERE peer_id = ?1 ORDER BY tested_at DESC LIMIT 1",
-            [peer_id.to_string()],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .ok()?;
-    Some(PogPeerStatus { last_result, failure_count, last_tested_at: last_tested_at as u64 })
-}
-
 pub struct BerAdminImpl<Network, Provider> {
     network: Network,
     provider: Provider,
@@ -236,6 +211,7 @@ pub struct BerAdminImpl<Network, Provider> {
     client_version: String,
     pog: Arc<PogCoordinator>,
     attribution: Arc<PogAttributionStore>,
+    pog_db: Option<Arc<pog::PogDb>>,
 }
 
 impl<Network, Provider> BerAdminImpl<Network, Provider> {
@@ -247,7 +223,8 @@ impl<Network, Provider> BerAdminImpl<Network, Provider> {
         pog: Arc<PogCoordinator>,
         attribution: Arc<PogAttributionStore>,
     ) -> Self {
-        Self { network, provider, chain_spec, client_version, pog, attribution }
+        let pog_db = pog::PogDb::open(pog.db_path()).ok().map(Arc::new);
+        Self { network, provider, chain_spec, client_version, pog, attribution, pog_db }
     }
 }
 
@@ -269,14 +246,16 @@ where
             .await
             .map_err(|e| ErrorObjectOwned::owned(-32000, e.to_string(), None::<()>))?;
 
-        let pog_db_path = self.pog.db_path().to_path_buf();
-        let has_pog = pog_db_path.exists();
+        let pog_statuses = self
+            .pog_db
+            .as_ref()
+            .map(|db| db.all_peer_statuses())
+            .unwrap_or_default();
         let handle = self.network.peers_handle();
 
         let mut result = Vec::with_capacity(peers.len());
         for info in &peers {
-            let pog =
-                if has_pog { query_pog_peer_status(&pog_db_path, &info.remote_id) } else { None };
+            let pog = pog_statuses.get(&info.remote_id.to_string()).cloned();
             let peer = handle.peer_by_id(info.remote_id).await.unwrap_or_else(|| {
                 reth_network_types::Peer::new(reth_network_types::PeerAddr::from_tcp(
                     info.remote_addr,
