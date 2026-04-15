@@ -198,8 +198,9 @@ where
             .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
 
         let pog = Arc::new(crate::pog::PogCoordinator::new(datadir.clone(), chain_id));
-        // Reuse the global attribution store (also referenced by BerachainNetworkBuilder's
-        // provenance callback, which may have been installed before launch_add_ons runs).
+        if let Err(e) = crate::pog::init_pog_db(pog.db_path()) {
+            tracing::warn!("PoG SQLite init failed: {e:#}");
+        }
         let attribution = crate::pog::attribution_store();
         let bera_admin = Arc::new(BerAdminImpl::new(
             network,
@@ -214,7 +215,10 @@ where
         let payload_builder = ctx.node.payload_builder_handle().clone();
         let attribution_for_sealing = attribution.clone();
         task_executor.spawn_task(async move {
-            let Ok(payload_events) = payload_builder.subscribe().await else { return };
+            let Ok(payload_events) = payload_builder.subscribe().await else {
+                tracing::warn!("payload builder subscribe failed — sealed block attribution will be unavailable");
+                return;
+            };
             let mut stream = payload_events.into_built_payload_stream();
             while let Some(payload) = stream.next().await {
                 let block_number = payload.block().number();

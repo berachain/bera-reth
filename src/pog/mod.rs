@@ -58,19 +58,6 @@ pub fn init_pog_db(db_path: &Path) -> rusqlite::Result<Connection> {
     Ok(db)
 }
 
-pub fn load_confirmed_peers(db: &Connection) -> rusqlite::Result<HashSet<PeerId>> {
-    let mut stmt = db.prepare(
-        "SELECT DISTINCT peer_id FROM peer_tests WHERE result IN ('confirmed','late_confirmed','seen')",
-    )?;
-    let rows = stmt.query_map([], |row| {
-        let peer_id_str: String = row.get(0)?;
-        peer_id_str.parse::<PeerId>().map_err(|e| {
-            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
-        })
-    })?;
-    rows.collect()
-}
-
 pub fn build_unsigned_canary(
     to: Address,
     nonce: u64,
@@ -189,12 +176,6 @@ impl PogCoordinator {
     pub fn set_pending(&self, p: PendingPrepare) {
         if let Ok(mut g) = self.inner.lock() {
             g.pending = Some(p);
-        }
-    }
-
-    pub fn clear_pending(&self) {
-        if let Ok(mut g) = self.inner.lock() {
-            g.pending = None;
         }
     }
 
@@ -648,17 +629,4 @@ mod tests {
         init_pog_db(tmp.path()).unwrap();
     }
 
-    #[test]
-    fn confirmed_peers_loads_seen() {
-        let tmp = NamedTempFile::new().unwrap();
-        let db = init_pog_db(tmp.path()).unwrap();
-        let pid = PeerId::random();
-        db.execute(
-            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
-            params![pid.to_string(), B256::random().to_string(), "seen", 1_i64],
-        )
-        .unwrap();
-        let set = load_confirmed_peers(&db).unwrap();
-        assert!(set.contains(&pid));
-    }
 }

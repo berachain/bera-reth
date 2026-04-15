@@ -5,7 +5,7 @@ use crate::{
     chainspec::BerachainChainSpec,
     pog::{
         self, InflightProbe, PendingPrepare, PogAttributionStore, PogCoordinator, PogProvider,
-        build_unsigned_canary, init_pog_db, min_balance_for_canary, unsigned_tx_hex,
+        build_unsigned_canary, min_balance_for_canary, unsigned_tx_hex,
     },
     primitives::{BerachainBlock, BerachainHeader},
     transaction::{BerachainTxEnvelope, BerachainTxType},
@@ -441,8 +441,6 @@ where
                 )
             })?;
 
-        init_pog_db(self.pog.db_path())
-            .map_err(|e| ErrorObjectOwned::owned(-32000, e.to_string(), None::<()>))?;
 
         let (tx, value_wei) = build_unsigned_canary(signer, nonce, self.pog.chain_id, base_fee);
         let unsigned_tx = unsigned_tx_hex(&tx);
