@@ -345,6 +345,12 @@ impl EthChainSpec for BerachainChainSpec {
             String::new()
         };
 
+        let prague4_details = if let Some(prague4_config) = &self.prague4_config {
+            format!("\nBerachain Prague4 configuration: {{time={}}}", prague4_config.time)
+        } else {
+            String::new()
+        };
+
         let osaka_details = if let Some(osaka_config) = &self.osaka_config {
             format!("\nBerachain Osaka configuration: {{time={}}}", osaka_config.time)
         } else {
@@ -352,7 +358,7 @@ impl EthChainSpec for BerachainChainSpec {
         };
 
         Box::new(format!(
-            "{inner_display}{prague1_details}{prague2_details}{prague3_details}{osaka_details}"
+            "{inner_display}{prague1_details}{prague2_details}{prague3_details}{prague4_details}{osaka_details}"
         ))
     }
 
@@ -609,16 +615,22 @@ impl From<Genesis> for BerachainChainSpec {
             }
         }
 
-        // Validate Osaka ordering if configured (must come at or after Prague)
+        // Validate Osaka ordering if configured (must come at or after the latest preceding fork)
         if let Some(osaka_config) = osaka_config_opt.as_ref() {
-            match genesis.config.prague_time {
-                Some(prague_time) if osaka_config.time < prague_time => {
-                    panic!(
-                        "Osaka hardfork must activate at or after Prague hardfork. Prague time: {}, Osaka time: {}.",
-                        prague_time, osaka_config.time
-                    );
-                }
-                _ => {}
+            let (predecessor_name, predecessor_time) = if let Some(p4) = prague4_config_opt.as_ref()
+            {
+                ("Prague4", p4.time)
+            } else if let Some(p3) = prague3_config_opt.as_ref() {
+                ("Prague3", p3.time)
+            } else {
+                ("Prague2", prague2_config.time)
+            };
+
+            if osaka_config.time < predecessor_time {
+                panic!(
+                    "Osaka hardfork must activate at or after {predecessor_name} hardfork. {predecessor_name} time: {predecessor_time}, Osaka time: {}.",
+                    osaka_config.time
+                );
             }
         }
 
