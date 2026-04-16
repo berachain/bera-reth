@@ -1,7 +1,7 @@
 use super::{
     endpoint::{ResolvedEndpoint, default_datadir},
     engine::{EvalOutcome, evaluate_line},
-    output::{hex_or_decimal_to_u64, print_value_for_chain_raw},
+    output::{BERACHAIN_CHAIN_IDS, hex_or_decimal_to_u64, print_value_for_chain_raw},
     rpc::RpcClient,
 };
 use eyre::Result;
@@ -130,7 +130,7 @@ async fn print_startup_snapshot(
 
 fn chain_emoji(chain_id: Option<u64>) -> &'static str {
     match chain_id {
-        Some(80_069) | Some(80_094) => " 🐻",
+        Some(id) if BERACHAIN_CHAIN_IDS.contains(&id) => " 🐻",
         _ => "",
     }
 }
@@ -235,7 +235,12 @@ impl Completer for CompletionHelper {
     ) -> rustyline::Result<(usize, Vec<Pair>)> {
         let safe_pos = pos.min(line.len());
         let up_to_cursor = &line[..safe_pos];
-        let start = up_to_cursor.rfind(char::is_whitespace).map(|i| i + 1).unwrap_or(0);
+        let start = up_to_cursor
+            .char_indices()
+            .rev()
+            .find(|(_, c)| c.is_whitespace())
+            .map(|(i, c)| i + c.len_utf8())
+            .unwrap_or(0);
         let needle = &up_to_cursor[start..];
         let matches = self
             .words

@@ -160,6 +160,13 @@ impl IpcClientLite {
     }
 
     async fn request(&self, method: &str, params: Value) -> Result<Value> {
+        const IPC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+        tokio::time::timeout(IPC_TIMEOUT, self.request_inner(method, params))
+            .await
+            .map_err(|_| eyre!("IPC request timed out after {IPC_TIMEOUT:?}"))?
+    }
+
+    async fn request_inner(&self, method: &str, params: Value) -> Result<Value> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let req = serde_json::json!({
             "jsonrpc": "2.0",

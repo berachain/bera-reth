@@ -2,6 +2,14 @@ use serde_json::Value;
 
 const DEFAULT_NATIVE_SYMBOL: &str = "ETH";
 
+/// Berachain mainnet (80094) and bepolia testnet (80069) chain IDs.
+pub(crate) const BERACHAIN_CHAIN_IDS: &[u64] = &[80_069, 80_094];
+
+/// ~0.001 native tokens in wei — below this, unlikely to be a balance worth annotating.
+const WEI_HEURISTIC_MIN: u128 = 1_000_000_000_000_000;
+/// ~10 billion native tokens in wei — above this, not a plausible balance.
+const WEI_HEURISTIC_MAX: u128 = 10_000_000_000_000_000_000_000_000_000;
+
 pub(crate) fn hex_or_decimal_to_u64(value: &Value) -> Option<u64> {
     match value {
         Value::String(s) => {
@@ -30,7 +38,7 @@ pub fn print_value_for_chain_raw(value: &Value, chain_id: Option<u64>, raw: bool
 
 pub fn native_symbol_for_chain_id(chain_id: Option<u64>) -> &'static str {
     match chain_id {
-        Some(80_069) | Some(80_094) => "BERA",
+        Some(id) if BERACHAIN_CHAIN_IDS.contains(&id) => "BERA",
         _ => DEFAULT_NATIVE_SYMBOL,
     }
 }
@@ -133,8 +141,7 @@ fn decimal_like_wei(input: &str) -> Option<u128> {
 }
 
 fn looks_like_wei(value: u128) -> bool {
-    // Heuristic: large integer range typically used for wei amounts.
-    (1_000_000_000_000_000u128..=1_000_000_000_000_000_000_000_000_000_000_000u128).contains(&value)
+    (WEI_HEURISTIC_MIN..=WEI_HEURISTIC_MAX).contains(&value)
 }
 
 fn format_eth(wei: u128) -> String {

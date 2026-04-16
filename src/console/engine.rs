@@ -93,11 +93,9 @@ mod tests {
     }
 
     #[test]
-    fn rpc_with_query_stores_raw_result_in_last() {
+    fn apply_query_on_array_returns_count() {
         let peers = json!([{"id": "a"}, {"id": "b"}]);
         let count = apply_query(".count", &peers).unwrap();
-        let last: Option<Value> = Some(peers.clone());
         assert_eq!(count, json!(2));
-        assert_eq!(last, Some(peers));
     }
 }
