@@ -10,7 +10,7 @@ use alloy_eips::{
 use alloy_primitives::{Address, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rpc_types::engine::{
-    BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
+    BlobsBundleV1, BlobsBundleV2, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadFieldV2,
     ExecutionPayloadV1, ExecutionPayloadV3, PayloadId,
 };
@@ -241,6 +241,29 @@ impl BerachainBuiltPayload {
             envelope_inner: self.try_into()?,
         })
     }
+
+    pub fn try_into_v5(self) -> Result<ExecutionPayloadEnvelopeV5, BuiltPayloadConversionError> {
+        let Self { block, fees, sidecars, requests, .. } = self;
+
+        let blobs_bundle = match sidecars {
+            BlobSidecars::Empty => BlobsBundleV2::empty(),
+            BlobSidecars::Eip7594(sidecars) => BlobsBundleV2::from(sidecars),
+            BlobSidecars::Eip4844(_) => {
+                return Err(BuiltPayloadConversionError::UnexpectedEip4844Sidecars)
+            }
+        };
+
+        Ok(ExecutionPayloadEnvelopeV5 {
+            execution_payload: ExecutionPayloadV3::from_block_unchecked(
+                block.hash(),
+                &Arc::unwrap_or_clone(block).into_block(),
+            ),
+            block_value: fees,
+            should_override_builder: false,
+            blobs_bundle,
+            execution_requests: requests.unwrap_or_default(),
+        })
+    }
 }
 
 impl From<BerachainBuiltPayload> for ExecutionPayloadV1 {
@@ -282,9 +305,11 @@ impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV4 {
     }
 }
 
-impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
-    fn from(_value: BerachainBuiltPayload) -> Self {
-        panic!("ExecutionPayloadV5 conversion not yet supported for Berachain")
+impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
+    type Error = BuiltPayloadConversionError;
+
+    fn try_from(value: BerachainBuiltPayload) -> Result<Self, Self::Error> {
+        value.try_into_v5()
     }
 }
 
