@@ -44,7 +44,7 @@ pub fn peer_to_detailed(
         None => (None, None),
     };
     DetailedPeer {
-        peer_id: info.remote_id.to_string(),
+        peer_id: alloy_primitives::hex::encode(info.remote_id.as_slice()),
         enode: info.enode.clone(),
         remote_addr: info.remote_addr.to_string(),
         direction: info.direction.to_string(),

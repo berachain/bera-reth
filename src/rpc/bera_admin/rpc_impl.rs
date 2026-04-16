@@ -135,7 +135,7 @@ where
         let syncing = NetworkInfo::is_syncing(&self.network);
         let node_record = PeersInfo::local_node_record(&self.network);
         let local_enode = node_record.to_string();
-        let local_peer_id = node_record.id.to_string();
+        let local_peer_id = alloy_primitives::hex::encode(node_record.id.as_slice());
 
         Ok(NodeStatusResponse {
             chain_id,
