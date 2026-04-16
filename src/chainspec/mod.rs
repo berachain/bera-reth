@@ -1,7 +1,7 @@
 //! Berachain chain specification with Ethereum hardforks plus Prague1 minimum base fee
 
 use crate::{
-    genesis::{BerachainGenesisConfig, Prague3Config, Prague4Config},
+    genesis::{BerachainGenesisConfig, OsakaConfig, Prague3Config, Prague4Config},
     hardforks::{BerachainHardfork, BerachainHardforks},
     primitives::{BerachainHeader, header::BlsPublicKey},
 };
@@ -43,6 +43,7 @@ const BEPOLIA_ETH_GENESIS_JSON: &str =
 
 /// Berachain chain specification wrapping Reth's ChainSpec with Berachain hardforks
 #[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
+#[allow(clippy::too_many_arguments)]
 pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
     pub inner: ChainSpec,
@@ -57,6 +58,8 @@ pub struct BerachainChainSpec {
     pub prague3_config: Option<Prague3Config>,
     /// Prague4 configuration (if configured)
     pub prague4_config: Option<Prague4Config>,
+    /// Osaka configuration (if configured)
+    pub osaka_config: Option<OsakaConfig>,
 }
 
 impl BerachainChainSpec {
@@ -342,7 +345,15 @@ impl EthChainSpec for BerachainChainSpec {
             String::new()
         };
 
-        Box::new(format!("{inner_display}{prague1_details}{prague2_details}{prague3_details}"))
+        let osaka_details = if let Some(osaka_config) = &self.osaka_config {
+            format!("\nBerachain Osaka configuration: {{time={}}}", osaka_config.time)
+        } else {
+            String::new()
+        };
+
+        Box::new(format!(
+            "{inner_display}{prague1_details}{prague2_details}{prague3_details}{osaka_details}"
+        ))
     }
 
     fn genesis_header(&self) -> &Self::Header {
@@ -472,6 +483,7 @@ impl BerachainChainSpec {
             prague2_minimum_base_fee: 0,
             prague3_config: None,
             prague4_config: None,
+            osaka_config: None,
         }
     }
 }
@@ -489,11 +501,12 @@ impl From<Genesis> for BerachainChainSpec {
             return Self::ethereum_fallback(genesis);
         }
 
-        // Parse Prague1, Prague2, Prague3, and Prague4 configurations if present
+        // Parse hardfork configurations if present
         let prague1_config_opt = berachain_genesis_config.prague1;
         let prague2_config_opt = berachain_genesis_config.prague2;
         let prague3_config_opt = berachain_genesis_config.prague3;
         let prague4_config_opt = berachain_genesis_config.prague4;
+        let osaka_config_opt = berachain_genesis_config.osaka;
 
         // Both Prague1 and Prague2 are required for Berachain genesis
         let (prague1_config, prague2_config) = match (prague1_config_opt, prague2_config_opt) {
@@ -596,6 +609,19 @@ impl From<Genesis> for BerachainChainSpec {
             }
         }
 
+        // Validate Osaka ordering if configured (must come at or after Prague)
+        if let Some(osaka_config) = osaka_config_opt.as_ref() {
+            match genesis.config.prague_time {
+                Some(prague_time) if osaka_config.time < prague_time => {
+                    panic!(
+                        "Osaka hardfork must activate at or after Prague hardfork. Prague time: {}, Osaka time: {}.",
+                        prague_time, osaka_config.time
+                    );
+                }
+                _ => {}
+            }
+        }
+
         // Berachain networks don't support proof-of-work or non-genesis merge
         if let Some(ttd) = genesis.config.terminal_total_difficulty {
             if !ttd.is_zero() {
@@ -685,7 +711,13 @@ impl From<Genesis> for BerachainChainSpec {
             ));
         }
 
-        if let Some(osaka_time) = genesis.config.osaka_time {
+        // Activate EthereumHardfork::Osaka via berachain config or standard genesis config
+        if let Some(osaka_config) = osaka_config_opt.as_ref() {
+            hardforks.push((
+                EthereumHardfork::Osaka.boxed(),
+                ForkCondition::Timestamp(osaka_config.time),
+            ));
+        } else if let Some(osaka_time) = genesis.config.osaka_time {
             hardforks.push((EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(osaka_time)));
         }
 
@@ -773,6 +805,7 @@ impl From<Genesis> for BerachainChainSpec {
             prague2_minimum_base_fee,
             prague3_config: prague3_config_opt,
             prague4_config: prague4_config_opt,
+            osaka_config: osaka_config_opt,
         }
     }
 }
