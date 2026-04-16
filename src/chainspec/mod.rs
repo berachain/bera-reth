@@ -615,8 +615,23 @@ impl From<Genesis> for BerachainChainSpec {
             }
         }
 
+        // Resolve effective Osaka activation timestamp from either source, rejecting conflicts
+        let effective_osaka_time = match (osaka_config_opt.as_ref(), genesis.config.osaka_time) {
+            (Some(berachain_osaka), Some(standard_osaka))
+                if berachain_osaka.time != standard_osaka =>
+            {
+                panic!(
+                    "Conflicting Osaka activation times: berachain.osaka.time={} vs osakaTime={}. Use one or the other.",
+                    berachain_osaka.time, standard_osaka
+                );
+            }
+            (Some(berachain_osaka), _) => Some(berachain_osaka.time),
+            (None, Some(standard_osaka)) => Some(standard_osaka),
+            (None, None) => None,
+        };
+
         // Validate Osaka ordering if configured (must come at or after the latest preceding fork)
-        if let Some(osaka_config) = osaka_config_opt.as_ref() {
+        if let Some(osaka_time) = effective_osaka_time {
             let (predecessor_name, predecessor_time) = if let Some(p4) = prague4_config_opt.as_ref()
             {
                 ("Prague4", p4.time)
@@ -626,10 +641,9 @@ impl From<Genesis> for BerachainChainSpec {
                 ("Prague2", prague2_config.time)
             };
 
-            if osaka_config.time < predecessor_time {
+            if osaka_time < predecessor_time {
                 panic!(
-                    "Osaka hardfork must activate at or after {predecessor_name} hardfork. {predecessor_name} time: {predecessor_time}, Osaka time: {}.",
-                    osaka_config.time
+                    "Osaka hardfork must activate at or after {predecessor_name} hardfork. {predecessor_name} time: {predecessor_time}, Osaka time: {osaka_time}.",
                 );
             }
         }
@@ -723,13 +737,7 @@ impl From<Genesis> for BerachainChainSpec {
             ));
         }
 
-        // Activate EthereumHardfork::Osaka via berachain config or standard genesis config
-        if let Some(osaka_config) = osaka_config_opt.as_ref() {
-            hardforks.push((
-                EthereumHardfork::Osaka.boxed(),
-                ForkCondition::Timestamp(osaka_config.time),
-            ));
-        } else if let Some(osaka_time) = genesis.config.osaka_time {
+        if let Some(osaka_time) = effective_osaka_time {
             hardforks.push((EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(osaka_time)));
         }
 
@@ -2542,5 +2550,233 @@ mod tests {
             syncing_fork_filter.validate(current_fork_id).is_ok(),
             "Syncing node should accept ahead node for sync"
         );
+    }
+
+    #[test]
+    fn test_osaka_activation_via_berachain_config() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
+                },
+                "osaka": {
+                    "time": 5000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert!(!chain_spec.is_osaka_active_at_timestamp(4999));
+        assert!(chain_spec.is_osaka_active_at_timestamp(5000));
+        assert!(chain_spec.is_osaka_active_at_timestamp(6000));
+        assert!(chain_spec.osaka_config.is_some());
+        assert_eq!(chain_spec.osaka_config.unwrap().time, 5000);
+    }
+
+    #[test]
+    fn test_osaka_activation_via_standard_genesis_config() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.osaka_time = Some(5000);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert!(!chain_spec.is_osaka_active_at_timestamp(4999));
+        assert!(chain_spec.is_osaka_active_at_timestamp(5000));
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Osaka hardfork must activate at or after Prague2 hardfork. Prague2 time: 3000, Osaka time: 1000."
+    )]
+    fn test_panic_on_osaka_before_prague2() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 3000,
+                    "minimumBaseFeeWei": 0
+                },
+                "osaka": {
+                    "time": 1000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Osaka hardfork must activate at or after Prague4 hardfork. Prague4 time: 4000, Osaka time: 3500."
+    )]
+    fn test_panic_on_osaka_before_prague4() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 1000,
+                    "minimumBaseFeeWei": 0
+                },
+                "prague3": {
+                    "time": 2000,
+                    "blockedAddresses": [
+                        "0x1111111111111111111111111111111111111111"
+                    ],
+                    "rescueAddress": "0x9999999999999999999999999999999999999999",
+                    "bexVaultAddress": "0xBE0BE0BE0BE0BE0BE0BE0BE0BE0BE0BE0BE0BE0B"
+                },
+                "prague4": {
+                    "time": 4000
+                },
+                "osaka": {
+                    "time": 3500
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Osaka hardfork must activate at or after Prague2 hardfork. Prague2 time: 3000, Osaka time: 1000."
+    )]
+    fn test_panic_on_osaka_before_prague2_via_standard_config() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.osaka_time = Some(1000);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 3000,
+                    "minimumBaseFeeWei": 0
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(expected = "Conflicting Osaka activation times")]
+    fn test_panic_on_conflicting_osaka_times() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.osaka_time = Some(6000);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
+                },
+                "osaka": {
+                    "time": 5000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    fn test_osaka_matching_dual_config_accepted() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.osaka_time = Some(5000);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 0,
+                    "minimumBaseFeeWei": 0
+                },
+                "osaka": {
+                    "time": 5000
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+        assert!(chain_spec.is_osaka_active_at_timestamp(5000));
     }
 }
