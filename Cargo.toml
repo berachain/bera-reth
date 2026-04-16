@@ -22,11 +22,14 @@ alloy-sol-types = "1.5.6"
 bytes = "1.10.1"
 clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
+dirs = "6.0.0"
 eyre = "0.6.12"
+libc = "0.2.177"
+rustyline = "17.0.2"
 sha2 = "0.10"
 
 # rpc
-jsonrpsee = "0.26.0"
+jsonrpsee = { version = "0.26.0", features = ["http-client", "ws-client"] }
 jsonrpsee-core = { version = "0.26.0", features = ["server"] }
 jsonrpsee-proc-macros = "0.26.0"
 
@@ -38,6 +41,7 @@ reth-basic-payload-builder = { git = "https://github.com/camembera/reth", branch
 reth-chainspec = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-cli = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-cli-commands = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-cli-runner = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-cli-util = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-codecs = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-consensus-common = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
@@ -70,13 +74,14 @@ reth-rpc-convert = { git = "https://github.com/camembera/reth", branch = "pog/pr
 reth-rpc-engine-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-rpc-eth-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-rpc-eth-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-rpc-server-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-storage-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-transaction-pool = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde_json = "1.0"
 thiserror = "2.0"
-tokio = "1.46.0"
+tokio = { version = "1.46.0", features = ["macros", "rt-multi-thread", "net", "io-util"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 futures = "0.3.32"
@@ -86,6 +91,7 @@ alloy-provider = "1.6.3"
 alloy-rpc-client = "1.6.3"
 alloy-rpc-types-trace = "1.6.3"
 eyre = "0.6.12"
+jsonrpsee = { version = "0.26.0", features = ["server"] }
 reth-e2e-test-utils = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-rpc-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-trie-common = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
