@@ -1,0 +1,396 @@
+use super::endpoint::{ResolvedEndpoint, Transport};
+use eyre::{Result, eyre};
+use http::{HeaderMap, HeaderName, HeaderValue};
+use jsonrpsee::{
+    core::{
+        client::ClientT,
+        params::{ArrayParams, ObjectParams},
+    },
+    http_client::{HttpClient, HttpClientBuilder},
+    rpc_params,
+    ws_client::{WsClient, WsClientBuilder},
+};
+use serde_json::{Map, Value};
+use std::{
+    collections::BTreeMap,
+    ffi::CString,
+    path::Path,
+    sync::atomic::{AtomicU64, Ordering},
+};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    net::UnixStream,
+};
+
+#[derive(Debug)]
+pub enum RpcClient {
+    Http(HttpClient),
+    Ws(WsClient),
+    Ipc(IpcClientLite),
+}
+
+impl RpcClient {
+    pub async fn connect(
+        endpoint: &ResolvedEndpoint,
+        http_headers: &[(String, String)],
+    ) -> Result<Self> {
+        let headers = make_headers(http_headers)?;
+        match endpoint.transport {
+            Transport::Http => {
+                let client =
+                    HttpClientBuilder::default().set_headers(headers).build(&endpoint.raw)?;
+                Ok(Self::Http(client))
+            }
+            Transport::Ws => {
+                let client =
+                    WsClientBuilder::default().set_headers(headers).build(&endpoint.raw).await?;
+                Ok(Self::Ws(client))
+            }
+            Transport::Ipc => {
+                validate_ipc_endpoint(&endpoint.raw)?;
+                let client = IpcClientLite::new(endpoint.raw.clone());
+                Ok(Self::Ipc(client))
+            }
+        }
+    }
+
+    pub async fn request_value(&self, method: &str, params: Option<Value>) -> Result<Value> {
+        let params = RpcParams::from_value(params)?;
+        match self {
+            Self::Http(client) => params.request(client, method).await,
+            Self::Ws(client) => params.request(client, method).await,
+            Self::Ipc(client) => client.request(method, params.into_value()).await,
+        }
+    }
+
+    pub async fn supported_modules(&self) -> Result<BTreeMap<String, String>> {
+        let value = self.request_value("rpc_modules", None).await?;
+        let map = serde_json::from_value(value)?;
+        Ok(map)
+    }
+}
+
+enum RpcParams {
+    None,
+    Array(ArrayParams, Vec<Value>),
+    Object(ObjectParams, Map<String, Value>),
+}
+
+impl RpcParams {
+    fn from_value(value: Option<Value>) -> Result<Self> {
+        let Some(value) = value else {
+            return Ok(Self::None);
+        };
+        match value {
+            Value::Null => Ok(Self::None),
+            Value::Array(values) => {
+                let mut out = ArrayParams::new();
+                for v in &values {
+                    out.insert(v).map_err(|e| eyre!("invalid rpc array params: {e}"))?;
+                }
+                Ok(Self::Array(out, values))
+            }
+            Value::Object(values) => Ok(Self::Object(object_params(values.clone())?, values)),
+            _ => Err(eyre!("rpc params must be null, JSON array, or JSON object")),
+        }
+    }
+
+    async fn request<C>(&self, client: &C, method: &str) -> Result<Value>
+    where
+        C: ClientT,
+    {
+        let value = match self {
+            Self::None => client.request(method, rpc_params![]).await?,
+            Self::Array(params, _) => client.request(method, params.clone()).await?,
+            Self::Object(params, _) => client.request(method, params.clone()).await?,
+        };
+        Ok(value)
+    }
+
+    fn into_value(self) -> Value {
+        match self {
+            Self::None => Value::Array(vec![]),
+            Self::Array(_, values) => Value::Array(values),
+            Self::Object(_, values) => Value::Object(values),
+        }
+    }
+}
+
+fn object_params(values: Map<String, Value>) -> Result<ObjectParams> {
+    let mut params = ObjectParams::new();
+    for (k, v) in values {
+        params.insert(k.as_str(), v).map_err(|e| eyre!("invalid rpc object params: {e}"))?;
+    }
+    Ok(params)
+}
+
+fn make_headers(headers: &[(String, String)]) -> Result<HeaderMap> {
+    let mut out = HeaderMap::new();
+    for (k, v) in headers {
+        let key = HeaderName::from_bytes(k.as_bytes())?;
+        let value = HeaderValue::from_str(v)?;
+        out.insert(key, value);
+    }
+    Ok(out)
+}
+
+fn validate_ipc_endpoint(path: &str) -> Result<()> {
+    let endpoint = Path::new(path);
+    if !endpoint.exists() {
+        return Err(eyre!("IPC endpoint not found: {path}"));
+    }
+    let metadata = std::fs::metadata(endpoint)
+        .map_err(|err| eyre!("failed to stat IPC endpoint {path}: {err}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        if !metadata.file_type().is_socket() {
+            return Err(eyre!("IPC endpoint is not a unix socket: {path}"));
+        }
+        let c_path =
+            CString::new(path).map_err(|_| eyre!("IPC endpoint contains invalid bytes: {path}"))?;
+        let read_ok = unsafe { libc::access(c_path.as_ptr(), libc::R_OK) == 0 };
+        if !read_ok {
+            return Err(eyre!("IPC endpoint is not readable by current user: {path}"));
+        }
+        let write_ok = unsafe { libc::access(c_path.as_ptr(), libc::W_OK) == 0 };
+        if !write_ok {
+            return Err(eyre!("IPC endpoint is not writable by current user: {path}"));
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+pub(crate) struct IpcClientLite {
+    path: String,
+    next_id: AtomicU64,
+}
+
+impl IpcClientLite {
+    fn new(path: String) -> Self {
+        Self { path, next_id: AtomicU64::new(1) }
+    }
+
+    async fn request(&self, method: &str, params: Value) -> Result<Value> {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let req = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params,
+        });
+        let mut stream = UnixStream::connect(&self.path)
+            .await
+            .map_err(|err| eyre!("failed to connect IPC endpoint {}: {err}", self.path))?;
+        let encoded = serde_json::to_string(&req)?;
+        stream.write_all(encoded.as_bytes()).await?;
+        stream.write_all(b"\n").await?;
+
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        reader.read_line(&mut line).await?;
+        if line.trim().is_empty() {
+            return Err(eyre!("empty IPC response"));
+        }
+
+        let resp: Value = serde_json::from_str(&line)?;
+        if let Some(err) = resp.get("error") {
+            return Err(eyre!("rpc error: {}", err));
+        }
+        resp.get("result").cloned().ok_or_else(|| eyre!("missing result field in IPC response"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::console::endpoint::{ResolvedEndpoint, Transport};
+    use jsonrpsee::{RpcModule, server::ServerBuilder};
+    use serde_json::json;
+    use tempfile::tempdir;
+    use tokio::{
+        io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+        net::UnixListener,
+    };
+
+    #[test]
+    fn rpc_params_accept_none_and_null() {
+        let none_params = RpcParams::from_value(None).unwrap();
+        assert!(matches!(none_params, RpcParams::None));
+
+        let null_params = RpcParams::from_value(Some(Value::Null)).unwrap();
+        assert!(matches!(null_params, RpcParams::None));
+    }
+
+    #[test]
+    fn rpc_params_reject_scalar_values() {
+        let err = match RpcParams::from_value(Some(json!(true))) {
+            Ok(_) => panic!("expected scalar params to be rejected"),
+            Err(err) => err,
+        };
+        assert!(err.to_string().contains("rpc params must be null, JSON array, or JSON object"));
+    }
+
+    #[test]
+    fn rpc_params_preserve_array_and_object_shapes() {
+        let array = RpcParams::from_value(Some(json!([1, "x"]))).unwrap();
+        assert_eq!(array.into_value(), json!([1, "x"]));
+
+        let object = RpcParams::from_value(Some(json!({"a": 1, "b": "x"}))).unwrap();
+        assert_eq!(object.into_value(), json!({"a": 1, "b": "x"}));
+    }
+
+    #[test]
+    fn make_headers_valid_and_invalid() {
+        let headers = make_headers(&[
+            ("Authorization".to_owned(), "Bearer token".to_owned()),
+            ("x-test".to_owned(), "1".to_owned()),
+        ])
+        .unwrap();
+        assert_eq!(
+            headers.get("authorization").expect("authorization header missing"),
+            "Bearer token"
+        );
+        assert_eq!(headers.get("x-test").expect("x-test missing"), "1");
+
+        let invalid_name = make_headers(&[("\n".to_owned(), "value".to_owned())]).unwrap_err();
+        assert!(invalid_name.to_string().contains("invalid HTTP header name"));
+
+        let invalid_value = make_headers(&[("x-test".to_owned(), "\n".to_owned())]).unwrap_err();
+        assert!(invalid_value.to_string().contains("failed to parse header value"));
+    }
+
+    #[test]
+    fn validate_ipc_endpoint_errors_for_missing_and_non_socket() {
+        let missing = validate_ipc_endpoint("/definitely/missing/reth.ipc").unwrap_err();
+        assert!(missing.to_string().contains("IPC endpoint not found"));
+
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("plain-file");
+        std::fs::write(&file_path, b"not a socket").expect("write file");
+        let err = validate_ipc_endpoint(file_path.to_string_lossy().as_ref()).unwrap_err();
+        assert!(err.to_string().contains("not a unix socket"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn rpc_client_http_request_and_supported_modules() {
+        let server = ServerBuilder::default().build("127.0.0.1:0").await.expect("server starts");
+        let addr = server.local_addr().expect("local addr");
+
+        let mut module = RpcModule::new(());
+        module
+            .register_method("eth_blockNumber", |_params, _ctx, _ext| {
+                Ok::<Value, jsonrpsee::types::ErrorObjectOwned>(json!("0x10"))
+            })
+            .expect("register eth_blockNumber");
+        module
+            .register_method("rpc_modules", |_params, _ctx, _ext| {
+                Ok::<Value, jsonrpsee::types::ErrorObjectOwned>(json!({
+                    "eth": "1.0",
+                    "net": "1.0"
+                }))
+            })
+            .expect("register rpc_modules");
+
+        let handle = server.start(module);
+        let endpoint =
+            ResolvedEndpoint { raw: format!("http://{addr}"), transport: Transport::Http };
+
+        let client = RpcClient::connect(&endpoint, &[]).await.unwrap();
+        let block = client.request_value("eth_blockNumber", None).await.unwrap();
+        assert_eq!(block, json!("0x10"));
+
+        let modules = client.supported_modules().await.unwrap();
+        assert_eq!(modules.get("eth"), Some(&"1.0".to_owned()));
+        assert_eq!(modules.get("net"), Some(&"1.0".to_owned()));
+
+        handle.stop().expect("stop server");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn rpc_client_ws_request_path() {
+        let server = ServerBuilder::default().build("127.0.0.1:0").await.expect("server starts");
+        let addr = server.local_addr().expect("local addr");
+
+        let mut module = RpcModule::new(());
+        module
+            .register_method("web3_clientVersion", |_params, _ctx, _ext| {
+                Ok::<Value, jsonrpsee::types::ErrorObjectOwned>(json!("reth/1.0.0"))
+            })
+            .expect("register method");
+
+        let handle = server.start(module);
+        let endpoint = ResolvedEndpoint { raw: format!("ws://{addr}"), transport: Transport::Ws };
+
+        let client = RpcClient::connect(&endpoint, &[]).await.unwrap();
+        let version = client.request_value("web3_clientVersion", None).await.unwrap();
+        assert_eq!(version, json!("reth/1.0.0"));
+
+        handle.stop().expect("stop server");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn supported_modules_errors_on_invalid_shape() {
+        let server = ServerBuilder::default().build("127.0.0.1:0").await.expect("server starts");
+        let addr = server.local_addr().expect("local addr");
+
+        let mut module = RpcModule::new(());
+        module
+            .register_method("rpc_modules", |_params, _ctx, _ext| {
+                Ok::<Value, jsonrpsee::types::ErrorObjectOwned>(json!(["eth", "net"]))
+            })
+            .expect("register rpc_modules");
+
+        let handle = server.start(module);
+        let endpoint =
+            ResolvedEndpoint { raw: format!("http://{addr}"), transport: Transport::Http };
+        let client = RpcClient::connect(&endpoint, &[]).await.unwrap();
+
+        let err = client.supported_modules().await.unwrap_err();
+        assert!(err.to_string().contains("invalid type"));
+
+        handle.stop().expect("stop server");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn ipc_client_handles_empty_response_and_rpc_error() {
+        let dir = tempdir().expect("tempdir");
+        let socket_path = dir.path().join("reth.ipc");
+        let listener = UnixListener::bind(&socket_path).expect("bind socket");
+
+        let server_task = tokio::spawn(async move {
+            // First request: reply with an empty line.
+            let (stream1, _) = listener.accept().await.expect("accept first");
+            let mut r1 = BufReader::new(stream1);
+            let mut req1 = String::new();
+            let _ = r1.read_line(&mut req1).await.expect("read first");
+            let mut s1 = r1.into_inner();
+            s1.write_all(b"\n").await.expect("write empty response");
+
+            // Second request: reply with JSON-RPC error.
+            let (stream2, _) = listener.accept().await.expect("accept second");
+            let mut r2 = BufReader::new(stream2);
+            let mut req2 = String::new();
+            let _ = r2.read_line(&mut req2).await.expect("read second");
+            let mut s2 = r2.into_inner();
+            s2.write_all(br#"{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"boom"}}"#)
+                .await
+                .expect("write error");
+            s2.write_all(b"\n").await.expect("write newline");
+        });
+
+        let client = IpcClientLite::new(socket_path.to_string_lossy().to_string());
+        let empty_err = client.request("eth_blockNumber", json!([])).await.unwrap_err();
+        assert!(empty_err.to_string().contains("empty IPC response"));
+
+        let rpc_err = client.request("eth_blockNumber", json!([])).await.unwrap_err();
+        assert!(rpc_err.to_string().contains("rpc error"));
+
+        server_task.await.expect("server task");
+    }
+}

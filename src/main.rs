@@ -4,6 +4,7 @@
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
 use bera_reth::{
+    berachain_cli::BerachainSubcommands,
     chainspec::{BerachainChainSpec, BerachainChainSpecParser},
     consensus::BerachainBeaconConsensus,
     evm::BerachainEvmFactory,
@@ -13,9 +14,10 @@ use bera_reth::{
 use clap::Parser;
 use reth::CliRunner;
 use reth_cli_commands::node::NoArgs;
-use reth_ethereum_cli::Cli;
+use reth_ethereum_cli::interface::{Cli, Commands};
 use reth_node_builder::NodeHandle;
-use std::sync::Arc;
+use reth_rpc_server_types::DefaultRpcModuleValidator;
+use std::{marker::PhantomData, sync::Arc};
 use tracing::info;
 
 /// Persist every canonical block to disk immediately rather than buffering.
@@ -47,20 +49,47 @@ fn main() {
         )
     };
 
-    if let Err(err) = Cli::<BerachainChainSpecParser, NoArgs>::parse()
-        .with_runner_and_components::<BerachainNode>(
-            CliRunner::try_default_runtime().expect("Failed to create default runtime"),
-            cli_components_builder,
-            async move |builder, _| {
-                info!(target: "reth::cli", "Launching Berachain node");
-                let NodeHandle { node: _node, node_exit_future } =
-                    builder.node(BerachainNode::default()).launch_with_debug_capabilities().await?;
+    let cli = Cli::<
+        BerachainChainSpecParser,
+        NoArgs,
+        DefaultRpcModuleValidator,
+        BerachainSubcommands,
+    >::parse();
 
-                node_exit_future.await
-            },
-        )
-    {
-        eprintln!("Error: {err:?}");
-        std::process::exit(1);
+    let reth_ethereum_cli::interface::Cli { command, logs, traces, _phantom } = cli;
+
+    match command {
+        Commands::Ext(BerachainSubcommands::Console(console_cmd)) => {
+            let runner =
+                CliRunner::try_default_runtime().expect("Failed to create default runtime");
+            if let Err(err) = console_cmd.run(runner) {
+                eprintln!("Error: {err:?}");
+                std::process::exit(1);
+            }
+        }
+        other => {
+            let cli = Cli {
+                command: other,
+                logs,
+                traces,
+                _phantom: PhantomData::<DefaultRpcModuleValidator>,
+            };
+            if let Err(err) = cli.with_runner_and_components::<BerachainNode>(
+                CliRunner::try_default_runtime().expect("Failed to create default runtime"),
+                cli_components_builder,
+                async move |builder, _| {
+                    info!(target: "reth::cli", "Launching Berachain node");
+                    let NodeHandle { node: _node, node_exit_future } = builder
+                        .node(BerachainNode::default())
+                        .launch_with_debug_capabilities()
+                        .await?;
+
+                    node_exit_future.await
+                },
+            ) {
+                eprintln!("Error: {err:?}");
+                std::process::exit(1);
+            }
+        }
     }
 }
