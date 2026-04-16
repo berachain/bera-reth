@@ -299,7 +299,6 @@ impl PogCoordinator {
 }
 
 pub trait PogProvider: Send + Sync {
-    fn receipt_exists(&self, hash: TxHash) -> eyre::Result<bool>;
     fn account_nonce(&self, address: &Address) -> eyre::Result<Option<u64>>;
     fn account_balance(&self, address: &Address) -> eyre::Result<Option<U256>>;
     fn latest_base_fee(&self) -> eyre::Result<u128>;
@@ -309,10 +308,6 @@ impl<P> PogProvider for P
 where
     P: StateProviderFactory + BlockReaderIdExt<Header = BerachainHeader> + Send + Sync,
 {
-    fn receipt_exists(&self, hash: TxHash) -> eyre::Result<bool> {
-        Ok(self.receipt_by_hash(hash)?.is_some())
-    }
-
     fn account_nonce(&self, address: &Address) -> eyre::Result<Option<u64>> {
         Ok(self.latest()?.account_nonce(address)?)
     }
@@ -435,15 +430,25 @@ pub fn attribution_store() -> std::sync::Arc<PogAttributionStore> {
     ATTRIBUTION_STORE.get_or_init(|| std::sync::Arc::new(PogAttributionStore::default())).clone()
 }
 
-/// Background receipt / timeout watcher; does not penalize peers (sentinel policy).
-pub async fn run_pog_watcher<P: PogProvider + 'static>(
+/// Background watcher that detects canary tx inclusion by scanning new canonical blocks.
+///
+/// Replaces the old polling `receipt_by_hash` approach, which failed when blocks were
+/// flushed immediately to disk (`--engine.persistence-threshold 0`) because the MDBX
+/// `TransactionHashNumbers` table is not populated during Engine API live sync.
+pub async fn run_pog_watcher(
     shutdown: reth::tasks::shutdown::GracefulShutdown,
     coord: std::sync::Arc<PogCoordinator>,
     store: std::sync::Arc<PogAttributionStore>,
-    provider: P,
+    mut canon_events: reth::providers::CanonStateNotifications<crate::primitives::BerachainPrimitives>,
 ) {
+    use alloy_consensus::BlockHeader as _;
+    use reth_primitives_traits::{BlockBody as _, transaction::TxHashRef as _};
+
     let mut shutdown = shutdown;
-    info!(target: "bera_reth::pog_probe", "PoG probe watcher started");
+    let mut timeout_interval = tokio::time::interval(Duration::from_secs(WATCHER_TICK_SECS));
+    timeout_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    info!(target: "bera_reth::pog_probe", "PoG probe watcher started (block-scan mode)");
     loop {
         tokio::select! {
             guard = &mut shutdown => {
@@ -451,87 +456,105 @@ pub async fn run_pog_watcher<P: PogProvider + 'static>(
                 info!(target: "bera_reth::pog_probe", "PoG probe watcher stopped");
                 return;
             }
-            _ = tokio::time::sleep(Duration::from_secs(WATCHER_TICK_SECS)) => {
+            event = canon_events.recv() => {
+                let chain = match event {
+                    Ok(notification) => notification.committed(),
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        info!(target: "bera_reth::pog_probe", skipped = n, "canon state stream lagged");
+                        continue;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        info!(target: "bera_reth::pog_probe", "canon state stream closed");
+                        return;
+                    }
+                };
+                for block in chain.blocks_iter() {
+                    let block_num = block.header().number();
+                    let tx_hashes: Vec<TxHash> = block
+                        .body()
+                        .transactions_iter()
+                        .map(|tx| *tx.tx_hash())
+                        .collect();
+
+                    // Check inflight probe against this block's transactions
+                    if let Some(inflight) = coord.inflight_snapshot()
+                        && tx_hashes.contains(&inflight.tx_hash)
+                    {
+                        let _ = coord.pog_db().insert_peer_test(
+                            &inflight.peer_id,
+                            inflight.tx_hash,
+                            "seen",
+                        );
+                        coord.clear_inflight();
+                        coord.remove_timed_out(&inflight.tx_hash);
+                        info!(
+                            target: "bera_reth::pog_probe",
+                            event = "probe.result",
+                            outcome = "seen",
+                            peer_id = %inflight.peer_id,
+                            enode = %inflight.enode,
+                            probe_id = %inflight.tx_hash,
+                            nonce = inflight.nonce,
+                            value_wei = inflight.value_wei,
+                            block = block_num,
+                            "canary receipt observed"
+                        );
+                    }
+
+                    // Check timed-out probes (late reconciliation)
+                    for tx_hash in coord.timed_out_tx_hashes() {
+                        if tx_hashes.contains(&tx_hash) {
+                            let Some(peer_id) = coord.timed_out_peer(&tx_hash) else {
+                                continue;
+                            };
+                            let _ = coord.pog_db().insert_peer_test(&peer_id, tx_hash, "seen");
+                            coord.remove_timed_out(&tx_hash);
+                            info!(
+                                target: "bera_reth::pog_probe",
+                                event = "probe.result",
+                                outcome = "seen",
+                                peer_id = %peer_id,
+                                probe_id = %tx_hash,
+                                block = block_num,
+                                late = true,
+                                "timed-out canary appeared on-chain"
+                            );
+                        }
+                    }
+                }
+            }
+            _ = timeout_interval.tick() => {
                 coord.prune_timed_out_window();
                 store.provenance.lock().expect("provenance mutex poisoned").evict_expired();
                 store.sealed.lock().expect("sealed mutex poisoned").evict_expired();
-                if let Err(e) = watcher_tick(&coord, &provider) {
-                    info!(target: "bera_reth::pog_probe", error = %e, "watcher tick error");
-                }
-                if let Err(e) = reconcile_late_confirmations(&coord, &provider) {
-                    info!(target: "bera_reth::pog_probe", error = %e, "late confirmation reconcile error");
+
+                // Check for timeout on inflight probe
+                if let Some(inflight) = coord.inflight_snapshot()
+                    && inflight.sent_at.elapsed() > coord.pog_timeout
+                {
+                    let _ = coord.pog_db().insert_peer_test(
+                        &inflight.peer_id,
+                        inflight.tx_hash,
+                        "timeout",
+                    );
+                    coord.insert_timed_out(inflight.tx_hash, inflight.peer_id);
+                    coord.clear_inflight();
+                    info!(
+                        target: "bera_reth::pog_probe",
+                        event = "probe.result",
+                        outcome = "timeout",
+                        peer_id = %inflight.peer_id,
+                        enode = %inflight.enode,
+                        probe_id = %inflight.tx_hash,
+                        nonce = inflight.nonce,
+                        value_wei = inflight.value_wei,
+                        elapsed_secs = inflight.sent_at.elapsed().as_secs(),
+                        "canary probe timed out"
+                    );
                 }
             }
         }
     }
-}
-
-fn watcher_tick<P: PogProvider>(coord: &PogCoordinator, provider: &P) -> eyre::Result<()> {
-    let Some(inflight) = coord.inflight_snapshot() else {
-        return Ok(());
-    };
-    let tx_hash = inflight.tx_hash;
-    if provider.receipt_exists(tx_hash)? {
-        coord.pog_db().insert_peer_test(&inflight.peer_id, tx_hash, "seen")?;
-        coord.clear_inflight();
-        coord.remove_timed_out(&tx_hash);
-        info!(
-            target: "bera_reth::pog_probe",
-            event = "probe.result",
-            outcome = "seen",
-            peer_id = %inflight.peer_id,
-            enode = %inflight.enode,
-            probe_id = %tx_hash,
-            nonce = inflight.nonce,
-            value_wei = inflight.value_wei,
-            "canary receipt observed"
-        );
-        return Ok(());
-    }
-    if inflight.sent_at.elapsed() > coord.pog_timeout {
-        coord.pog_db().insert_peer_test(&inflight.peer_id, tx_hash, "timeout")?;
-        coord.insert_timed_out(tx_hash, inflight.peer_id);
-        coord.clear_inflight();
-        info!(
-            target: "bera_reth::pog_probe",
-            event = "probe.result",
-            outcome = "timeout",
-            peer_id = %inflight.peer_id,
-            enode = %inflight.enode,
-            probe_id = %tx_hash,
-            nonce = inflight.nonce,
-            value_wei = inflight.value_wei,
-            elapsed_secs = inflight.sent_at.elapsed().as_secs(),
-            "canary probe timed out"
-        );
-    }
-    Ok(())
-}
-
-fn reconcile_late_confirmations<P: PogProvider>(
-    coord: &PogCoordinator,
-    provider: &P,
-) -> eyre::Result<()> {
-    let timed_hashes: Vec<TxHash> = coord.timed_out_tx_hashes();
-    for tx_hash in timed_hashes {
-        if provider.receipt_exists(tx_hash)? {
-            let Some(peer_id) = coord.timed_out_peer(&tx_hash) else {
-                continue;
-            };
-            coord.pog_db().insert_peer_test(&peer_id, tx_hash, "seen")?;
-            coord.remove_timed_out(&tx_hash);
-            info!(
-                target: "bera_reth::pog_probe",
-                event = "probe.result",
-                outcome = "seen",
-                peer_id = %peer_id,
-                probe_id = %tx_hash,
-                late = true,
-                "timed-out canary appeared on-chain"
-            );
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

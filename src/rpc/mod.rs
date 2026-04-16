@@ -228,11 +228,14 @@ where
             }
         });
 
+        let canon_events = {
+            use reth::providers::CanonStateSubscriptions as _;
+            provider_watcher.subscribe_to_canonical_state()
+        };
         task_executor.spawn_with_graceful_shutdown_signal(move |shutdown| {
             let coord = pog.clone();
             let store = attribution.clone();
-            let prov = provider_watcher.clone();
-            async move { crate::pog::run_pog_watcher(shutdown, coord, store, prov).await }
+            async move { crate::pog::run_pog_watcher(shutdown, coord, store, canon_events).await }
         });
 
         let bera_for_rpc = bera_admin.clone();
