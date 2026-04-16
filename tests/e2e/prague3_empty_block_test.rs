@@ -1,5 +1,7 @@
 use crate::e2e::berachain_payload_attributes_generator;
-use bera_reth::{chainspec::BerachainChainSpec, node::BerachainNode};
+use bera_reth::{
+    chainspec::BerachainChainSpec, node::BerachainNode, transaction::BerachainTxEnvelope,
+};
 use reth::tasks::Runtime;
 use reth_cli::chainspec::parse_genesis;
 use reth_e2e_test_utils::node::NodeTestContext;
@@ -32,12 +34,18 @@ async fn test_prague3_builds_empty_block() -> eyre::Result<()> {
 
     let payload = ctx.advance_block().await?;
     let block = payload.block();
+    let txs = &block.body().transactions;
 
     assert_eq!(block.number, 1, "should have advanced to block 1");
+    assert_eq!(
+        txs.len(),
+        1,
+        "Prague3 block must contain only the PoL system transaction, found {}",
+        txs.len()
+    );
     assert!(
-        block.body().transactions.is_empty(),
-        "Prague3 block must contain zero transactions, found {}",
-        block.body().transactions.len()
+        matches!(txs[0], BerachainTxEnvelope::Berachain(_)),
+        "sole transaction must be the PoL system transaction"
     );
 
     Ok(())
