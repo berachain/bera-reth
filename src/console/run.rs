@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 pub async fn run_console(cmd: ConsoleCommand) -> Result<()> {
     let endpoint = resolve_endpoint(cmd.endpoint.as_deref())?;
-    let rpc = RpcClient::connect(&endpoint, &[]).await?;
+    let rpc = RpcClient::connect(&endpoint).await?;
 
     let chain_id =
         rpc.request_value("eth_chainId", None).await.ok().and_then(|v| parse_chain_id(&v));

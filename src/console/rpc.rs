@@ -1,6 +1,5 @@
 use super::endpoint::{ResolvedEndpoint, Transport};
 use eyre::{Result, eyre};
-use http::{HeaderMap, HeaderName, HeaderValue};
 use jsonrpsee::{
     core::{
         client::ClientT,
@@ -30,20 +29,14 @@ pub enum RpcClient {
 }
 
 impl RpcClient {
-    pub async fn connect(
-        endpoint: &ResolvedEndpoint,
-        http_headers: &[(String, String)],
-    ) -> Result<Self> {
-        let headers = make_headers(http_headers)?;
+    pub async fn connect(endpoint: &ResolvedEndpoint) -> Result<Self> {
         match endpoint.transport {
             Transport::Http => {
-                let client =
-                    HttpClientBuilder::default().set_headers(headers).build(&endpoint.raw)?;
+                let client = HttpClientBuilder::default().build(&endpoint.raw)?;
                 Ok(Self::Http(client))
             }
             Transport::Ws => {
-                let client =
-                    WsClientBuilder::default().set_headers(headers).build(&endpoint.raw).await?;
+                let client = WsClientBuilder::default().build(&endpoint.raw).await?;
                 Ok(Self::Ws(client))
             }
             Transport::Ipc => {
@@ -122,16 +115,6 @@ fn object_params(values: Map<String, Value>) -> Result<ObjectParams> {
         params.insert(k.as_str(), v).map_err(|e| eyre!("invalid rpc object params: {e}"))?;
     }
     Ok(params)
-}
-
-fn make_headers(headers: &[(String, String)]) -> Result<HeaderMap> {
-    let mut out = HeaderMap::new();
-    for (k, v) in headers {
-        let key = HeaderName::from_bytes(k.as_bytes())?;
-        let value = HeaderValue::from_str(v)?;
-        out.insert(key, value);
-    }
-    Ok(out)
 }
 
 fn validate_ipc_endpoint(path: &str) -> Result<()> {
@@ -246,26 +229,6 @@ mod tests {
     }
 
     #[test]
-    fn make_headers_valid_and_invalid() {
-        let headers = make_headers(&[
-            ("Authorization".to_owned(), "Bearer token".to_owned()),
-            ("x-test".to_owned(), "1".to_owned()),
-        ])
-        .unwrap();
-        assert_eq!(
-            headers.get("authorization").expect("authorization header missing"),
-            "Bearer token"
-        );
-        assert_eq!(headers.get("x-test").expect("x-test missing"), "1");
-
-        let invalid_name = make_headers(&[("\n".to_owned(), "value".to_owned())]).unwrap_err();
-        assert!(invalid_name.to_string().contains("invalid HTTP header name"));
-
-        let invalid_value = make_headers(&[("x-test".to_owned(), "\n".to_owned())]).unwrap_err();
-        assert!(invalid_value.to_string().contains("failed to parse header value"));
-    }
-
-    #[test]
     fn validate_ipc_endpoint_errors_for_missing_and_non_socket() {
         let missing = validate_ipc_endpoint("/definitely/missing/reth.ipc").unwrap_err();
         assert!(missing.to_string().contains("IPC endpoint not found"));
@@ -301,7 +264,7 @@ mod tests {
         let endpoint =
             ResolvedEndpoint { raw: format!("http://{addr}"), transport: Transport::Http };
 
-        let client = RpcClient::connect(&endpoint, &[]).await.unwrap();
+        let client = RpcClient::connect(&endpoint).await.unwrap();
         let block = client.request_value("eth_blockNumber", None).await.unwrap();
         assert_eq!(block, json!("0x10"));
 
@@ -327,7 +290,7 @@ mod tests {
         let handle = server.start(module);
         let endpoint = ResolvedEndpoint { raw: format!("ws://{addr}"), transport: Transport::Ws };
 
-        let client = RpcClient::connect(&endpoint, &[]).await.unwrap();
+        let client = RpcClient::connect(&endpoint).await.unwrap();
         let version = client.request_value("web3_clientVersion", None).await.unwrap();
         assert_eq!(version, json!("reth/1.0.0"));
 
@@ -349,7 +312,7 @@ mod tests {
         let handle = server.start(module);
         let endpoint =
             ResolvedEndpoint { raw: format!("http://{addr}"), transport: Transport::Http };
-        let client = RpcClient::connect(&endpoint, &[]).await.unwrap();
+        let client = RpcClient::connect(&endpoint).await.unwrap();
 
         let err = client.supported_modules().await.unwrap_err();
         assert!(err.to_string().contains("invalid type"));

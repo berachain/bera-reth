@@ -1473,7 +1473,6 @@ dependencies = [
  "derive_more",
  "dirs",
  "eyre",
- "http",
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
