@@ -558,6 +558,7 @@ mod tests {
                 last_result: "seen".to_string(),
                 failure_count: 0,
                 last_tested_at: 12345,
+                last_tx_hash: "0xdeadbeef".to_string(),
             }),
             ..make_test_peer(42, true)
         };

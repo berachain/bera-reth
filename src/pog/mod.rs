@@ -62,6 +62,7 @@ pub struct PogPeerStatus {
     pub last_result: String,
     pub failure_count: u32,
     pub last_tested_at: u64,
+    pub last_tx_hash: String,
 }
 
 /// Persistent SQLite connection to the PoG peer_tests database.
@@ -100,6 +101,7 @@ impl PogDb {
             "SELECT peer_id,
                     (SELECT result FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_result,
                     (SELECT tested_at FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_tested_at,
+                    (SELECT tx_hash FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_tx_hash,
                     SUM(CASE WHEN result = 'timeout' THEN 1 ELSE 0 END) AS failure_count
              FROM peer_tests p1
              GROUP BY peer_id",
@@ -108,10 +110,11 @@ impl PogDb {
             let peer_id: String = row.get(0)?;
             let last_result: String = row.get(1)?;
             let last_tested_at: i64 = row.get(2)?;
-            let failure_count: u32 = row.get(3)?;
+            let last_tx_hash: String = row.get(3)?;
+            let failure_count: u32 = row.get(4)?;
             Ok((
                 peer_id,
-                PogPeerStatus { last_result, failure_count, last_tested_at: last_tested_at as u64 },
+                PogPeerStatus { last_result, failure_count, last_tested_at: last_tested_at as u64, last_tx_hash },
             ))
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
