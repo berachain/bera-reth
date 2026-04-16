@@ -38,6 +38,8 @@ use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
 use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 
 const BERACHAIN_BLOCK_TIME_SECONDS: u64 = 2;
+const MAX_CODE_SIZE_OSAKA: usize = 32_768;
+const MAX_INITCODE_SIZE_OSAKA: usize = 65_536;
 
 #[derive(Debug, Clone)]
 pub struct BerachainEvmConfig {
@@ -129,6 +131,8 @@ impl ConfigureEvm for BerachainEvmConfig {
 
         if self.chain_spec().is_osaka_active_at_timestamp(header.timestamp) {
             cfg_env.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
+            cfg_env.limit_contract_code_size = Some(MAX_CODE_SIZE_OSAKA);
+            cfg_env.limit_contract_initcode_size = Some(MAX_INITCODE_SIZE_OSAKA);
         }
 
         // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
@@ -176,6 +180,8 @@ impl ConfigureEvm for BerachainEvmConfig {
 
         if self.chain_spec().is_osaka_active_at_timestamp(attributes.timestamp) {
             cfg.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
+            cfg.limit_contract_code_size = Some(MAX_CODE_SIZE_OSAKA);
+            cfg.limit_contract_initcode_size = Some(MAX_INITCODE_SIZE_OSAKA);
         }
 
         // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
@@ -312,6 +318,8 @@ impl ConfigureEngineEvm<BerachainExecutionData> for BerachainEvmConfig {
 
         if self.chain_spec().is_osaka_active_at_timestamp(timestamp) {
             cfg_env.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
+            cfg_env.limit_contract_code_size = Some(MAX_CODE_SIZE_OSAKA);
+            cfg_env.limit_contract_initcode_size = Some(MAX_INITCODE_SIZE_OSAKA);
         }
 
         // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
