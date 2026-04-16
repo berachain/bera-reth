@@ -42,17 +42,49 @@ pub const MAX_FUNDING_BACKOFF_SECS: u64 = 86400;
 pub const LATE_CONFIRMATION_TRACK_WINDOW_SECS: u64 = 900;
 
 pub(crate) fn ensure_peer_tests_schema(conn: &Connection) -> rusqlite::Result<()> {
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS peer_tests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                peer_id TEXT NOT NULL,
-                tx_hash TEXT NOT NULL,
-                result TEXT NOT NULL,
-                tested_at INTEGER NOT NULL
-            )",
-        [],
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS peer_pog_status (
+            peer_id        TEXT PRIMARY KEY,
+            last_result    TEXT NOT NULL,
+            last_tx_hash   TEXT NOT NULL,
+            last_tested_at INTEGER NOT NULL,
+            failure_count  INTEGER NOT NULL DEFAULT 0,
+            success_count  INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS peer_pog_log (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            peer_id   TEXT NOT NULL,
+            tx_hash   TEXT NOT NULL,
+            result    TEXT NOT NULL,
+            tested_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_pog_log_peer ON peer_pog_log(peer_id, tested_at);",
     )?;
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_peer_tests_peer_id ON peer_tests(peer_id)", [])?;
+
+    // Migrate from legacy `peer_tests` table if it exists.
+    let legacy_exists: bool = conn.query_row(
+        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='peer_tests'",
+        [],
+        |row| row.get(0),
+    )?;
+    if legacy_exists {
+        conn.execute_batch(
+            "INSERT OR IGNORE INTO peer_pog_status (peer_id, last_result, last_tx_hash, last_tested_at, failure_count, success_count)
+             SELECT peer_id,
+                    (SELECT result   FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1),
+                    (SELECT tx_hash  FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1),
+                    (SELECT tested_at FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1),
+                    SUM(CASE WHEN result = 'timeout' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN result = 'seen' THEN 1 ELSE 0 END)
+             FROM peer_tests p1
+             GROUP BY peer_id;
+
+             INSERT INTO peer_pog_log (peer_id, tx_hash, result, tested_at)
+             SELECT peer_id, tx_hash, result, tested_at FROM peer_tests;
+
+             DROP TABLE peer_tests;",
+        )?;
+    }
     Ok(())
 }
 
@@ -87,24 +119,34 @@ impl PogDb {
     ) -> rusqlite::Result<()> {
         let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+        let pid = peer_id.to_string();
+        let txh = tx_hash.to_string();
         conn.execute(
-            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
-            params![peer_id.to_string(), tx_hash.to_string(), result, ts],
+            "INSERT INTO peer_pog_status (peer_id, last_result, last_tx_hash, last_tested_at, failure_count, success_count)
+             VALUES (?1, ?2, ?3, ?4,
+                     CASE WHEN ?2 = 'timeout' THEN 1 ELSE 0 END,
+                     CASE WHEN ?2 = 'seen' THEN 1 ELSE 0 END)
+             ON CONFLICT(peer_id) DO UPDATE SET
+                 last_result    = excluded.last_result,
+                 last_tx_hash   = excluded.last_tx_hash,
+                 last_tested_at = excluded.last_tested_at,
+                 failure_count  = failure_count + CASE WHEN excluded.last_result = 'timeout' THEN 1 ELSE 0 END,
+                 success_count  = success_count + CASE WHEN excluded.last_result = 'seen' THEN 1 ELSE 0 END",
+            params![pid, result, txh, ts],
+        )?;
+        conn.execute(
+            "INSERT INTO peer_pog_log (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![pid, txh, result, ts],
         )?;
         Ok(())
     }
 
-    /// Load PoG status for all peers in a single query. Returns a map keyed by peer_id string.
+    /// Load PoG status for all peers. Returns a map keyed by peer_id string.
     pub fn all_peer_statuses(&self) -> rusqlite::Result<HashMap<String, PogPeerStatus>> {
         let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let mut stmt = conn.prepare(
-            "SELECT peer_id,
-                    (SELECT result FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_result,
-                    (SELECT tested_at FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_tested_at,
-                    (SELECT tx_hash FROM peer_tests p2 WHERE p2.peer_id = p1.peer_id ORDER BY tested_at DESC LIMIT 1) AS last_tx_hash,
-                    SUM(CASE WHEN result = 'timeout' THEN 1 ELSE 0 END) AS failure_count
-             FROM peer_tests p1
-             GROUP BY peer_id",
+            "SELECT peer_id, last_result, last_tested_at, last_tx_hash, failure_count
+             FROM peer_pog_status",
         )?;
         let rows = stmt.query_map([], |row| {
             let peer_id: String = row.get(0)?;
@@ -706,38 +748,76 @@ mod tests {
     #[test]
     fn pog_db_all_peer_statuses_batch_query() {
         let tmp = NamedTempFile::new().unwrap();
-        let db = Connection::open(tmp.path()).unwrap();
-        ensure_peer_tests_schema(&db).unwrap();
-        db.pragma_update(None, "journal_mode", "WAL").unwrap();
+        let pog_db = PogDb::open(tmp.path()).unwrap();
         let p1 = PeerId::random();
         let p2 = PeerId::random();
+        let tx1 = B256::random();
+        let tx2 = B256::random();
+        let tx3 = B256::random();
+        let tx4 = B256::random();
         // p1: two timeouts then a seen
-        for (result, ts) in [("timeout", 1), ("timeout", 2), ("seen", 3)] {
-            db.execute(
-                "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
-                params![p1.to_string(), B256::random().to_string(), result, ts as i64],
-            ).unwrap();
-        }
+        pog_db.insert_peer_test(&p1, tx1, "timeout").unwrap();
+        pog_db.insert_peer_test(&p1, tx2, "timeout").unwrap();
+        pog_db.insert_peer_test(&p1, tx3, "seen").unwrap();
         // p2: one timeout only
-        db.execute(
-            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
-            params![p2.to_string(), B256::random().to_string(), "timeout", 10_i64],
-        )
-        .unwrap();
-        drop(db);
+        pog_db.insert_peer_test(&p2, tx4, "timeout").unwrap();
 
-        let pog_db = PogDb::open(tmp.path()).unwrap();
         let statuses = pog_db.all_peer_statuses().unwrap();
         assert_eq!(statuses.len(), 2);
 
         let s1 = &statuses[&p1.to_string()];
         assert_eq!(s1.last_result, "seen");
         assert_eq!(s1.failure_count, 2);
-        assert_eq!(s1.last_tested_at, 3);
+        assert_eq!(s1.last_tx_hash, tx3.to_string());
 
         let s2 = &statuses[&p2.to_string()];
         assert_eq!(s2.last_result, "timeout");
         assert_eq!(s2.failure_count, 1);
-        assert_eq!(s2.last_tested_at, 10);
+        assert_eq!(s2.last_tx_hash, tx4.to_string());
+    }
+
+    #[test]
+    fn pog_db_migrates_legacy_peer_tests() {
+        let tmp = NamedTempFile::new().unwrap();
+        let conn = Connection::open(tmp.path()).unwrap();
+        conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+        // Create legacy schema manually
+        conn.execute_batch(
+            "CREATE TABLE peer_tests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                peer_id TEXT NOT NULL,
+                tx_hash TEXT NOT NULL,
+                result TEXT NOT NULL,
+                tested_at INTEGER NOT NULL
+            );",
+        )
+        .unwrap();
+        let p1 = PeerId::random();
+        let tx = B256::random();
+        conn.execute(
+            "INSERT INTO peer_tests (peer_id, tx_hash, result, tested_at) VALUES (?1, ?2, ?3, ?4)",
+            params![p1.to_string(), tx.to_string(), "seen", 100_i64],
+        )
+        .unwrap();
+        drop(conn);
+
+        // Opening PogDb triggers migration
+        let pog_db = PogDb::open(tmp.path()).unwrap();
+        let statuses = pog_db.all_peer_statuses().unwrap();
+        assert_eq!(statuses.len(), 1);
+        let s = &statuses[&p1.to_string()];
+        assert_eq!(s.last_result, "seen");
+        assert_eq!(s.last_tx_hash, tx.to_string());
+
+        // Legacy table should be gone
+        let conn = Connection::open(tmp.path()).unwrap();
+        let legacy_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='peer_tests'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!legacy_exists, "peer_tests should be dropped after migration");
     }
 }
