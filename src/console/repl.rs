@@ -1,7 +1,7 @@
 use super::{
     endpoint::{ResolvedEndpoint, default_datadir},
     engine::{EvalOutcome, evaluate_line},
-    output::print_value_for_chain_raw,
+    output::{hex_or_decimal_to_u64, print_value_for_chain_raw},
     rpc::RpcClient,
 };
 use eyre::Result;
@@ -139,20 +139,6 @@ fn as_string(value: &Value) -> Option<String> {
     match value {
         Value::String(s) => Some(s.clone()),
         Value::Number(n) => Some(n.to_string()),
-        _ => None,
-    }
-}
-
-fn hex_or_decimal_to_u64(value: &Value) -> Option<u64> {
-    match value {
-        Value::String(s) => {
-            if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-                u64::from_str_radix(hex, 16).ok()
-            } else {
-                s.parse::<u64>().ok()
-            }
-        }
-        Value::Number(n) => n.as_u64(),
         _ => None,
     }
 }

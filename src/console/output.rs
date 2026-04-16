@@ -2,6 +2,20 @@ use serde_json::Value;
 
 const DEFAULT_NATIVE_SYMBOL: &str = "ETH";
 
+pub(crate) fn hex_or_decimal_to_u64(value: &Value) -> Option<u64> {
+    match value {
+        Value::String(s) => {
+            if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+                u64::from_str_radix(hex, 16).ok()
+            } else {
+                s.parse::<u64>().ok()
+            }
+        }
+        Value::Number(n) => n.as_u64(),
+        _ => None,
+    }
+}
+
 pub fn print_value_for_chain(value: &Value, chain_id: Option<u64>) {
     print_value_with_symbol(value, native_symbol_for_chain_id(chain_id), false);
 }
@@ -256,7 +270,7 @@ fn try_format_node_status(value: &Value) -> Option<String> {
         .or_else(|| obj.get("chain_id"))
         .or_else(|| obj.get("networkId"))
         .or_else(|| obj.get("network_id"))
-        .and_then(|v| v.as_u64())
+        .and_then(hex_or_decimal_to_u64)
         .unwrap_or(0);
     let genesis = obj
         .get("genesisHash")
@@ -271,7 +285,7 @@ fn try_format_node_status(value: &Value) -> Option<String> {
     let head = obj
         .get("headNumber")
         .or_else(|| obj.get("head_number"))
-        .and_then(|v| v.as_u64())
+        .and_then(hex_or_decimal_to_u64)
         .unwrap_or(0);
     let head_hash = obj
         .get("headHash")
@@ -288,17 +302,17 @@ fn try_format_node_status(value: &Value) -> Option<String> {
     let peers_total = obj
         .get("peerCountTotal")
         .or_else(|| obj.get("peer_count_total"))
-        .and_then(|v| v.as_u64())
+        .and_then(hex_or_decimal_to_u64)
         .unwrap_or(0);
     let peers_in = obj
         .get("peerCountInbound")
         .or_else(|| obj.get("peer_count_inbound"))
-        .and_then(|v| v.as_u64())
+        .and_then(hex_or_decimal_to_u64)
         .unwrap_or(0);
     let peers_out = obj
         .get("peerCountOutbound")
         .or_else(|| obj.get("peer_count_outbound"))
-        .and_then(|v| v.as_u64())
+        .and_then(hex_or_decimal_to_u64)
         .unwrap_or(0);
     let client = obj
         .get("clientVersion")

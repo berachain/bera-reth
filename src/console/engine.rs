@@ -42,10 +42,6 @@ pub async fn evaluate_line(
             Ok(EvalOutcome::Value(result))
         }
         InputCommand::Alias(alias) => {
-            if is_remove_all_peers_alias(alias.as_str()) {
-                return run_remove_all_peers(rpc, last_rpc_result).await;
-            }
-
             let method = resolve_alias_method(aliases, &alias);
             let value = rpc.request_value(&method, None).await?;
             *last_rpc_result = Some(value.clone());
@@ -66,43 +62,6 @@ fn normalize_rpc_method(method: &str) -> String {
 
 fn resolve_alias_method(aliases: &BTreeMap<String, String>, alias: &str) -> String {
     aliases.get(alias).cloned().unwrap_or_else(|| alias.replace('.', "_"))
-}
-
-fn is_remove_all_peers_alias(alias: &str) -> bool {
-    matches!(alias, "removeAllPeers" | "admin.removeAllPeers")
-}
-
-async fn run_remove_all_peers(
-    rpc: &RpcClient,
-    last_rpc_result: &mut Option<Value>,
-) -> Result<EvalOutcome> {
-    let peers = rpc.request_value("admin_peers", None).await?;
-    let arr = peers.as_array().ok_or_else(|| eyre!("admin.peers did not return an array"))?;
-    let total = arr.len() as u64;
-    let mut removed = 0u64;
-    let mut failed = 0u64;
-    for peer in arr {
-        let enode = peer
-            .get("enode")
-            .and_then(Value::as_str)
-            .ok_or_else(|| eyre!("peer entry missing enode"))?;
-        match rpc.request_value("admin_removePeer", Some(serde_json::json!([enode]))).await {
-            Ok(Value::Bool(true)) => removed += 1,
-            Ok(other) => {
-                eprintln!("admin.removePeer({enode}): unexpected response: {other}");
-                failed += 1;
-            }
-            Err(err) => {
-                eprintln!("admin.removePeer({enode}): {err}");
-                failed += 1;
-            }
-        }
-    }
-    *last_rpc_result = Some(peers);
-    eprintln!("Removed {removed}/{total} peer(s).");
-    Ok(EvalOutcome::Value(
-        serde_json::json!({ "removed": removed, "failed": failed, "total": total }),
-    ))
 }
 
 #[cfg(test)]

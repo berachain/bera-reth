@@ -273,64 +273,6 @@ pub const FLASHBOTS_METHOD_SUFFIXES: &[&str] = &[
     "validateBuilderSubmissionV5",
 ];
 
-/// `anvil_*` methods from reth.
-pub const ANVIL_METHOD_SUFFIXES: &[&str] = &[
-    "anvil_dropTransaction",
-    "autoImpersonateAccount",
-    "dumpState",
-    "enableTraces",
-    "getAutomine",
-    "impersonateAccount",
-    "increaseTime",
-    "loadState",
-    "metadata",
-    "mine",
-    "mine_detailed",
-    "nodeInfo",
-    "removeBlockTimestampInterval",
-    "removePoolTransactions",
-    "reset",
-    "revert",
-    "setAutomine",
-    "setBalance",
-    "setBlockGasLimit",
-    "setBlockTimestampInterval",
-    "setChainId",
-    "setCode",
-    "setCoinbase",
-    "setIntervalMining",
-    "setLoggingEnabled",
-    "setMinGasPrice",
-    "setNextBlockBaseFeePerGas",
-    "setNextBlockTimestamp",
-    "setNonce",
-    "setRpcUrl",
-    "setStorageAt",
-    "setTime",
-    "snapshot",
-    "stopImpersonatingAccount",
-];
-
-/// `hardhat_*` methods from reth.
-pub const HARDHAT_METHOD_SUFFIXES: &[&str] = &[
-    "getAutomine",
-    "hardhat_dropTransaction",
-    "impersonateAccount",
-    "metadata",
-    "mine",
-    "reset",
-    "setBalance",
-    "setCode",
-    "setCoinbase",
-    "setLoggingEnabled",
-    "setMinGasPrice",
-    "setNextBlockBaseFeePerGas",
-    "setNonce",
-    "setPrevRandao",
-    "setStorageAt",
-    "stopImpersonatingAccount",
-];
-
 /// All built-in namespaces and their method suffix slices.
 pub const RPC_NAMESPACE_TABLE: &[(&str, &[&str])] = &[
     ("eth", ETH_METHOD_SUFFIXES),
@@ -348,8 +290,6 @@ pub const RPC_NAMESPACE_TABLE: &[(&str, &[&str])] = &[
     ("mev", MEV_METHOD_SUFFIXES),
     ("testing", TESTING_METHOD_SUFFIXES),
     ("flashbots", FLASHBOTS_METHOD_SUFFIXES),
-    ("anvil", ANVIL_METHOD_SUFFIXES),
-    ("hardhat", HARDHAT_METHOD_SUFFIXES),
     ("beraAdmin", BERA_ADMIN_METHOD_SUFFIXES),
 ];
 
