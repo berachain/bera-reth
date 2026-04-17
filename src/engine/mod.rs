@@ -32,8 +32,8 @@ use alloy_eips::{
 use alloy_primitives::{B256, Bytes, Sealed};
 use alloy_rpc_types::engine::{
     CancunPayloadFields, ExecutionPayload, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
-    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadInputV2,
-    ExecutionPayloadSidecar, ExecutionPayloadV1, PraguePayloadFields,
+    ExecutionPayloadEnvelopeV5, ExecutionPayloadInputV2, ExecutionPayloadSidecar,
+    ExecutionPayloadV1, PraguePayloadFields,
 };
 use reth::{
     api::{BuiltPayload, EngineTypes, NodePrimitives, PayloadTypes},
@@ -127,7 +127,7 @@ impl EngineTypes for BerachainEngineTypes {
     type ExecutionPayloadEnvelopeV1 = ExecutionPayloadV1;
     type ExecutionPayloadEnvelopeV2 = ExecutionPayloadEnvelopeV2;
     type ExecutionPayloadEnvelopeV3 = ExecutionPayloadEnvelopeV3;
-    type ExecutionPayloadEnvelopeV4 = ExecutionPayloadEnvelopeV4;
+    type ExecutionPayloadEnvelopeV4 = BerachainExecutionPayloadEnvelopeV4;
     type ExecutionPayloadEnvelopeV5 = ExecutionPayloadEnvelopeV5;
     type ExecutionPayloadEnvelopeV6 = ExecutionPayloadEnvelopeV5;
 }
