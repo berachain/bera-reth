@@ -6,9 +6,9 @@ use super::{
 };
 use eyre::Result;
 use reedline::{
-    ColumnarMenu, Completer, Emacs, FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Prompt,
-    PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus, Reedline, ReedlineEvent,
-    ReedlineMenu, Signal, Span, Suggestion, default_emacs_keybindings, HISTORY_SIZE,
+    ColumnarMenu, Completer, Emacs, FileBackedHistory, HISTORY_SIZE, KeyCode, KeyModifiers,
+    MenuBuilder, Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus, Reedline,
+    ReedlineEvent, ReedlineMenu, Signal, Span, Suggestion, default_emacs_keybindings,
 };
 use serde_json::Value;
 use std::{borrow::Cow, collections::BTreeMap, path::PathBuf};
@@ -130,10 +130,8 @@ async fn print_startup_snapshot(
             .get("clientVersion")
             .or_else(|| status.get("client_version"))
             .and_then(as_string);
-        let network_id = status
-            .get("networkId")
-            .or_else(|| status.get("network_id"))
-            .and_then(as_string);
+        let network_id =
+            status.get("networkId").or_else(|| status.get("network_id")).and_then(as_string);
         let head_number = status
             .get("headNumber")
             .or_else(|| status.get("head_number"))
@@ -211,7 +209,9 @@ fn as_string(value: &Value) -> Option<String> {
 
 fn print_help() {
     println!("Commands:");
-    println!("  <method> [json_params]   (RPC call; dots become underscores, e.g. eth.blockNumber)");
+    println!(
+        "  <method> [json_params]   (RPC call; dots become underscores, e.g. eth.blockNumber)"
+    );
     println!("  TAB                      completion for RPC namespaces/methods");
     println!("  help | exit");
     println!("Queries (run against last RPC result):");

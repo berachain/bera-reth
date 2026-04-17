@@ -6,8 +6,8 @@
 //! macros in `rpc-eth-api` and `rpc-api`, plus Berachain’s `beraAdmin_*` surface.
 //! When upstream adds RPCs, refresh these tables from the same reth sources.
 //!
-//! Use [`RPC_NAMESPACE_TABLE`] to walk all namespaces, or [`method_suffixes`] /
-//! [`dot_completions_for_namespace`] for one namespace.
+//! Use `RPC_NAMESPACE_TABLE` to walk all namespaces, or `method_suffixes` /
+//! `dot_completions_for_namespace` for one namespace.
 
 /// Berachain extension namespace (`beraAdmin_*` JSON-RPC).
 pub const BERA_ADMIN_METHOD_SUFFIXES: &[&str] =
