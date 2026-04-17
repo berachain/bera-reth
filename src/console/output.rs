@@ -24,6 +24,33 @@ pub(crate) fn hex_or_decimal_to_u64(value: &Value) -> Option<u64> {
     }
 }
 
+/// First `max_chars` Unicode scalars (never splits a codepoint).
+fn chars_prefix(s: &str, max_chars: usize) -> &str {
+    if max_chars == 0 {
+        return "";
+    }
+    let mut end_byte = 0usize;
+    let mut iter = s.char_indices();
+    for _ in 0..max_chars {
+        match iter.next() {
+            Some((i, ch)) => end_byte = i + ch.len_utf8(),
+            None => return s,
+        }
+    }
+    &s[..end_byte]
+}
+
+/// `prefix..suffix` with lengths in characters; returns `s` unchanged if it fits.
+fn ellipsis_char_ends(s: &str, prefix_chars: usize, suffix_chars: usize) -> String {
+    let n = s.chars().count();
+    if n <= prefix_chars + suffix_chars {
+        return s.to_string();
+    }
+    let prefix: String = s.chars().take(prefix_chars).collect();
+    let suffix: String = s.chars().skip(n - suffix_chars).collect();
+    format!("{prefix}..{suffix}")
+}
+
 pub fn print_value_for_chain(value: &Value, chain_id: Option<u64>) {
     print_value_with_symbol(value, native_symbol_for_chain_id(chain_id), false);
 }
@@ -196,7 +223,7 @@ fn try_format_detailed_peers(value: &Value) -> Option<String> {
             let direction = peer_obj
                 .get("direction")
                 .and_then(|v| v.as_str())
-                .map(|s| &s[..s.len().min(3)])
+                .map(|s| chars_prefix(s, 3))
                 .unwrap_or("-");
             let reputation = peer_obj
                 .get("reputation")
@@ -214,8 +241,8 @@ fn try_format_detailed_peers(value: &Value) -> Option<String> {
                 .or_else(|| peer_obj.get("client_version"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("-");
-            let client_short = if client.len() > 14 {
-                format!("{}..{}", &client[..8], &client[client.len() - 3..])
+            let client_short = if client.chars().count() > 14 {
+                ellipsis_char_ends(client, 8, 3)
             } else {
                 client.to_string()
             };
@@ -242,8 +269,8 @@ fn try_format_detailed_peers(value: &Value) -> Option<String> {
                 "-".to_string()
             };
 
-            let peer_short = if peer_id.len() > 12 {
-                format!("{}..{}", &peer_id[..6], &peer_id[peer_id.len() - 4..])
+            let peer_short = if peer_id.chars().count() > 12 {
+                ellipsis_char_ends(peer_id, 6, 4)
             } else {
                 peer_id.to_string()
             };
@@ -284,8 +311,8 @@ fn try_format_node_status(value: &Value) -> Option<String> {
         .or_else(|| obj.get("genesis_hash"))
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
-    let genesis_short = if genesis.len() > 12 {
-        format!("{}..{}", &genesis[..6], &genesis[genesis.len() - 4..])
+    let genesis_short = if genesis.chars().count() > 12 {
+        ellipsis_char_ends(genesis, 6, 4)
     } else {
         genesis.to_string()
     };
@@ -300,8 +327,8 @@ fn try_format_node_status(value: &Value) -> Option<String> {
         .or_else(|| obj.get("head"))
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
-    let head_hash_short = if head_hash.len() > 12 {
-        format!("{}..{}", &head_hash[..6], &head_hash[head_hash.len() - 4..])
+    let head_hash_short = if head_hash.chars().count() > 12 {
+        ellipsis_char_ends(head_hash, 6, 4)
     } else {
         head_hash.to_string()
     };
@@ -392,13 +419,13 @@ fn try_format_peer_scores(value: &Value) -> Option<String> {
                 .map(|p| p.len().to_string())
                 .unwrap_or_else(|| "0".to_string());
 
-            let peer_short = if peer_id.len() > 12 {
-                format!("{}..{}", &peer_id[..6], &peer_id[peer_id.len() - 4..])
+            let peer_short = if peer_id.chars().count() > 12 {
+                ellipsis_char_ends(peer_id, 6, 4)
             } else {
                 peer_id.to_string()
             };
-            let reason_short = if reason.len() > 14 {
-                format!("{}..{}", &reason[..8], &reason[reason.len() - 3..])
+            let reason_short = if reason.chars().count() > 14 {
+                ellipsis_char_ends(reason, 8, 3)
             } else {
                 reason.to_string()
             };
@@ -456,8 +483,8 @@ fn try_format_banned_subnets(value: &Value) -> Option<String> {
                 .map(|n| n.len().to_string())
                 .unwrap_or_else(|| "?".to_string());
 
-            let reason_short = if reason.len() > 14 {
-                format!("{}..{}", &reason[..8], &reason[reason.len() - 3..])
+            let reason_short = if reason.chars().count() > 14 {
+                ellipsis_char_ends(reason, 8, 3)
             } else {
                 reason.to_string()
             };
@@ -573,5 +600,17 @@ mod tests {
         let empty_subnets = serde_json::json!([]);
         let formatted = try_format_banned_subnets(&empty_subnets);
         assert_eq!(formatted, Some("-- no subnets banned --".to_string()));
+    }
+
+    #[test]
+    fn chars_prefix_never_splits_codepoints() {
+        assert_eq!(chars_prefix("μμμbound", 3), "μμμ");
+        assert_eq!(chars_prefix("μμμbound", 0), "");
+    }
+
+    #[test]
+    fn ellipsis_char_ends_counts_chars_not_bytes() {
+        let out = ellipsis_char_ends("abcdefghijklmnopqrs", 6, 4);
+        assert_eq!(out, "abcdef..pqrs");
     }
 }

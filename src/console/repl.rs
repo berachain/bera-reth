@@ -5,18 +5,60 @@ use super::{
     rpc::RpcClient,
 };
 use eyre::Result;
-use rustyline::{
-    CompletionType, Context, Editor, Helper,
-    completion::{Completer, Pair},
-    config::Configurer,
-    error::ReadlineError,
-    highlight::Highlighter,
-    hint::Hinter,
-    history::DefaultHistory,
-    validate::Validator,
+use reedline::{
+    ColumnarMenu, Completer, Emacs, FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Prompt,
+    PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus, Reedline, ReedlineEvent,
+    ReedlineMenu, Signal, Span, Suggestion, default_emacs_keybindings, HISTORY_SIZE,
 };
 use serde_json::Value;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{borrow::Cow, collections::BTreeMap, path::PathBuf};
+
+const COMPLETION_MENU_NAME: &str = "completion_menu";
+
+fn completion_keybindings() -> reedline::Keybindings {
+    let mut kb = default_emacs_keybindings();
+    kb.add_binding(
+        KeyModifiers::NONE,
+        KeyCode::Tab,
+        ReedlineEvent::UntilFound(vec![
+            ReedlineEvent::Menu(COMPLETION_MENU_NAME.to_string()),
+            ReedlineEvent::MenuNext,
+        ]),
+    );
+    kb
+}
+
+/// Single-line prompt matching the previous `rustyline` `readline("bera> ")` UX.
+struct BeraPrompt;
+
+impl Prompt for BeraPrompt {
+    fn render_prompt_left(&self) -> Cow<'_, str> {
+        Cow::Borrowed("bera> ")
+    }
+
+    fn render_prompt_right(&self) -> Cow<'_, str> {
+        Cow::Borrowed("")
+    }
+
+    fn render_prompt_indicator(&self, _prompt_mode: PromptEditMode) -> Cow<'_, str> {
+        Cow::Borrowed("")
+    }
+
+    fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
+        Cow::Borrowed(".. ")
+    }
+
+    fn render_prompt_history_search_indicator(
+        &self,
+        history_search: PromptHistorySearch,
+    ) -> Cow<'_, str> {
+        let prefix = match history_search.status {
+            PromptHistorySearchStatus::Passing => "",
+            PromptHistorySearchStatus::Failing => "failing ",
+        };
+        Cow::Owned(format!("({}reverse-search: {}) ", prefix, history_search.term))
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_repl(
@@ -34,12 +76,21 @@ pub async fn run_repl(
 
     let modules = rpc.supported_modules().await.unwrap_or_default();
     let helper = CompletionHelper::new(&modules, has_bera_admin);
-    let mut editor: Editor<CompletionHelper, DefaultHistory> = Editor::new()?;
-    editor.set_completion_type(CompletionType::List);
-    editor.set_helper(Some(helper));
-    if history_path.exists() {
-        let _ = editor.load_history(&history_path);
-    }
+
+    let history = FileBackedHistory::with_file(HISTORY_SIZE, history_path.clone())
+        .map_err(|e| eyre::eyre!("failed to load console history: {e}"))?;
+
+    let completion_menu = Box::new(ColumnarMenu::default().with_name(COMPLETION_MENU_NAME));
+    let edit_mode = Box::new(Emacs::new(completion_keybindings()));
+
+    let mut editor = Reedline::create()
+        .with_history(Box::new(history))
+        .with_completer(Box::new(helper))
+        .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
+        .with_edit_mode(edit_mode)
+        .with_quick_completions(true);
+
+    let prompt = BeraPrompt;
 
     println!("bera-reth console :: {}", endpoint.raw);
     print_startup_snapshot(rpc, chain_id, bera_admin_status.as_ref()).await;
@@ -47,12 +98,8 @@ pub async fn run_repl(
 
     let mut last_rpc_result = None;
     loop {
-        let line = editor.readline("bera> ");
-        match line {
-            Ok(line) => {
-                if !line.trim().is_empty() {
-                    let _ = editor.add_history_entry(line.as_str());
-                }
+        match editor.read_line(&prompt) {
+            Ok(Signal::Success(line)) => {
                 match evaluate_line(rpc, &line, &mut last_rpc_result).await {
                     Ok(EvalOutcome::Noop) => {}
                     Ok(EvalOutcome::Exit) => break,
@@ -63,13 +110,13 @@ pub async fn run_repl(
                     Err(err) => eprintln!("error: {err}"),
                 }
             }
-            Err(ReadlineError::Interrupted) => {}
-            Err(ReadlineError::Eof) => break,
+            Ok(Signal::CtrlC) => {}
+            Ok(Signal::CtrlD) => break,
+            Ok(_) => {}
             Err(err) => return Err(err.into()),
         }
     }
 
-    let _ = editor.save_history(&history_path);
     Ok(())
 }
 
@@ -79,12 +126,31 @@ async fn print_startup_snapshot(
     bera_admin_status: Option<&Value>,
 ) {
     if let Some(status) = bera_admin_status {
-        let client_version = status.get("client").and_then(as_string);
-        let network_id = status.get("networkId").and_then(as_string);
-        let head_number = status.get("head").and_then(as_string);
-        let peer_count_total = status.get("peerCountTotal").and_then(hex_or_decimal_to_u64);
-        let peer_count_inbound = status.get("peerCountInbound").and_then(hex_or_decimal_to_u64);
-        let peer_count_outbound = status.get("peerCountOutbound").and_then(hex_or_decimal_to_u64);
+        let client_version = status
+            .get("clientVersion")
+            .or_else(|| status.get("client_version"))
+            .and_then(as_string);
+        let network_id = status
+            .get("networkId")
+            .or_else(|| status.get("network_id"))
+            .and_then(as_string);
+        let head_number = status
+            .get("headNumber")
+            .or_else(|| status.get("head_number"))
+            .and_then(|v| hex_or_decimal_to_u64(v).map(|n| n.to_string()))
+            .or_else(|| status.get("head").and_then(as_string));
+        let peer_count_total = status
+            .get("peerCountTotal")
+            .or_else(|| status.get("peer_count_total"))
+            .and_then(hex_or_decimal_to_u64);
+        let peer_count_inbound = status
+            .get("peerCountInbound")
+            .or_else(|| status.get("peer_count_inbound"))
+            .and_then(hex_or_decimal_to_u64);
+        let peer_count_outbound = status
+            .get("peerCountOutbound")
+            .or_else(|| status.get("peer_count_outbound"))
+            .and_then(hex_or_decimal_to_u64);
 
         let peers_str = if let (Some(in_count), Some(out_count)) =
             (peer_count_inbound, peer_count_outbound)
@@ -95,9 +161,10 @@ async fn print_startup_snapshot(
         };
 
         println!(
-            "node :: {} | net={} 🐻⭐ | block={} | {}",
+            "node :: {} | net={}{} | block={} | {}",
             client_version.unwrap_or_else(|| "unavailable".to_owned()),
             network_id.unwrap_or_else(|| "unavailable".to_owned()),
+            chain_emoji(chain_id),
             head_number.unwrap_or_else(|| "unavailable".to_owned()),
             peers_str
         );
@@ -185,22 +252,8 @@ impl CompletionHelper {
     }
 }
 
-impl Helper for CompletionHelper {}
-impl Validator for CompletionHelper {}
-impl Highlighter for CompletionHelper {}
-impl Hinter for CompletionHelper {
-    type Hint = String;
-}
-
 impl Completer for CompletionHelper {
-    type Candidate = Pair;
-
-    fn complete(
-        &self,
-        line: &str,
-        pos: usize,
-        _ctx: &Context<'_>,
-    ) -> rustyline::Result<(usize, Vec<Pair>)> {
+    fn complete(&mut self, line: &str, pos: usize) -> Vec<Suggestion> {
         let safe_pos = pos.min(line.len());
         let up_to_cursor = &line[..safe_pos];
         let start = up_to_cursor
@@ -210,13 +263,16 @@ impl Completer for CompletionHelper {
             .map(|(i, c)| i + c.len_utf8())
             .unwrap_or(0);
         let needle = &up_to_cursor[start..];
-        let matches = self
-            .words
+        self.words
             .iter()
             .filter(|word| word.starts_with(needle))
-            .map(|word| Pair { display: word.clone(), replacement: word.clone() })
-            .collect();
-        Ok((start, matches))
+            .map(|word| Suggestion {
+                value: word.clone(),
+                span: Span::new(start, safe_pos),
+                append_whitespace: false,
+                ..Default::default()
+            })
+            .collect()
     }
 }
 
@@ -227,8 +283,6 @@ pub fn history_file_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyline::{completion::Completer, history::DefaultHistory};
-    use serde_json::json;
 
     #[test]
     fn completion_includes_bera_admin_when_enabled() {
@@ -247,11 +301,9 @@ mod tests {
     #[test]
     fn completion_matches_prefix() {
         let modules = BTreeMap::from([("eth".to_owned(), "1.0".to_owned())]);
-        let helper = CompletionHelper::new(&modules, false);
-        let history = DefaultHistory::new();
-        let ctx = Context::new(&history);
-        let (_start, hits) = helper.complete("eth.getB", "eth.getB".len(), &ctx).unwrap();
-        assert!(hits.iter().any(|p| p.replacement == "eth.getBalance"));
+        let mut helper = CompletionHelper::new(&modules, false);
+        let hits = helper.complete("eth.getB", "eth.getB".len());
+        assert!(hits.iter().any(|s| s.value == "eth.getBalance"));
     }
 
     #[test]
@@ -264,6 +316,7 @@ mod tests {
 
     #[test]
     fn parses_hex_or_decimal_numbers() {
+        use serde_json::json;
         assert_eq!(hex_or_decimal_to_u64(&json!("0x10")), Some(16));
     }
 }
