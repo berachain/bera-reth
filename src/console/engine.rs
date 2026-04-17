@@ -5,7 +5,6 @@ use super::{
 };
 use eyre::{Result, eyre};
 use serde_json::Value;
-use std::collections::BTreeMap;
 
 pub enum EvalOutcome {
     Noop,
@@ -16,7 +15,6 @@ pub enum EvalOutcome {
 
 pub async fn evaluate_line(
     rpc: &RpcClient,
-    aliases: &BTreeMap<String, String>,
     line: &str,
     last_rpc_result: &mut Option<Value>,
 ) -> Result<EvalOutcome> {
@@ -41,8 +39,8 @@ pub async fn evaluate_line(
             let result = apply_query(&query, &value)?;
             Ok(EvalOutcome::Value(result))
         }
-        InputCommand::Alias(alias) => {
-            let method = resolve_alias_method(aliases, &alias);
+        InputCommand::MethodToken(token) => {
+            let method = normalize_rpc_method(&token);
             let value = rpc.request_value(&method, None).await?;
             *last_rpc_result = Some(value.clone());
             Ok(EvalOutcome::Value(value))
@@ -60,10 +58,6 @@ fn normalize_rpc_method(method: &str) -> String {
     method.replace('.', "_")
 }
 
-fn resolve_alias_method(aliases: &BTreeMap<String, String>, alias: &str) -> String {
-    aliases.get(alias).cloned().unwrap_or_else(|| alias.replace('.', "_"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,18 +66,6 @@ mod tests {
     #[test]
     fn normalizes_rpc_methods() {
         assert_eq!(normalize_rpc_method("eth.getBalance"), "eth_getBalance");
-    }
-
-    #[test]
-    fn resolves_alias_from_map() {
-        let aliases = BTreeMap::from([("bn".to_owned(), "eth_blockNumber".to_owned())]);
-        assert_eq!(resolve_alias_method(&aliases, "bn"), "eth_blockNumber");
-    }
-
-    #[test]
-    fn resolves_alias_by_dot_fallback() {
-        let aliases = BTreeMap::new();
-        assert_eq!(resolve_alias_method(&aliases, "net.peerCount"), "net_peerCount");
     }
 
     #[test]

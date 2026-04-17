@@ -9,7 +9,8 @@ pub enum InputCommand {
     Query(String),
     Rpc { method: String, params: Option<Value> },
     RpcWithQuery { method: String, params: Option<Value>, query: String },
-    Alias(String),
+    /// Single token treated as a method name (`eth.blockNumber` → `eth_blockNumber`).
+    MethodToken(String),
 }
 
 pub fn parse_input(line: &str) -> Result<InputCommand> {
@@ -34,7 +35,7 @@ pub fn parse_input(line: &str) -> Result<InputCommand> {
     if looks_like_implicit_rpc(line) {
         return parse_rpc(line);
     }
-    Ok(InputCommand::Alias(line.to_owned()))
+    Ok(InputCommand::MethodToken(line.to_owned()))
 }
 
 fn split_rpc_query_tail(line: &str) -> Option<(&str, String)> {
@@ -88,7 +89,7 @@ fn looks_like_implicit_rpc(line: &str) -> bool {
     // Accept direct method calls like:
     // - eth_getBalance ["0x...", "latest"]
     // - eth.getBalance ["0x...", "latest"]
-    // Keep simple alias calls like eth.blockNumber as aliases.
+    // Single-token `eth.blockNumber`-style input is handled as MethodToken.
     line.contains(char::is_whitespace) ||
         (line.contains('(') && line.ends_with(')')) ||
         (line.contains('_') && !line.contains(' '))
@@ -218,10 +219,10 @@ mod tests {
     }
 
     #[test]
-    fn keeps_dot_alias_as_alias_when_no_params() {
+    fn keeps_dot_method_token_when_no_params() {
         assert_eq!(
             parse_input("eth.blockNumber").unwrap(),
-            InputCommand::Alias("eth.blockNumber".to_owned())
+            InputCommand::MethodToken("eth.blockNumber".to_owned())
         );
     }
 
@@ -290,10 +291,10 @@ mod tests {
     }
 
     #[test]
-    fn no_chain_on_plain_alias() {
+    fn no_chain_on_plain_method_token() {
         assert_eq!(
             parse_input("admin.peers").unwrap(),
-            InputCommand::Alias("admin.peers".to_owned())
+            InputCommand::MethodToken("admin.peers".to_owned())
         );
     }
 }
