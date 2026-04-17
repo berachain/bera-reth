@@ -1,3 +1,4 @@
+use super::BerachainExecutionPayloadEnvelopeV4;
 use crate::{
     chainspec::BerachainChainSpec,
     primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
@@ -11,8 +12,8 @@ use alloy_primitives::{Address, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rpc_types::engine::{
     BlobsBundleV1, BlobsBundleV2, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
-    ExecutionPayloadEnvelopeV4, ExecutionPayloadEnvelopeV5, ExecutionPayloadFieldV2,
-    ExecutionPayloadV1, ExecutionPayloadV3, PayloadId,
+    ExecutionPayloadEnvelopeV5, ExecutionPayloadFieldV2, ExecutionPayloadV1, ExecutionPayloadV3,
+    PayloadId,
 };
 use reth::{
     api::PayloadAttributes,
@@ -235,10 +236,15 @@ impl BerachainBuiltPayload {
         })
     }
 
-    pub fn try_into_v4(self) -> Result<ExecutionPayloadEnvelopeV4, BuiltPayloadConversionError> {
-        Ok(ExecutionPayloadEnvelopeV4 {
-            execution_requests: self.requests.clone().unwrap_or_default(),
+    pub fn try_into_v4(
+        self,
+    ) -> Result<BerachainExecutionPayloadEnvelopeV4, BuiltPayloadConversionError> {
+        let parent_proposer_pub_key = self.block.prev_proposer_pubkey;
+        let requests = self.requests.clone().unwrap_or_default();
+        Ok(BerachainExecutionPayloadEnvelopeV4 {
+            execution_requests: requests,
             envelope_inner: self.try_into()?,
+            parent_proposer_pub_key,
         })
     }
 
@@ -297,7 +303,7 @@ impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV3 {
     }
 }
 
-impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV4 {
+impl TryFrom<BerachainBuiltPayload> for BerachainExecutionPayloadEnvelopeV4 {
     type Error = BuiltPayloadConversionError;
 
     fn try_from(value: BerachainBuiltPayload) -> Result<Self, Self::Error> {
@@ -483,5 +489,83 @@ mod tests {
         let attributes: BerachainPayloadAttributes =
             serde_json::from_str(json_with_pubkey).unwrap();
         assert!(attributes.prev_proposer_pubkey.is_some());
+    }
+
+    #[test]
+    fn test_try_into_v4_propagates_pubkey_and_requests() {
+        let pubkey = BlsPublicKey::from([0x42; 48]);
+        let header = BerachainHeader {
+            prev_proposer_pubkey: Some(pubkey),
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            ..Default::default()
+        };
+        let block = alloy_consensus::Block {
+            header,
+            body: alloy_consensus::BlockBody {
+                transactions: vec![],
+                ommers: vec![],
+                withdrawals: None,
+            },
+        };
+        let sealed = SealedBlock::new_unhashed(block);
+
+        let requests =
+            Requests::new(vec![alloy_primitives::Bytes::from_static(b"\x00test_request")]);
+        let payload = BerachainBuiltPayload::new(
+            PayloadId::new([1; 8]),
+            std::sync::Arc::new(sealed),
+            U256::from(123),
+            Some(requests.clone()),
+        );
+
+        let envelope = payload.try_into_v4().expect("conversion should succeed");
+
+        assert_eq!(
+            envelope.parent_proposer_pub_key,
+            Some(pubkey),
+            "parent_proposer_pub_key must match the source block header"
+        );
+        assert_eq!(
+            envelope.execution_requests, requests,
+            "execution_requests must be propagated from the built payload"
+        );
+    }
+
+    #[test]
+    fn test_try_into_v4_none_pubkey() {
+        let header = BerachainHeader {
+            prev_proposer_pubkey: None,
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            ..Default::default()
+        };
+        let block = alloy_consensus::Block {
+            header,
+            body: alloy_consensus::BlockBody {
+                transactions: vec![],
+                ommers: vec![],
+                withdrawals: None,
+            },
+        };
+        let sealed = SealedBlock::new_unhashed(block);
+
+        let payload = BerachainBuiltPayload::new(
+            PayloadId::new([2; 8]),
+            std::sync::Arc::new(sealed),
+            U256::ZERO,
+            None,
+        );
+
+        let envelope = payload.try_into_v4().expect("conversion should succeed");
+
+        assert_eq!(
+            envelope.parent_proposer_pub_key, None,
+            "parent_proposer_pub_key must be None when header has no pubkey"
+        );
+        assert!(
+            envelope.execution_requests.is_empty(),
+            "execution_requests must default to empty when payload has no requests"
+        );
     }
 }

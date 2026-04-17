@@ -58,9 +58,8 @@ impl RpcClient {
 
     pub async fn supported_modules(&self) -> Result<BTreeMap<String, String>> {
         let value = self.request_value("rpc_modules", None).await?;
-        serde_json::from_value(value).map_err(|e| {
-            eyre!("failed to parse rpc_modules response as a JSON object: {e}")
-        })
+        serde_json::from_value(value)
+            .map_err(|e| eyre!("failed to parse rpc_modules response as a JSON object: {e}"))
     }
 }
 

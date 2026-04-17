@@ -21,7 +21,9 @@ fn print_raw_json(value: &Value) {
 
 fn print_help() {
     println!("Usage:");
-    println!("  <method> [json_params]   (RPC call; dots become underscores, e.g. eth.blockNumber)");
+    println!(
+        "  <method> [json_params]   (RPC call; dots become underscores, e.g. eth.blockNumber)"
+    );
     println!("  .count | .len | .first | .last | .[0] | .[0].field | .map(.field)");
     println!("Destructive: removeAllPeers | admin.removeAllPeers (batch admin.removePeer)");
 }

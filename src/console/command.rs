@@ -7,8 +7,15 @@ pub enum InputCommand {
     Help,
     Exit,
     Query(String),
-    Rpc { method: String, params: Option<Value> },
-    RpcWithQuery { method: String, params: Option<Value>, query: String },
+    Rpc {
+        method: String,
+        params: Option<Value>,
+    },
+    RpcWithQuery {
+        method: String,
+        params: Option<Value>,
+        query: String,
+    },
     /// Single token treated as a method name (`eth.blockNumber` → `eth_blockNumber`).
     MethodToken(String),
 }

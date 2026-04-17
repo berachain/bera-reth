@@ -34,6 +34,7 @@ jsonrpsee-core = { version = "0.26.0", features = ["server"] }
 jsonrpsee-proc-macros = "0.26.0"
 
 async-trait = "0.1.88"
+futures = "0.3.32"
 modular-bitfield = "0.13.1"
 # RUSTSEC-2026-0097: use >=0.8.6 on the 0.8 release line.
 rand = "0.8.6"
@@ -85,7 +86,6 @@ thiserror = "2.0"
 tokio = { version = "1.46.0", features = ["macros", "rt-multi-thread", "net", "io-util"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
-futures = "0.3.32"
 
 [dev-dependencies]
 alloy-provider = "1.6.3"
@@ -129,7 +129,26 @@ opt-level = 3
 lto = "thin"
 
 [package.metadata.cargo-machete]
-ignored = ["modular-bitfield", "reth-cli-commands"]
+# cargo-machete misses macro/build.rs/test-only uses; keep explicit allowlist in sync when deps change.
+ignored = [
+  "alloy-provider",
+  "alloy-rpc-client",
+  "alloy-signer",
+  "futures",
+  "modular-bitfield",
+  "rand",
+  "reth-eth-wire-types",
+  "reth-metrics",
+  "reth-network",
+  "reth-network-api",
+  "reth-network-types",
+  "reth-rpc-builder",
+  "rusqlite",
+  "test-fuzz",
+  "tracing-subscriber",
+  "vergen",
+  "vergen-git2",
+]
 
 # [patch."https://github.com/paradigmxyz/reth"]
 # reth = { path = "../reth/bin/reth" }
