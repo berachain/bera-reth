@@ -303,7 +303,7 @@ pub fn method_suffixes(namespace: &str) -> &[&str] {
     &[]
 }
 
-/// `namespace.method` strings for rustyline completion.
+/// `namespace.method` strings for reedline tab completion.
 pub fn dot_completions_for_namespace(namespace: &str) -> Vec<String> {
     method_suffixes(namespace).iter().map(|suffix| format!("{namespace}.{suffix}")).collect()
 }

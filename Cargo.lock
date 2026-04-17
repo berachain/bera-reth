@@ -1464,6 +1464,7 @@ dependencies = [
  "alloy-rpc-types-eth",
  "alloy-rpc-types-trace",
  "alloy-serde",
+ "alloy-signer",
  "alloy-signer-local",
  "alloy-sol-macro",
  "alloy-sol-types",
@@ -1473,11 +1474,14 @@ dependencies = [
  "derive_more",
  "dirs",
  "eyre",
+ "futures",
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
  "libc",
  "modular-bitfield",
+ "rand 0.8.5",
+ "reedline",
  "reth",
  "reth-basic-payload-builder",
  "reth-chainspec",
@@ -1493,13 +1497,18 @@ dependencies = [
  "reth-engine-local",
  "reth-engine-primitives",
  "reth-errors",
+ "reth-eth-wire-types",
  "reth-ethereum-cli",
  "reth-ethereum-engine-primitives",
  "reth-ethereum-payload-builder",
  "reth-ethereum-primitives",
  "reth-evm",
  "reth-evm-ethereum",
+ "reth-metrics",
+ "reth-network",
+ "reth-network-api",
  "reth-network-peers",
+ "reth-network-types",
  "reth-node-api",
  "reth-node-builder",
  "reth-node-core",
@@ -1518,7 +1527,7 @@ dependencies = [
  "reth-transaction-pool",
  "reth-trie-common",
  "revm-inspectors",
- "rustyline",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",
@@ -1527,6 +1536,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber 0.3.22",
  "vergen",
  "vergen-git2",
 ]
@@ -2130,15 +2140,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
-name = "clipboard-win"
-version = "5.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bde03770d3df201d4fb868f2c9c59e66a3e4e2bd06692a0fe701e7103c7e84d4"
-dependencies = [
- "error-code",
-]
-
-[[package]]
 name = "coins-bip32"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2439,6 +2440,7 @@ dependencies = [
  "mio",
  "parking_lot",
  "rustix",
+ "serde",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -3031,12 +3033,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "endian-type"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
-
-[[package]]
 name = "enr"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3125,12 +3121,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "error-code"
-version = "3.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dea2df4cf52843e0452895c455a1a2cfbb842a1e7329671acf418fdc53ed4c59"
-
-[[package]]
 name = "ethereum_hashing"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3217,6 +3207,18 @@ dependencies = [
  "indenter",
  "once_cell",
 ]
+
+[[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
 name = "fast-float2"
@@ -3435,9 +3437,9 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "futures"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65bc07b1a8bc7c85c5f2e110c476c7389b4554ba72af57d8445ea63a576b0876"
+checksum = "8b147ee9d1f6d097cef9ce628cd2ee62288d963e16fb287bd9286455b241382d"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -3450,9 +3452,9 @@ dependencies = [
 
 [[package]]
 name = "futures-channel"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dff15bf788c671c1934e366d07e30c1814a8ef514e1af724a602e8a2fbe1b10"
+checksum = "07bbe89c50d7a535e539b8c17bc0b49bdb77747034daa8087407d655f3f7cc1d"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -3473,15 +3475,15 @@ dependencies = [
 
 [[package]]
 name = "futures-core"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e"
+checksum = "7e3450815272ef58cec6d564423f6e755e25379b217b0bc688e295ba24df6b1d"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e28d1d997f585e54aebc3f97d39e72338912123a67330d723fdbb564d646c9f"
+checksum = "baf29c38818342a3b26b5b923639e7b1f4a61fc5e76102d4b1981c6dc7a7579d"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -3490,9 +3492,9 @@ dependencies = [
 
 [[package]]
 name = "futures-io"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e5c1b78ca4aae1ac06c48a526a655760685149f0d465d21f37abfe57ce075c6"
+checksum = "cecba35d7ad927e23624b22ad55235f2239cfa44fd10428eecbeba6d6a717718"
 
 [[package]]
 name = "futures-lite"
@@ -3509,9 +3511,9 @@ dependencies = [
 
 [[package]]
 name = "futures-macro"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
+checksum = "e835b70203e41293343137df5c0664546da5745f82ec9b84d40be8336958447b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3520,15 +3522,15 @@ dependencies = [
 
 [[package]]
 name = "futures-sink"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e575fab7d1e0dcb8d0c7bcf9a63ee213816ab51902e6d244a95819acacf1d4f7"
+checksum = "c39754e157331b013978ec91992bde1ac089843443c49cbc7f46150b0fad0893"
 
 [[package]]
 name = "futures-task"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f90f7dce0722e95104fcb095585910c0977252f286e354b5e3bd38902cd99988"
+checksum = "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393"
 
 [[package]]
 name = "futures-timer"
@@ -3542,9 +3544,9 @@ dependencies = [
 
 [[package]]
 name = "futures-util"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81"
+checksum = "389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -3554,7 +3556,6 @@ dependencies = [
  "futures-task",
  "memchr",
  "pin-project-lite",
- "pin-utils",
  "slab",
 ]
 
@@ -3881,15 +3882,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest 0.10.7",
-]
-
-[[package]]
-name = "home"
-version = "0.5.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
-dependencies = [
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4826,6 +4818,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsqlite3-sys"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "libz-sys"
 version = "1.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5220,27 +5223,6 @@ dependencies = [
  "security-framework 2.11.1",
  "security-framework-sys",
  "tempfile",
-]
-
-[[package]]
-name = "nibble_vec"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a5d83df9f36fe23f0c3648c6bbb8b0298bb5f1939c8f2704431371f4b84d43"
-dependencies = [
- "smallvec",
-]
-
-[[package]]
-name = "nix"
-version = "0.30.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
-dependencies = [
- "bitflags 2.10.0",
- "cfg-if",
- "cfg_aliases",
- "libc",
 ]
 
 [[package]]
@@ -6289,16 +6271,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
-name = "radix_trie"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c069c179fcdc6a2fe24d8d18305cf085fdbd4f922c041943e203685d6a1c58fd"
-dependencies = [
- "endian-type",
- "nibble_vec",
-]
-
-[[package]]
 name = "rand"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6527,6 +6499,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "reedline"
+version = "0.47.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2066729dce9fecd28d1c6850a159ee68719130f149b22467c362353e16994e90"
+dependencies = [
+ "chrono",
+ "crossterm",
+ "fd-lock",
+ "itertools 0.13.0",
+ "nu-ansi-term",
+ "serde",
+ "strip-ansi-escapes",
+ "strum",
+ "thiserror 2.0.18",
+ "unicase",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
 name = "ref-cast"
 version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6640,7 +6632,7 @@ checksum = "1e061d1b48cb8d38042de4ae0a7a6401009d6143dc80d2e2d6f31f0bdd6470c7"
 [[package]]
 name = "reth"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -6680,7 +6672,7 @@ dependencies = [
 [[package]]
 name = "reth-basic-payload-builder"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6704,7 +6696,7 @@ dependencies = [
 [[package]]
 name = "reth-chain-state"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6736,7 +6728,7 @@ dependencies = [
 [[package]]
 name = "reth-chainspec"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -6756,7 +6748,7 @@ dependencies = [
 [[package]]
 name = "reth-cli"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-genesis",
  "clap",
@@ -6770,7 +6762,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-commands"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -6850,7 +6842,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-runner"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "reth-tasks",
  "tokio",
@@ -6860,7 +6852,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-util"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -6878,7 +6870,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6898,7 +6890,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs-derive"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6908,7 +6900,7 @@ dependencies = [
 [[package]]
 name = "reth-config"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "eyre",
  "humantime-serde",
@@ -6924,7 +6916,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -6937,7 +6929,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-common"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6949,7 +6941,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-debug-client"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -6975,7 +6967,7 @@ dependencies = [
 [[package]]
 name = "reth-db"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "derive_more",
@@ -7002,7 +6994,7 @@ dependencies = [
 [[package]]
 name = "reth-db-api"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-genesis",
@@ -7031,7 +7023,7 @@ dependencies = [
 [[package]]
 name = "reth-db-common"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-genesis",
@@ -7061,7 +7053,7 @@ dependencies = [
 [[package]]
 name = "reth-db-models"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -7076,7 +7068,7 @@ dependencies = [
 [[package]]
 name = "reth-discv4"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -7101,7 +7093,7 @@ dependencies = [
 [[package]]
 name = "reth-discv5"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -7125,7 +7117,7 @@ dependencies = [
 [[package]]
 name = "reth-dns-discovery"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "dashmap",
@@ -7149,7 +7141,7 @@ dependencies = [
 [[package]]
 name = "reth-downloaders"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7184,7 +7176,7 @@ dependencies = [
 [[package]]
 name = "reth-e2e-test-utils"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7242,7 +7234,7 @@ dependencies = [
 [[package]]
 name = "reth-ecies"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "aes",
  "alloy-primitives",
@@ -7270,7 +7262,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-local"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7293,7 +7285,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-primitives"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7318,7 +7310,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-service"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "futures",
  "pin-project",
@@ -7340,7 +7332,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-tree"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eip7928",
@@ -7397,7 +7389,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-util"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types-engine",
@@ -7425,7 +7417,7 @@ dependencies = [
 [[package]]
 name = "reth-era"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7440,7 +7432,7 @@ dependencies = [
 [[package]]
 name = "reth-era-downloader"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "bytes",
@@ -7456,7 +7448,7 @@ dependencies = [
 [[package]]
 name = "reth-era-utils"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7478,7 +7470,7 @@ dependencies = [
 [[package]]
 name = "reth-errors"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "reth-consensus",
  "reth-execution-errors",
@@ -7489,7 +7481,7 @@ dependencies = [
 [[package]]
 name = "reth-eth-wire"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-chains",
  "alloy-primitives",
@@ -7517,7 +7509,7 @@ dependencies = [
 [[package]]
 name = "reth-eth-wire-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -7538,7 +7530,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-cli"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "clap",
  "eyre",
@@ -7561,7 +7553,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-consensus"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7577,7 +7569,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-engine-primitives"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -7595,7 +7587,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-forks"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eip2124",
  "alloy-hardforks",
@@ -7608,7 +7600,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-payload-builder"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7637,7 +7629,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-primitives"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7657,7 +7649,7 @@ dependencies = [
 [[package]]
 name = "reth-etl"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "rayon",
  "reth-db-api",
@@ -7667,7 +7659,7 @@ dependencies = [
 [[package]]
 name = "reth-evm"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7691,7 +7683,7 @@ dependencies = [
 [[package]]
 name = "reth-evm-ethereum"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7713,7 +7705,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-errors"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-evm",
  "alloy-primitives",
@@ -7726,7 +7718,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7744,7 +7736,7 @@ dependencies = [
 [[package]]
 name = "reth-exex"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7782,7 +7774,7 @@ dependencies = [
 [[package]]
 name = "reth-exex-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -7796,7 +7788,7 @@ dependencies = [
 [[package]]
 name = "reth-fs-util"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "serde",
  "serde_json",
@@ -7806,7 +7798,7 @@ dependencies = [
 [[package]]
 name = "reth-invalid-block-hooks"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7834,7 +7826,7 @@ dependencies = [
 [[package]]
 name = "reth-ipc"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "bytes",
  "futures",
@@ -7854,7 +7846,7 @@ dependencies = [
 [[package]]
 name = "reth-libmdbx"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "bitflags 2.10.0",
  "byteorder",
@@ -7870,7 +7862,7 @@ dependencies = [
 [[package]]
 name = "reth-mdbx-sys"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "bindgen",
  "cc",
@@ -7879,7 +7871,7 @@ dependencies = [
 [[package]]
 name = "reth-metrics"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "futures",
  "metrics",
@@ -7891,7 +7883,7 @@ dependencies = [
 [[package]]
 name = "reth-net-banlist"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "ipnet",
@@ -7900,7 +7892,7 @@ dependencies = [
 [[package]]
 name = "reth-net-nat"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "futures-util",
  "if-addrs",
@@ -7914,7 +7906,7 @@ dependencies = [
 [[package]]
 name = "reth-network"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -7971,7 +7963,7 @@ dependencies = [
 [[package]]
 name = "reth-network-api"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -7996,7 +7988,7 @@ dependencies = [
 [[package]]
 name = "reth-network-p2p"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8019,7 +8011,7 @@ dependencies = [
 [[package]]
 name = "reth-network-peers"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -8034,7 +8026,7 @@ dependencies = [
 [[package]]
 name = "reth-network-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eip2124",
  "humantime-serde",
@@ -8048,7 +8040,7 @@ dependencies = [
 [[package]]
 name = "reth-nippy-jar"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "anyhow",
  "bincode 1.3.3",
@@ -8065,7 +8057,7 @@ dependencies = [
 [[package]]
 name = "reth-node-api"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-rpc-types-engine",
  "eyre",
@@ -8089,7 +8081,7 @@ dependencies = [
 [[package]]
 name = "reth-node-builder"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8158,7 +8150,7 @@ dependencies = [
 [[package]]
 name = "reth-node-core"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8213,7 +8205,7 @@ dependencies = [
 [[package]]
 name = "reth-node-ethereum"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-network",
@@ -8251,7 +8243,7 @@ dependencies = [
 [[package]]
 name = "reth-node-ethstats"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -8275,7 +8267,7 @@ dependencies = [
 [[package]]
 name = "reth-node-events"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8299,7 +8291,7 @@ dependencies = [
 [[package]]
 name = "reth-node-metrics"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "bytes",
  "eyre",
@@ -8323,7 +8315,7 @@ dependencies = [
 [[package]]
 name = "reth-node-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "reth-chainspec",
  "reth-db-api",
@@ -8335,7 +8327,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-builder"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -8356,7 +8348,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-builder-primitives"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "pin-project",
  "reth-payload-primitives",
@@ -8368,7 +8360,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-primitives"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8391,7 +8383,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-validator"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types-engine",
@@ -8401,7 +8393,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -8415,7 +8407,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives-traits"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8449,7 +8441,7 @@ dependencies = [
 [[package]]
 name = "reth-provider"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8494,7 +8486,7 @@ dependencies = [
 [[package]]
 name = "reth-prune"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8523,7 +8515,7 @@ dependencies = [
 [[package]]
 name = "reth-prune-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -8539,7 +8531,7 @@ dependencies = [
 [[package]]
 name = "reth-revm"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "reth-primitives-traits",
@@ -8552,7 +8544,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -8629,7 +8621,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-api"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eip7928",
  "alloy-eips",
@@ -8659,7 +8651,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-builder"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-network",
  "alloy-provider",
@@ -8700,7 +8692,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-convert"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-evm",
@@ -8721,7 +8713,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-engine-api"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8751,7 +8743,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-eth-api"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -8795,7 +8787,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-eth-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8843,7 +8835,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-layer"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-rpc-types-engine",
  "http",
@@ -8857,7 +8849,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-server-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8873,7 +8865,7 @@ dependencies = [
 [[package]]
 name = "reth-stages"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -8923,7 +8915,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-api"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -8950,7 +8942,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -8964,7 +8956,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "parking_lot",
@@ -8984,7 +8976,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file-types"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "clap",
@@ -8999,7 +8991,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-api"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -9023,7 +9015,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-errors"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -9040,7 +9032,7 @@ dependencies = [
 [[package]]
 name = "reth-tasks"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -9058,7 +9050,7 @@ dependencies = [
 [[package]]
 name = "reth-testing-utils"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -9074,7 +9066,7 @@ dependencies = [
 [[package]]
 name = "reth-tokio-util"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "tokio",
  "tokio-stream",
@@ -9084,7 +9076,7 @@ dependencies = [
 [[package]]
 name = "reth-tracing"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "clap",
  "eyre",
@@ -9101,7 +9093,7 @@ dependencies = [
 [[package]]
 name = "reth-tracing-otlp"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "clap",
  "eyre",
@@ -9119,7 +9111,7 @@ dependencies = [
 [[package]]
 name = "reth-transaction-pool"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -9163,7 +9155,7 @@ dependencies = [
 [[package]]
 name = "reth-trie"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -9189,7 +9181,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-common"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -9216,7 +9208,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-db"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "metrics",
@@ -9236,7 +9228,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-parallel"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -9261,7 +9253,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-sparse"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -9280,7 +9272,7 @@ dependencies = [
 [[package]]
 name = "reth-zstd-compressors"
 version = "1.11.3"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.11.3#d6324d63e27ef6b7c49cdc9b1977c1b808234c7b"
+source = "git+https://github.com/camembera/reth?branch=pog%2Fprovenance-callback#ab0c215ee7276dab1f9cc944258b530a7cef466a"
 dependencies = [
  "zstd",
 ]
@@ -9644,6 +9636,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
+name = "rusqlite"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
+dependencies = [
+ "bitflags 2.10.0",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9789,28 +9795,6 @@ dependencies = [
  "quick-error",
  "tempfile",
  "wait-timeout",
-]
-
-[[package]]
-name = "rustyline"
-version = "17.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e902948a25149d50edc1a8e0141aad50f54e22ba83ff988cf8f7c9ef07f50564"
-dependencies = [
- "bitflags 2.10.0",
- "cfg-if",
- "clipboard-win",
- "fd-lock",
- "home",
- "libc",
- "log",
- "memchr",
- "nix",
- "radix_trie",
- "unicode-segmentation",
- "unicode-width",
- "utf8parse",
- "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -10371,6 +10355,15 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "strip-ansi-escapes"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a8f8038e7e7969abb3f1b7c2a811225e9296da208539e0f79c5251d6cac0025"
+dependencies = [
+ "vte",
+]
 
 [[package]]
 name = "strsim"
@@ -11451,6 +11444,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
+]
+
+[[package]]
+name = "vte"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "231fdcd7ef3037e8330d8e17e61011a2c244126acc0a982f4040ac3f9f0bc077"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
