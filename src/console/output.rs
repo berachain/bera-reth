@@ -161,7 +161,7 @@ fn format_eth(wei: u128) -> String {
 fn try_format_detailed_peers(value: &Value) -> Option<String> {
     let peers = value.as_array()?;
     if peers.is_empty() {
-        return None;
+        return Some("-- no peers connected --".to_string());
     }
 
     let first = peers.first()?;
