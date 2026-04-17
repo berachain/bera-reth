@@ -36,7 +36,8 @@ jsonrpsee-proc-macros = "0.26.0"
 async-trait = "0.1.88"
 futures = "0.3.32"
 modular-bitfield = "0.13.1"
-rand = "0.8"
+# RUSTSEC-2026-0097: use >=0.8.6 on the 0.8 release line.
+rand = "0.8.6"
 reth = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-basic-payload-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 reth-chainspec = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
