@@ -130,8 +130,10 @@ async fn print_startup_snapshot(
             .get("clientVersion")
             .or_else(|| status.get("client_version"))
             .and_then(as_string);
-        let network_id =
-            status.get("networkId").or_else(|| status.get("network_id")).and_then(as_string);
+        let network_id = status
+            .get("networkId")
+            .or_else(|| status.get("network_id"))
+            .and_then(as_string);
         let head_number = status
             .get("headNumber")
             .or_else(|| status.get("head_number"))
