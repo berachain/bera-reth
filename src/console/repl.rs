@@ -23,7 +23,6 @@ pub async fn run_repl(
     rpc: &RpcClient,
     history_path: PathBuf,
     endpoint: ResolvedEndpoint,
-    aliases: &BTreeMap<String, String>,
     chain_id: Option<u64>,
     raw: bool,
     has_bera_admin: bool,
@@ -34,7 +33,7 @@ pub async fn run_repl(
     )?;
 
     let modules = rpc.supported_modules().await.unwrap_or_default();
-    let helper = CompletionHelper::new(aliases, &modules, has_bera_admin);
+    let helper = CompletionHelper::new(&modules, has_bera_admin);
     let mut editor: Editor<CompletionHelper, DefaultHistory> = Editor::new()?;
     editor.set_completion_type(CompletionType::List);
     editor.set_helper(Some(helper));
@@ -54,10 +53,10 @@ pub async fn run_repl(
                 if !line.trim().is_empty() {
                     let _ = editor.add_history_entry(line.as_str());
                 }
-                match evaluate_line(rpc, aliases, &line, &mut last_rpc_result).await {
+                match evaluate_line(rpc, &line, &mut last_rpc_result).await {
                     Ok(EvalOutcome::Noop) => {}
                     Ok(EvalOutcome::Exit) => break,
-                    Ok(EvalOutcome::Help) => print_help(aliases, has_bera_admin),
+                    Ok(EvalOutcome::Help) => print_help(),
                     Ok(EvalOutcome::Value(value)) => {
                         print_value_for_chain_raw(&value, chain_id, raw);
                     }
@@ -143,27 +142,13 @@ fn as_string(value: &Value) -> Option<String> {
     }
 }
 
-fn print_help(aliases: &BTreeMap<String, String>, has_bera_admin: bool) {
+fn print_help() {
     println!("Commands:");
-    println!("  <method> [json_params]   (RPC call)");
-    println!("  <alias>                  (e.g. eth.blockNumber)");
-    println!("  TAB                      completion for aliases/methods");
+    println!("  <method> [json_params]   (RPC call; dots become underscores, e.g. eth.blockNumber)");
+    println!("  TAB                      completion for RPC namespaces/methods");
     println!("  help | exit");
     println!("Queries (run against last RPC result):");
     println!("  .count | .len | .first | .last | .[0] | .[0].field | .map(.field)");
-    if has_bera_admin {
-        println!("beraAdmin (when detected):");
-        println!("  peers                 detailed peer table");
-        println!("  status                node identity and sync state");
-        println!("  ban \"0xpeerId\"        ban peer (~12h)");
-        println!("  penalize \"0xpeerId\" -100   penalize peer by value");
-    }
-    if !aliases.is_empty() {
-        println!("Aliases:");
-        for (alias, method) in aliases {
-            println!("  {alias} -> {method}");
-        }
-    }
 }
 
 struct CompletionHelper {
@@ -171,11 +156,7 @@ struct CompletionHelper {
 }
 
 impl CompletionHelper {
-    fn new(
-        aliases: &BTreeMap<String, String>,
-        modules: &BTreeMap<String, String>,
-        has_bera_admin: bool,
-    ) -> CompletionHelper {
+    fn new(modules: &BTreeMap<String, String>, has_bera_admin: bool) -> CompletionHelper {
         let mut words = vec![
             "help".to_owned(),
             "exit".to_owned(),
@@ -186,13 +167,6 @@ impl CompletionHelper {
             ".last".to_owned(),
             ".map(".to_owned(),
         ];
-        words.extend(aliases.keys().cloned());
-        for method in aliases.values() {
-            words.push(method.clone());
-            if let Some(dot) = rpc_method_to_dot(method) {
-                words.push(dot);
-            }
-        }
         for module in modules.keys() {
             words.push(format!("{module}."));
             words.push(format!("{module}_"));
@@ -207,14 +181,6 @@ impl CompletionHelper {
         words.dedup();
         CompletionHelper { words }
     }
-}
-
-fn rpc_method_to_dot(method: &str) -> Option<String> {
-    let (module, rest) = method.split_once('_')?;
-    if module.is_empty() || rest.is_empty() {
-        return None;
-    }
-    Some(format!("{module}.{rest}"))
 }
 
 impl Helper for CompletionHelper {}
@@ -264,25 +230,22 @@ mod tests {
 
     #[test]
     fn completion_includes_bera_admin_when_enabled() {
-        let aliases = BTreeMap::new();
         let modules = BTreeMap::new();
-        let helper = CompletionHelper::new(&aliases, &modules, true);
+        let helper = CompletionHelper::new(&modules, true);
         assert!(helper.words.iter().any(|w| w == "beraAdmin.detailedPeers"));
     }
 
     #[test]
     fn completion_excludes_bera_admin_when_disabled() {
-        let aliases = BTreeMap::new();
         let modules = BTreeMap::new();
-        let helper = CompletionHelper::new(&aliases, &modules, false);
+        let helper = CompletionHelper::new(&modules, false);
         assert!(!helper.words.iter().any(|w| w == "beraAdmin.detailedPeers"));
     }
 
     #[test]
     fn completion_matches_prefix() {
-        let aliases = BTreeMap::from([("bn".to_owned(), "eth_blockNumber".to_owned())]);
         let modules = BTreeMap::from([("eth".to_owned(), "1.0".to_owned())]);
-        let helper = CompletionHelper::new(&aliases, &modules, false);
+        let helper = CompletionHelper::new(&modules, false);
         let history = DefaultHistory::new();
         let ctx = Context::new(&history);
         let (_start, hits) = helper.complete("eth.getB", "eth.getB".len(), &ctx).unwrap();
@@ -291,9 +254,8 @@ mod tests {
 
     #[test]
     fn completion_includes_eth_namespace_methods() {
-        let aliases = BTreeMap::new();
         let modules = BTreeMap::from([("eth".to_owned(), "1.0".to_owned())]);
-        let helper = CompletionHelper::new(&aliases, &modules, false);
+        let helper = CompletionHelper::new(&modules, false);
         assert!(helper.words.iter().any(|w| w == "eth.getLogs"));
         assert!(helper.words.iter().any(|w| w == "eth.getTransactionReceipt"));
     }

@@ -4,15 +4,10 @@ use super::{
 };
 use eyre::Result;
 use serde_json::Value;
-use std::collections::BTreeMap;
 
-pub async fn run_exec(
-    rpc: &RpcClient,
-    script: &str,
-    aliases: &BTreeMap<String, String>,
-) -> Result<()> {
+pub async fn run_exec(rpc: &RpcClient, script: &str) -> Result<()> {
     let mut last = None;
-    match evaluate_line(rpc, aliases, script, &mut last).await? {
+    match evaluate_line(rpc, script, &mut last).await? {
         EvalOutcome::Value(value) => print_raw_json(&value),
         EvalOutcome::Help => print_help(),
         EvalOutcome::Noop | EvalOutcome::Exit => {}
@@ -26,7 +21,6 @@ fn print_raw_json(value: &Value) {
 
 fn print_help() {
     println!("Usage:");
-    println!("  <method> [json_params]   (RPC call)");
-    println!("  <alias>                  (e.g. eth.blockNumber)");
+    println!("  <method> [json_params]   (RPC call; dots become underscores, e.g. eth.blockNumber)");
     println!("  .count | .len | .first | .last | .[0] | .[0].field | .map(.field)");
 }
