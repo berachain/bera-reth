@@ -189,7 +189,7 @@ impl IpcClientLite {
         }
 
         let resp: Value = serde_json::from_str(&line)?;
-        if let Some(err) = resp.get("error") {
+        if let Some(err) = resp.get("error").filter(|e| !e.is_null()) {
             return Err(eyre!("rpc error: {}", err));
         }
         resp.get("result").cloned().ok_or_else(|| eyre!("missing result field in IPC response"))
