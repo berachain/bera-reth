@@ -35,13 +35,14 @@ pub fn resolve_endpoint(endpoint: Option<&str>) -> Result<ResolvedEndpoint> {
 }
 
 fn detect_transport(endpoint: &str) -> Result<Transport> {
-    if endpoint.starts_with("http://") || endpoint.starts_with("https://") {
+    let lower = endpoint.to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
         return Ok(Transport::Http);
     }
-    if endpoint.starts_with("ws://") || endpoint.starts_with("wss://") {
+    if lower.starts_with("ws://") || lower.starts_with("wss://") {
         return Ok(Transport::Ws);
     }
-    if endpoint.contains("://") {
+    if lower.contains("://") {
         bail!("unsupported endpoint scheme in {endpoint:?}");
     }
     Ok(Transport::Ipc)
@@ -62,6 +63,14 @@ mod tests {
     fn parses_http() {
         let got = resolve_endpoint(Some("http://127.0.0.1:8545")).unwrap();
         assert_eq!(got.transport, Transport::Http);
+    }
+
+    #[test]
+    fn parses_http_uppercase_scheme_preserves_raw() {
+        let raw = "HTTP://127.0.0.1:8545";
+        let got = resolve_endpoint(Some(raw)).unwrap();
+        assert_eq!(got.transport, Transport::Http);
+        assert_eq!(got.raw, raw);
     }
 
     #[test]
