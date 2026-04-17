@@ -40,12 +40,54 @@ pub async fn evaluate_line(
             Ok(EvalOutcome::Value(result))
         }
         InputCommand::MethodToken(token) => {
+            if is_remove_all_peers_token(token.as_str()) {
+                return run_remove_all_peers(rpc, last_rpc_result).await;
+            }
             let method = normalize_rpc_method(&token);
             let value = rpc.request_value(&method, None).await?;
             *last_rpc_result = Some(value.clone());
             Ok(EvalOutcome::Value(value))
         }
     }
+}
+
+fn is_remove_all_peers_token(s: &str) -> bool {
+    matches!(s, "removeAllPeers" | "admin.removeAllPeers")
+}
+
+async fn run_remove_all_peers(
+    rpc: &RpcClient,
+    last_rpc_result: &mut Option<Value>,
+) -> Result<EvalOutcome> {
+    let peers = rpc.request_value("admin_peers", None).await?;
+    let arr = peers.as_array().ok_or_else(|| eyre!("admin.peers did not return an array"))?;
+    let total = arr.len() as u64;
+    let mut removed = 0u64;
+    let mut failed = 0u64;
+    for peer in arr {
+        let enode = peer
+            .get("enode")
+            .and_then(Value::as_str)
+            .ok_or_else(|| eyre!("peer entry missing enode"))?;
+        match rpc.request_value("admin_removePeer", Some(serde_json::json!([enode]))).await {
+            Ok(Value::Bool(true)) => removed += 1,
+            Ok(other) => {
+                eprintln!("admin.removePeer({enode}): unexpected response: {other}");
+                failed += 1;
+            }
+            Err(err) => {
+                eprintln!("admin.removePeer({enode}): {err}");
+                failed += 1;
+            }
+        }
+    }
+    *last_rpc_result = Some(peers.clone());
+    eprintln!("Removed {removed}/{total} peer(s).");
+    Ok(EvalOutcome::Value(serde_json::json!({
+        "removed": removed,
+        "failed": failed,
+        "total": total
+    })))
 }
 
 fn apply_query_to_last_rpc(expr: &str, last_rpc_result: &Option<Value>) -> Result<Value> {

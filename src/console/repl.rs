@@ -149,6 +149,8 @@ fn print_help() {
     println!("  help | exit");
     println!("Queries (run against last RPC result):");
     println!("  .count | .len | .first | .last | .[0] | .[0].field | .map(.field)");
+    println!("Destructive (calls admin.removePeer for each connected peer):");
+    println!("  removeAllPeers | admin.removeAllPeers");
 }
 
 struct CompletionHelper {
