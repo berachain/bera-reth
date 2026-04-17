@@ -84,4 +84,20 @@ mod tests {
         let err = resolve_endpoint(Some("ftp://example.test")).unwrap_err();
         assert!(err.to_string().contains("unsupported endpoint scheme"));
     }
+
+    #[test]
+    fn windows_named_pipe_path_is_ipc() {
+        let raw = r"\\.\pipe\reth.ipc";
+        let got = resolve_endpoint(Some(raw)).unwrap();
+        assert_eq!(got.transport, Transport::Ipc);
+        assert_eq!(got.raw, raw);
+    }
+
+    #[test]
+    fn relative_path_with_colons_is_ipc() {
+        let raw = "relative:with:segments/reth.ipc";
+        let got = resolve_endpoint(Some(raw)).unwrap();
+        assert_eq!(got.transport, Transport::Ipc);
+        assert_eq!(got.raw, raw);
+    }
 }
