@@ -55,7 +55,22 @@ fn parse_map(expr: &str) -> Result<Option<(&str, &str)>> {
     if !expr.starts_with(".map(") {
         return Ok(None);
     }
-    let close = expr.find(')').ok_or_else(|| eyre!("invalid .map(...) expression"))?;
+    let mut depth = 1usize;
+    let mut close = None;
+    for (i, b) in expr.bytes().enumerate().skip(5) {
+        match b {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    close = Some(i);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let close = close.ok_or_else(|| eyre!("invalid .map(...) expression"))?;
     let inner = &expr[5..close];
     if !inner.starts_with('.') {
         bail!("map selector must start with '.'");
