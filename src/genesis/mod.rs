@@ -7,7 +7,7 @@ use reth::{revm::primitives::address, rpc::types::serde_helpers::OtherFields};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use config::{OsakaConfig, Prague1Config, Prague2Config, Prague3Config, Prague4Config};
+pub use config::{Prague1Config, Prague2Config, Prague3Config, Prague4Config};
 
 /// Errors for Berachain genesis configuration parsing
 #[derive(Debug, Error)]
@@ -37,8 +37,6 @@ pub struct BerachainGenesisConfig {
     pub prague3: Option<Prague3Config>,
     /// Configuration for the Prague4 hardfork, which ends Prague3 restrictions
     pub prague4: Option<Prague4Config>,
-    /// Configuration for the Osaka hardfork (BRIP-0010), which enables Osaka-level EVM features
-    pub osaka: Option<OsakaConfig>,
 }
 
 impl Default for BerachainGenesisConfig {
@@ -57,7 +55,6 @@ impl Default for BerachainGenesisConfig {
             }),
             prague3: None, // Not activated by default
             prague4: None, // Not activated by default
-            osaka: None,   // Not activated by default
         }
     }
 }
@@ -122,9 +119,7 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                 Ok(cfg)
             }
             Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
-            None => {
-                Ok(Self { prague1: None, prague2: None, prague3: None, prague4: None, osaka: None })
-            }
+            None => Ok(Self { prague1: None, prague2: None, prague3: None, prague4: None }),
         }
     }
 }
