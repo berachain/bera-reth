@@ -88,11 +88,9 @@ fn main() {
                         .launch_with_debug_capabilities()
                         .await?;
 
-                    let exit_result = node_exit_future.await;
-                    if args.pog {
-                        bera_reth::pog::run_shutdown_peer_curation_if_enabled();
-                    }
-                    exit_result
+                    // Known-peers filtering runs from `reth_node_builder::post_known_peers_write`
+                    // (see `pog::configure_shutdown_peer_curation`), after the graceful peer-file write.
+                    node_exit_future.await
                 },
             ) {
                 eprintln!("Error: {err:?}");

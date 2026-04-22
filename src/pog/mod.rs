@@ -28,7 +28,13 @@ fn shutdown_peer_curation_slot() -> &'static Mutex<Option<ShutdownPeerCurationCo
     SHUTDOWN_PEER_CURATION.get_or_init(|| Mutex::new(None))
 }
 
-/// Capture the paths required for post-shutdown known-peers curation.
+/// Capture the paths required for post-shutdown known-peers handling (PoG evidence →
+/// `known-peers.json`).
+///
+/// When a persistent peers file is configured, registers
+/// [`reth_node_builder::set_post_known_peers_write_hook`] so
+/// [`run_shutdown_peer_curation_if_enabled`] runs **after** Reth’s graceful `known-peers.json`
+/// flush (see `CliRunner::run_command_until_exit` / `post_known_peers_write`).
 pub fn configure_shutdown_peer_curation(datadir: PathBuf, known_peers_path: Option<PathBuf>) {
     let mut guard = shutdown_peer_curation_slot().lock().unwrap_or_else(|e| e.into_inner());
     *guard = known_peers_path
@@ -36,9 +42,21 @@ pub fn configure_shutdown_peer_curation(datadir: PathBuf, known_peers_path: Opti
             known_peers_path,
             pog_db_path: datadir.join("proof_of_gossip.db"),
         });
+
+    if guard.is_some() {
+        reth_node_builder::set_post_known_peers_write_hook(Some(Box::new(|_path: &Path| {
+            run_shutdown_peer_curation_if_enabled();
+        })));
+    } else {
+        reth_node_builder::set_post_known_peers_write_hook(None);
+    }
 }
 
-/// Run known-peers curation after reth completes graceful shutdown peer persistence.
+/// Run known-peers filtering using the paths from [`configure_shutdown_peer_curation`].
+///
+/// Normally invoked from the `post_known_peers_write` hook registered in
+/// [`configure_shutdown_peer_curation`]. Do **not** call this after `node_exit_future.await` in
+/// `main.rs`: that runs before Reth’s graceful peer-file write and will be overwritten.
 pub fn run_shutdown_peer_curation_if_enabled() {
     if !pog_cli_enabled() {
         return;
