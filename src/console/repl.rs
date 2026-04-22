@@ -242,9 +242,9 @@ impl CompletionHelper {
             words.extend(super::rpc_completion::dot_completions_for_namespace(module));
         }
         if has_bera_admin {
-            words.push("beraAdmin.".to_owned());
-            words.push("beraAdmin_".to_owned());
-            words.extend(super::rpc_completion::dot_completions_for_namespace("beraAdmin"));
+            words.push("beradmin.".to_owned());
+            words.push("beradmin_".to_owned());
+            words.extend(super::rpc_completion::dot_completions_for_namespace("beradmin"));
         }
         words.sort();
         words.dedup();
@@ -288,14 +288,14 @@ mod tests {
     fn completion_includes_bera_admin_when_enabled() {
         let modules = BTreeMap::new();
         let helper = CompletionHelper::new(&modules, true);
-        assert!(helper.words.iter().any(|w| w == "beraAdmin.detailedPeers"));
+        assert!(helper.words.iter().any(|w| w == "beradmin.detailedPeers"));
     }
 
     #[test]
     fn completion_excludes_bera_admin_when_disabled() {
         let modules = BTreeMap::new();
         let helper = CompletionHelper::new(&modules, false);
-        assert!(!helper.words.iter().any(|w| w == "beraAdmin.detailedPeers"));
+        assert!(!helper.words.iter().any(|w| w == "beradmin.detailedPeers"));
     }
 
     #[test]
