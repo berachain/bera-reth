@@ -1,7 +1,7 @@
 use crate::{
     flashblocks::{BerachainFlashblockPayload, FlashblocksListeners},
     primitives::BerachainHeader,
-    rpc::receipt::BerachainReceiptEnvelope,
+    rpc::{receipt::BerachainReceiptEnvelope, record_state_fallback, record_state_lookup},
     transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE},
 };
 use alloy_consensus::{BlockHeader, Transaction};
@@ -349,12 +349,35 @@ where
     /// Only returns a block whose parent hash matches the latest canonical header,
     /// ensuring stale flashblocks are not served during reorgs.
     pub fn pending_flashblock(&self) -> Option<PendingBlock<N::Primitives>> {
-        let latest_hash = self.provider().latest_header().ok().flatten()?.hash();
+        let latest_hash = match self.provider().latest_header().ok().flatten() {
+            Some(h) => h.hash(),
+            None => {
+                record_state_lookup("miss_no_header");
+                return None;
+            }
+        };
 
-        self.flashblocks
-            .as_ref()
-            .and_then(|f| f.pending_block_rx.borrow().as_ref().map(|b| b.pending.clone()))
-            .filter(|pending| pending.block().parent_hash() == latest_hash)
+        let Some(flashblocks) = self.flashblocks.as_ref() else {
+            record_state_lookup("miss_no_listener");
+            return None;
+        };
+
+        let pending = flashblocks.pending_block_rx.borrow().as_ref().map(|b| b.pending.clone());
+
+        match pending {
+            None => {
+                record_state_lookup("miss_no_pending");
+                None
+            }
+            Some(p) if p.block().parent_hash() == latest_hash => {
+                record_state_lookup("hit");
+                Some(p)
+            }
+            Some(_) => {
+                record_state_lookup("miss_stale_hash");
+                None
+            }
+        }
     }
 }
 
@@ -812,6 +835,7 @@ where
         let Ok(latest_historical) =
             self.provider().history_by_block_hash(parent_hash).map_err(Into::<EthApiError>::into)
         else {
+            record_state_fallback("parent_absent");
             tracing::info!(
                 %parent_hash,
                 "parent block not imported yet, falling back to canonical state"

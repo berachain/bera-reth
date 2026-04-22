@@ -1,4 +1,6 @@
-use crate::flashblocks::{payload::PendingFlashBlock, traits::FlashblockPayloadBase};
+use crate::flashblocks::{
+    payload::PendingFlashBlock, record_build_skip, traits::FlashblockPayloadBase,
+};
 use alloy_eips::{BlockNumberOrTag, eip2718::WithEncoded};
 use alloy_primitives::B256;
 use reth_chain_state::{ComputedTrieData, ExecutedBlock};
@@ -71,7 +73,8 @@ where
         let latest_hash = latest.hash();
 
         if args.base.parent_hash() != latest_hash {
-            trace!(target: "flashblocks", flashblock_parent = ?args.base.parent_hash(), local_latest=?latest.num_hash(),"Skipping non consecutive flashblock");
+            record_build_skip("non_consecutive");
+            trace!(target: "flashblocks", flashblock_parent = ?args.base.parent_hash(), local_latest=?latest.num_hash(), "Skipping non consecutive flashblock");
             return Ok(None);
         }
 

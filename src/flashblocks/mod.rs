@@ -16,7 +16,10 @@ pub mod service;
 pub use service::{FlashBlockBuildInfo, FlashBlockService};
 
 mod cache;
+mod metrics;
 mod worker;
+
+pub(crate) use metrics::{FlashBlockServiceMetrics, record_build_skip, record_insert};
 
 pub mod ws;
 pub use ws::{FlashBlockDecoder, WsConnect, WsFlashBlockStream};

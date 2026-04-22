@@ -57,7 +57,12 @@ use std::{
 };
 use tracing::{debug, info, trace, warn};
 
-use crate::transaction::BerachainTxType;
+use crate::{
+    sequencer::{
+        FlashblockSequencerMetrics, record_build_exit, record_emitted, record_publish_error,
+    },
+    transaction::BerachainTxType,
+};
 
 type BestTransactionsIter<Pool> = Box<
     dyn BestTransactions<Item = Arc<ValidPoolTransaction<<Pool as TransactionPool>::Transaction>>>,
@@ -319,12 +324,14 @@ where
 
     // Apply pre-execution changes (PoL, withdrawals, etc.)
     builder.apply_pre_execution_changes().map_err(|err| {
+        record_build_exit("pre_exec_failed");
         warn!(target: "sequencer::builder", %err, "failed to apply pre-execution changes");
         PayloadBuilderError::Internal(err.into())
     })?;
 
     // Check if Prague3 is active
     if chain_spec.is_prague3_active_at_timestamp(attributes.timestamp()) {
+        record_build_exit("prague3_rejected");
         return Err(PayloadBuilderError::Other(Box::from(
             "Prague 3 block building is not supported",
         )));
@@ -350,12 +357,17 @@ where
     let mut tracker = FlashblockExecutionTracker::new();
     let mut blob_sidecars = BlobSidecars::Empty;
     let mut flashblock_index = 0u64;
+    let mut last_emitted_cumulative_gas: u64 = 0;
     let mut last_flashblock_time = Instant::now();
     let interval = sequencer_config.interval;
     let build_start_time = Instant::now();
+    let metrics = FlashblockSequencerMetrics::default();
 
     // Helper to emit flashblock. Per BRIP-0007, no state root computation needed.
-    let emit = |flashblock_index: u64, tracker: &FlashblockExecutionTracker, is_last: bool| {
+    let emit = |flashblock_index: u64,
+                tracker: &FlashblockExecutionTracker,
+                interval_gas: u64,
+                is_last: bool| {
         emit_flashblock(
             &publisher,
             payload_id,
@@ -363,10 +375,12 @@ where
             &base,
             flashblock_index == 0,
             tracker,
+            interval_gas,
             block_number,
             &sequencer_config.signer,
             &withdrawals,
             is_last,
+            &metrics,
         );
     };
 
@@ -376,6 +390,7 @@ where
     // track the current state even when no transactions are being processed.
     loop {
         if payload_requested.load(Ordering::Relaxed) {
+            record_build_exit("payload_requested");
             info!(
                 target: "sequencer::builder",
                 id = %payload_id,
@@ -389,6 +404,7 @@ where
 
         // Check if deadline exceeded (--builder.deadline).
         if build_start_time.elapsed() >= deadline {
+            record_build_exit("deadline");
             info!(
                 target: "sequencer::builder",
                 id = %payload_id,
@@ -403,6 +419,7 @@ where
 
         // Check if gas limit reached (use a small buffer to account for minimum tx gas)
         if tracker.cumulative_gas_used + 21_000 > block_gas_limit {
+            record_build_exit("gas_limit");
             info!(
                 target: "sequencer::builder",
                 id = %payload_id,
@@ -417,8 +434,14 @@ where
 
         // Emit flashblock at regular intervals (may be empty, serving as heartbeat)
         if last_flashblock_time.elapsed() >= interval {
-            emit(flashblock_index, &tracker, false);
+            let actual = last_flashblock_time.elapsed();
+            let drift = actual.saturating_sub(interval);
+            let interval_gas =
+                tracker.cumulative_gas_used.saturating_sub(last_emitted_cumulative_gas);
+            metrics.interval_drift_seconds.record(drift.as_secs_f64());
+            emit(flashblock_index, &tracker, interval_gas, false);
             flashblock_index += 1;
+            last_emitted_cumulative_gas = tracker.cumulative_gas_used;
             tracker.clear_interval();
             last_flashblock_time = Instant::now();
         }
@@ -531,7 +554,9 @@ where
 
     // Always emit the final flashblock marked as last, even if empty.
     // This signals to RPC nodes that no more flashblocks will arrive for this payload.
-    emit(flashblock_index, &tracker, true);
+    let final_interval_gas =
+        tracker.cumulative_gas_used.saturating_sub(last_emitted_cumulative_gas);
+    emit(flashblock_index, &tracker, final_interval_gas, true);
 
     // Finalize the block
     let BlockBuilderOutcome { execution_result, block, .. } = builder.finish(&state_provider)?;
@@ -539,6 +564,8 @@ where
     let requests = chain_spec
         .is_prague_active_at_timestamp(attributes.timestamp())
         .then_some(execution_result.requests);
+
+    metrics.build_duration_seconds.record(build_start_time.elapsed().as_secs_f64());
 
     let sealed_block = Arc::new(block.sealed_block().clone());
     info!(
@@ -566,11 +593,15 @@ fn emit_flashblock(
     base: &BerachainFlashblockPayloadBase,
     include_base_in_payload: bool,
     tracker: &FlashblockExecutionTracker,
+    interval_gas: u64,
     block_number: u64,
     signer: &FlashblockSigner,
     withdrawals: &[Withdrawal],
     is_last: bool,
+    metrics: &FlashblockSequencerMetrics,
 ) {
+    metrics.gas_used_per_flashblock.record(interval_gas as f64);
+
     // Withdrawals are included in first flashblock only (index 0)
     let diff_withdrawals = if include_base_in_payload { withdrawals.to_vec() } else { vec![] };
 
@@ -582,7 +613,9 @@ fn emit_flashblock(
 
     // Sign over transactions hash
     let tx_hash = compute_transactions_hash(&tracker.interval_transactions);
+    let sign_start = Instant::now();
     let signature = signer.sign_flashblock(block_number, payload_id, index, tx_hash);
+    metrics.signing_duration_seconds.record(sign_start.elapsed().as_secs_f64());
 
     let flashblock = BerachainFlashblockPayload {
         payload_id,
@@ -594,8 +627,12 @@ fn emit_flashblock(
         is_last,
     };
 
+    record_emitted(is_last);
+    metrics.transactions_per_flashblock.record(tracker.interval_transactions.len() as f64);
+
     match publisher.publish(&flashblock) {
-        Ok(count) => {
+        Ok((count, bytes)) => {
+            metrics.payload_bytes.record(bytes as f64);
             debug!(
                 target: "sequencer::builder",
                 payload_id = %payload_id,
@@ -608,6 +645,7 @@ fn emit_flashblock(
             );
         }
         Err(e) => {
+            record_publish_error("serialize");
             warn!(
                 target: "sequencer::builder",
                 payload_id = %payload_id,

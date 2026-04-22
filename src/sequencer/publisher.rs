@@ -19,6 +19,8 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
+use crate::sequencer::{FlashblockSequencerMetrics, record_ws_connection};
+
 /// Capacity for the flashblock broadcast channel.
 const FLASHBLOCK_CHANNEL_CAPACITY: usize = 20;
 
@@ -34,13 +36,19 @@ pub struct WebSocketPublisher {
     sender: broadcast::Sender<String>,
     address: SocketAddr,
     subscriber_count: Arc<AtomicUsize>,
+    metrics: FlashblockSequencerMetrics,
 }
 
 impl WebSocketPublisher {
     /// Create a new WebSocket publisher.
     pub fn new(address: SocketAddr) -> Self {
         let (sender, _) = broadcast::channel(FLASHBLOCK_CHANNEL_CAPACITY);
-        Self { sender, address, subscriber_count: Arc::new(AtomicUsize::new(0)) }
+        Self {
+            sender,
+            address,
+            subscriber_count: Arc::new(AtomicUsize::new(0)),
+            metrics: FlashblockSequencerMetrics::default(),
+        }
     }
 
     /// Get the number of active subscribers.
@@ -54,9 +62,14 @@ impl WebSocketPublisher {
     }
 
     /// Publish a flashblock to all subscribers.
-    pub fn publish(&self, payload: &BerachainFlashblockPayload) -> io::Result<usize> {
+    ///
+    /// Returns `(subscribers, bytes)` where `subscribers` is the receiver count and
+    /// `bytes` is the length of the serialized JSON payload. Exposing the size lets
+    /// callers record the `payload_bytes` metric without re-serializing.
+    pub fn publish(&self, payload: &BerachainFlashblockPayload) -> io::Result<(usize, usize)> {
         let json = serde_json::to_string(payload)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let bytes = json.len();
 
         match self.sender.send(json) {
             Ok(count) => {
@@ -67,11 +80,11 @@ impl WebSocketPublisher {
                     subscribers = count,
                     "published flashblock"
                 );
-                Ok(count)
+                Ok((count, bytes))
             }
             Err(_) => {
                 // No subscribers - this is fine
-                Ok(0)
+                Ok((0, bytes))
             }
         }
     }
@@ -99,19 +112,20 @@ impl WebSocketPublisher {
                     match result {
                         Ok((stream, addr)) => {
                             if self.subscriber_count.load(Ordering::Relaxed) >= MAX_CONNECTIONS {
+                                record_ws_connection("rejected_limit");
                                 warn!(target: "sequencer::publisher", %addr, "connection limit reached");
                                 continue;
                             }
                             let rx = self.sender.subscribe();
                             let count = self.subscriber_count.clone();
                             let conn_cancel = cancel.clone();
+                            let metrics = self.metrics.clone();
                             tokio::spawn(async move {
-                                if let Err(e) = handle_connection(stream, addr, rx, count, conn_cancel).await {
-                                    warn!(target: "sequencer::publisher", %addr, error = %e, "connection error");
-                                }
+                                handle_connection(stream, addr, rx, count, conn_cancel, metrics).await;
                             });
                         }
                         Err(e) => {
+                            record_ws_connection("accept_error");
                             error!(target: "sequencer::publisher", error = %e, "failed to accept connection");
                         }
                     }
@@ -129,10 +143,22 @@ async fn handle_connection(
     mut rx: broadcast::Receiver<String>,
     subscriber_count: Arc<AtomicUsize>,
     cancel: CancellationToken,
-) -> eyre::Result<()> {
-    let ws_stream = tokio::time::timeout(HANDSHAKE_TIMEOUT, accept_async(stream))
-        .await
-        .map_err(|_| eyre::eyre!("handshake timeout"))??;
+    metrics: FlashblockSequencerMetrics,
+) {
+    let ws_stream = match tokio::time::timeout(HANDSHAKE_TIMEOUT, accept_async(stream)).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
+            record_ws_connection("handshake_error");
+            warn!(target: "sequencer::publisher", %addr, error = %e, "handshake failed");
+            return;
+        }
+        Err(_) => {
+            record_ws_connection("handshake_error");
+            warn!(target: "sequencer::publisher", %addr, "handshake timeout");
+            return;
+        }
+    };
+    record_ws_connection("accepted");
     let (mut write, mut read) = ws_stream.split();
 
     subscriber_count.fetch_add(1, Ordering::Relaxed);
@@ -142,6 +168,9 @@ async fn handle_connection(
         count = subscriber_count.load(Ordering::Relaxed),
         "client connected"
     );
+    metrics.ws_subscribers.set(subscriber_count.load(Ordering::Relaxed) as f64);
+
+    let mut session_error: Option<String> = None;
 
     // Handle incoming messages and broadcast outgoing flashblocks
     loop {
@@ -156,11 +185,13 @@ async fn handle_connection(
                 match result {
                     Ok(json) => {
                         if let Err(e) = write.send(Message::Text(json.into())).await {
+                            session_error = Some(format!("send failed: {e}"));
                             debug!(target: "sequencer::publisher", %addr, error = %e, "failed to send message");
                             break;
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
+                        metrics.ws_client_lagged_total.increment(n);
                         warn!(target: "sequencer::publisher", %addr, skipped = n, "client lagging");
                     }
                     Err(broadcast::error::RecvError::Closed) => {
@@ -173,6 +204,7 @@ async fn handle_connection(
                 match msg {
                     Some(Ok(Message::Ping(data))) => {
                         if let Err(e) = write.send(Message::Pong(data)).await {
+                            session_error = Some(format!("pong failed: {e}"));
                             debug!(target: "sequencer::publisher", %addr, error = %e, "failed to send pong");
                             break;
                         }
@@ -181,6 +213,7 @@ async fn handle_connection(
                         break;
                     }
                     Some(Err(e)) => {
+                        session_error = Some(format!("ws error: {e}"));
                         debug!(target: "sequencer::publisher", %addr, error = %e, "websocket error");
                         break;
                     }
@@ -190,6 +223,11 @@ async fn handle_connection(
         }
     }
 
+    if let Some(err) = session_error {
+        record_ws_connection("closed_error");
+        warn!(target: "sequencer::publisher", %addr, %err, "connection error");
+    }
+
     subscriber_count.fetch_sub(1, Ordering::Relaxed);
     info!(
         target: "sequencer::publisher",
@@ -197,6 +235,5 @@ async fn handle_connection(
         count = subscriber_count.load(Ordering::Relaxed),
         "client disconnected"
     );
-
-    Ok(())
+    metrics.ws_subscribers.set(subscriber_count.load(Ordering::Relaxed) as f64);
 }
