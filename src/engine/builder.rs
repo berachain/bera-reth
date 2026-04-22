@@ -255,15 +255,12 @@ where
     let is_osaka = chain_spec.is_osaka_active_at_timestamp(attributes.timestamp);
     let withdrawals_rlp_length = attributes.withdrawals().length();
 
-    // Check if Prague3 is active and skip all transactions if so
-    if chain_spec.is_prague3_active_at_timestamp(attributes.timestamp()) {
-        warn!(target: "payload_builder", "Prague3 is active, building payload without transactions is not supported");
-        return Err(PayloadBuilderError::Other(Box::from(
-            "Prague 3 block building is not supported",
-        )));
+    let prague3_active = chain_spec.is_prague3_active_at_timestamp(attributes.timestamp());
+    if prague3_active {
+        debug!(target: "payload_builder", "Prague3 is active, building empty block");
     }
-    // Skip all transactions and proceed to finalize the empty block
-    while let Some(pool_tx) = best_txs.next() {
+
+    while !prague3_active && let Some(pool_tx) = best_txs.next() {
         // ensure we still have capacity for this transaction
         if cumulative_gas_used + pool_tx.gas_limit() > block_gas_limit {
             // we can't fit this transaction into the block, so we need to mark it as invalid

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Synced with reth v1.11.2
+# Synced with reth v1.11.3
 set -eo pipefail
 
 # Create the hive_assets directory

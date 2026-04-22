@@ -1,8 +1,18 @@
 #![allow(missing_docs)]
 
-use std::{env, error::Error};
+use std::{
+    env,
+    error::Error,
+    fs,
+    path::{Path, PathBuf},
+};
 use vergen::{BuildBuilder, CargoBuilder, Emitter};
 use vergen_git2::Git2Builder;
+
+const MAINNET_FIXTURE_PATH: &str = "tests/fixtures/mainnet-genesis.json";
+const BEPOLIA_FIXTURE_PATH: &str = "tests/fixtures/bepolia-genesis.json";
+const MAINNET_BAKED_FILENAME: &str = "mainnet-eth-genesis.json";
+const BEPOLIA_BAKED_FILENAME: &str = "bepolia-eth-genesis.json";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut emitter = Emitter::default();
@@ -32,6 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Set the build profile
     let out_dir = env::var("OUT_DIR").unwrap();
+    bake_eth_genesis_specs(&out_dir)?;
     let profile = out_dir.rsplit(std::path::MAIN_SEPARATOR).nth(3).unwrap();
     println!("cargo:rustc-env=BERA_RETH_BUILD_PROFILE={profile}");
 
@@ -63,5 +74,29 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     );
 
+    Ok(())
+}
+
+fn bake_eth_genesis_specs(out_dir: &str) -> Result<(), Box<dyn Error>> {
+    println!("cargo:rerun-if-changed={MAINNET_FIXTURE_PATH}");
+    println!("cargo:rerun-if-changed={BEPOLIA_FIXTURE_PATH}");
+
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR")?;
+    let mainnet_out = Path::new(out_dir).join(MAINNET_BAKED_FILENAME);
+    let bepolia_out = Path::new(out_dir).join(BEPOLIA_BAKED_FILENAME);
+
+    copy_fixture_to_out_dir(&manifest_dir, MAINNET_FIXTURE_PATH, &mainnet_out)?;
+    copy_fixture_to_out_dir(&manifest_dir, BEPOLIA_FIXTURE_PATH, &bepolia_out)?;
+
+    Ok(())
+}
+
+fn copy_fixture_to_out_dir(
+    manifest_dir: &str,
+    fixture_relative_path: &str,
+    destination: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let source = PathBuf::from(manifest_dir).join(fixture_relative_path);
+    fs::copy(source, destination)?;
     Ok(())
 }
