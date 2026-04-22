@@ -3,15 +3,22 @@
 //! The REPL completes `namespace.method` tokens (e.g. `eth.getLogs`). JSON-RPC uses
 //! `namespace_method`; this module only stores the **suffix** after the namespace
 //! (the part after `_` or `.`), taken from upstream reth’s `#[method(name = "...")]`
-//! macros in `rpc-eth-api` and `rpc-api`, plus Berachain’s `beraAdmin_*` surface.
+//! macros in `rpc-eth-api` and `rpc-api`, plus Berachain’s `beradmin_*` surface.
 //! When upstream adds RPCs, refresh these tables from the same reth sources.
 //!
 //! Use `RPC_NAMESPACE_TABLE` to walk all namespaces, or `method_suffixes` /
 //! `dot_completions_for_namespace` for one namespace.
 
-/// Berachain extension namespace (`beraAdmin_*` JSON-RPC).
-pub const BERA_ADMIN_METHOD_SUFFIXES: &[&str] =
-    &["detailedPeers", "nodeStatus", "banPeer", "penalizePeer", "prepareCanary", "submitCanary"];
+/// Berachain extension namespace (`beradmin_*` JSON-RPC; matches `#[rpc(namespace = "beradmin")]`).
+pub const BERA_ADMIN_METHOD_SUFFIXES: &[&str] = &[
+    "detailedPeers",
+    "nodeStatus",
+    "banPeer",
+    "penalizePeer",
+    "prepareCanary",
+    "submitCanary",
+    "sealedBlockAttribution",
+];
 
 /// `eth_*` methods from reth.
 pub const ETH_METHOD_SUFFIXES: &[&str] = &[
@@ -290,7 +297,7 @@ pub const RPC_NAMESPACE_TABLE: &[(&str, &[&str])] = &[
     ("mev", MEV_METHOD_SUFFIXES),
     ("testing", TESTING_METHOD_SUFFIXES),
     ("flashbots", FLASHBOTS_METHOD_SUFFIXES),
-    ("beraAdmin", BERA_ADMIN_METHOD_SUFFIXES),
+    ("beradmin", BERA_ADMIN_METHOD_SUFFIXES),
 ];
 
 /// Returns method suffixes for a namespace, or empty if unknown.
@@ -335,7 +342,8 @@ mod tests {
 
     #[test]
     fn bera_admin_dot_forms() {
-        let v = dot_completions_for_namespace("beraAdmin");
-        assert!(v.iter().any(|s| s == "beraAdmin.detailedPeers"));
+        let v = dot_completions_for_namespace("beradmin");
+        assert!(v.iter().any(|s| s == "beradmin.detailedPeers"));
+        assert!(v.iter().any(|s| s == "beradmin.sealedBlockAttribution"));
     }
 }

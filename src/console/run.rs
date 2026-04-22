@@ -15,7 +15,7 @@ pub async fn run_console(cmd: ConsoleCommand) -> Result<()> {
     let chain_id =
         rpc.request_value("eth_chainId", None).await.ok().and_then(|v| parse_chain_id(&v));
 
-    let bera_admin_status = rpc.request_value("beraAdmin_nodeStatus", None).await.ok();
+    let bera_admin_status = rpc.request_value("beradmin_nodeStatus", None).await.ok();
     let has_bera_admin = bera_admin_status.is_some();
 
     if let Some(script) = cmd.exec.as_deref() {
