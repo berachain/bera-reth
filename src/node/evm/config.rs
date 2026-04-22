@@ -40,10 +40,10 @@ use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 const BERACHAIN_BLOCK_TIME_SECONDS: u64 = 2;
 
 /// BRIP-0010: Contract code size limit increase from 24 KB to 32 KB (Osaka)
-const MAX_CODE_SIZE_OSAKA: usize = 32_768;
+pub(crate) const MAX_CODE_SIZE_OSAKA: usize = 32_768;
 
 /// BRIP-0010: Contract initcode size limit increase from 48 KB to 64 KB (Osaka)
-const MAX_INITCODE_SIZE_OSAKA: usize = 65_536;
+pub(crate) const MAX_INITCODE_SIZE_OSAKA: usize = 65_536;
 
 #[derive(Debug, Clone)]
 pub struct BerachainEvmConfig {

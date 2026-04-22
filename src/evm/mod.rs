@@ -439,6 +439,7 @@ mod tests {
 #[cfg(test)]
 mod osaka_eip_tests {
     use super::*;
+    use crate::node::evm::config::{MAX_CODE_SIZE_OSAKA, MAX_INITCODE_SIZE_OSAKA};
     use alloy_primitives::{Bytes, U256, address, hex};
     use reth::revm::{
         context_interface::result::ExecutionResult,
@@ -448,19 +449,8 @@ mod osaka_eip_tests {
         state::{AccountInfo, Bytecode},
     };
 
-    /// EIP-7951 post-Osaka gas cost for P256VERIFY precompile.
     const P256VERIFY_OSAKA_GAS: u64 = 6_900;
-
-    /// EIP-7883 post-Osaka minimum gas for MODEXP (up from 200).
     const MODEXP_MIN_GAS_OSAKA: u64 = 500;
-
-    /// Max runtime code size after BRIP-0010 (32 KB).
-    const OSAKA_MAX_CODE_SIZE: usize = 32_768;
-
-    /// Max initcode size after BRIP-0010 (64 KB).
-    const OSAKA_MAX_INITCODE_SIZE: usize = 65_536;
-
-    /// Default max runtime code size pre-Osaka (EIP-170).
     const DEFAULT_MAX_CODE_SIZE: usize = 24_576;
 
     const CALLER: Address = address!("0x1000000000000000000000000000000000000001");
@@ -488,8 +478,8 @@ mod osaka_eip_tests {
         let mut cfg = CfgEnv::default();
         cfg.spec = SpecId::OSAKA;
         cfg.chain_id = 1;
-        cfg.limit_contract_code_size = Some(OSAKA_MAX_CODE_SIZE);
-        cfg.limit_contract_initcode_size = Some(OSAKA_MAX_INITCODE_SIZE);
+        cfg.limit_contract_code_size = Some(MAX_CODE_SIZE_OSAKA);
+        cfg.limit_contract_initcode_size = Some(MAX_INITCODE_SIZE_OSAKA);
         cfg
     }
 
@@ -762,7 +752,7 @@ mod osaka_eip_tests {
         // 28 KB is larger than the pre-Osaka 24 KB limit but fits within the 32 KB Osaka limit.
         let runtime_len: u16 = 28_000;
         assert!(runtime_len as usize > DEFAULT_MAX_CODE_SIZE);
-        assert!((runtime_len as usize) < OSAKA_MAX_CODE_SIZE);
+        assert!((runtime_len as usize) < MAX_CODE_SIZE_OSAKA);
 
         let init_code = create_init_code_returning_stops(runtime_len);
         let mut db = CacheDB::new(EmptyDB::default());
