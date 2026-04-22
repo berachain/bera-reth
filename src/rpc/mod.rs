@@ -194,6 +194,11 @@ where
         let chain_spec = ctx.node.provider().chain_spec();
         let chain_id = chain_spec.chain().id();
         let datadir = ctx.config.datadir().data_dir().to_path_buf();
+        let known_peers_file = ctx
+            .config
+            .network
+            .persistent_peers_file(ctx.config.datadir().known_peers());
+        crate::pog::configure_shutdown_peer_curation(datadir.clone(), known_peers_file);
         let client_version = std::env::var("BERA_RETH_P2P_CLIENT_VERSION")
             .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
 

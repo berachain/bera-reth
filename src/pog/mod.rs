@@ -4,7 +4,16 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+pub mod peer_curation;
+
 static POG_CLI_ENABLED: AtomicBool = AtomicBool::new(false);
+static SHUTDOWN_PEER_CURATION: OnceLock<Mutex<Option<ShutdownPeerCurationConfig>>> = OnceLock::new();
+
+#[derive(Debug, Clone)]
+struct ShutdownPeerCurationConfig {
+    known_peers_path: PathBuf,
+    pog_db_path: PathBuf,
+}
 
 /// Set from `main` after parsing CLI. When false (default), PoG RPC modules and watcher are off.
 pub fn set_pog_cli_enabled(enabled: bool) {
@@ -13,6 +22,39 @@ pub fn set_pog_cli_enabled(enabled: bool) {
 
 pub fn pog_cli_enabled() -> bool {
     POG_CLI_ENABLED.load(Ordering::SeqCst)
+}
+
+fn shutdown_peer_curation_slot() -> &'static Mutex<Option<ShutdownPeerCurationConfig>> {
+    SHUTDOWN_PEER_CURATION.get_or_init(|| Mutex::new(None))
+}
+
+/// Capture the paths required for post-shutdown known-peers curation.
+pub fn configure_shutdown_peer_curation(datadir: PathBuf, known_peers_path: Option<PathBuf>) {
+    let mut guard = shutdown_peer_curation_slot().lock().unwrap_or_else(|e| e.into_inner());
+    *guard = known_peers_path
+        .map(|known_peers_path| ShutdownPeerCurationConfig {
+            known_peers_path,
+            pog_db_path: datadir.join("proof_of_gossip.db"),
+        });
+}
+
+/// Run known-peers curation after reth completes graceful shutdown peer persistence.
+pub fn run_shutdown_peer_curation_if_enabled() {
+    if !pog_cli_enabled() {
+        return;
+    }
+
+    let config = shutdown_peer_curation_slot().lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let Some(config) = config else {
+        info!(
+            target: "bera_reth::pog_peer_curation",
+            "Skipping known-peers.json curation; persistent peers file is disabled"
+        );
+        return;
+    };
+
+    let _ =
+        peer_curation::curate_known_peers_file(&config.known_peers_path, &config.pog_db_path);
 }
 
 use crate::primitives::BerachainHeader;

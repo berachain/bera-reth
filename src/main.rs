@@ -88,7 +88,11 @@ fn main() {
                         .launch_with_debug_capabilities()
                         .await?;
 
-                    node_exit_future.await
+                    let exit_result = node_exit_future.await;
+                    if args.pog {
+                        bera_reth::pog::run_shutdown_peer_curation_if_enabled();
+                    }
+                    exit_result
                 },
             ) {
                 eprintln!("Error: {err:?}");
