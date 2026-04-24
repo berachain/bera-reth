@@ -1,11 +1,10 @@
 use clap::Args;
 use reth_cli_runner::CliRunner;
 
-/// JSON-RPC console (IPC, HTTP, or WebSocket).
+/// JSON-RPC console over IPC.
 #[derive(Debug, Clone, Args)]
 pub struct ConsoleCommand {
-    /// IPC path, or `http(s)://…`, or `ws(s)://…`. If omitted, uses the platform default
-    /// datadir with `reth.ipc`.
+    /// IPC path. If omitted, uses the platform default datadir with `reth.ipc`.
     #[arg(value_name = "ENDPOINT")]
     pub endpoint: Option<String>,
 
