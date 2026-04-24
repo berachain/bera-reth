@@ -55,22 +55,6 @@ pub struct NodeStatusResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TxAttribution {
-    pub tx_hash: B256,
-    pub from_peer_id: Option<String>,
-    /// `(effective_gas_price − base_fee) × gas_used`
-    pub effective_tip_wei: u128,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SealedBlockAttributionResponse {
-    pub block_number: u64,
-    pub transactions: Vec<TxAttribution>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PrepareCanaryResponse {
     pub peer_id: String,
     pub enode: String,
@@ -85,4 +69,56 @@ pub struct SubmitCanaryResponse {
     pub tx_hash: B256,
     pub peer_id: String,
     pub enode: String,
+}
+
+// ---------------------------------------------------------------------------
+// Sealed-tx-fact export wire shape (BERA-265).
+// ---------------------------------------------------------------------------
+
+/// Reserved wire slot for subsequent-peer relay records. Always serialized as `[]` in v1
+/// (see brief §5.7 / AC-R4); BERA-261 populates it once upstream reth lands BERA-260.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtraHear {
+    pub peer_id: String,
+    pub heard_at_ms: u64,
+}
+
+/// JSON-RPC params for `beradmin_exportSealedTxFacts`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportSealedTxFactsRequest {
+    /// Exclusive lower bound on `id`. `0` means "start from the beginning of retained history."
+    pub after_id: u64,
+    /// Requested page size. Server rejects values outside `[1, server_max_limit]`.
+    pub limit: u32,
+}
+
+/// One `sealed_tx_fact` row as it appears on the wire.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SealedTxFactRow {
+    pub id: u64,
+    pub sealed_block_number: u64,
+    pub tx_hash: String,
+    pub first_peer_id: Option<String>,
+    pub first_heard_ms: u64,
+    /// Effective tip in wei, encoded as a `u128` "Quantity" (lowercase 0x-prefixed
+    /// minimal hex, `"0x0"` for zero). See brief §5.5 and the `DRIFT-SENTINEL` resolution.
+    #[serde(with = "alloy_serde::quantity")]
+    pub effective_tip_wei: u128,
+    pub tip_formula_version: u32,
+    /// Reserved slot for BERA-261 extras-population. Always `[]` in v1.
+    pub extra_hears: Vec<ExtraHear>,
+}
+
+/// JSON-RPC response for `beradmin_exportSealedTxFacts`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportSealedTxFactsResponse {
+    pub rows: Vec<SealedTxFactRow>,
+    pub next_after_id: u64,
+    pub high_water_id: u64,
+    pub min_retained_id: u64,
+    pub truncated: bool,
 }

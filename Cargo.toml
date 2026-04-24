@@ -35,6 +35,7 @@ jsonrpsee-proc-macros = "0.26.0"
 
 async-trait = "0.1.88"
 futures = "0.3.32"
+metrics = "0.24"
 modular-bitfield = "0.13.1"
 # RUSTSEC-2026-0097: use >=0.8.6 on the 0.8 release line.
 rand = "0.8.6"

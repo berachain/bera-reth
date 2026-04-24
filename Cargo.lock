@@ -1479,6 +1479,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
  "libc",
+ "metrics",
  "modular-bitfield",
  "rand 0.8.6",
  "reedline",

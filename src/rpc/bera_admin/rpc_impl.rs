@@ -1,19 +1,19 @@
 //! `BerAdminImpl` and [`BerAdminApiServer`](super::BerAdminApiServer) implementation.
 
-use super::{helpers::*, types::*};
 use super::BerAdminApiServer;
+use super::{helpers::*, types::*};
 
 use crate::{
     chainspec::BerachainChainSpec,
     pog::{
-        self, InflightProbe, PendingPrepare, PogAttributionStore, PogCoordinator, PogProvider,
+        self, InflightProbe, PendingPrepare, PogCoordinator, PogProvider, PogSqliteStore,
         build_unsigned_canary, min_balance_for_canary, unsigned_tx_hex,
     },
     primitives::{BerachainBlock, BerachainHeader},
     transaction::{BerachainTxEnvelope, BerachainTxType},
 };
 use alloy_consensus::{EthereumTxEnvelope, Transaction};
-use alloy_eips::{BlockHashOrNumber, Decodable2718};
+use alloy_eips::Decodable2718;
 use alloy_primitives::{Address, U256, hex};
 use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
@@ -31,8 +31,7 @@ pub struct BerAdminImpl<Network, Provider> {
     chain_spec: Arc<BerachainChainSpec>,
     client_version: String,
     pog: Arc<PogCoordinator>,
-    attribution: Arc<PogAttributionStore>,
-    pog_db: Arc<pog::PogDb>,
+    store: Arc<PogSqliteStore>,
 }
 
 impl<Network, Provider> BerAdminImpl<Network, Provider> {
@@ -42,10 +41,9 @@ impl<Network, Provider> BerAdminImpl<Network, Provider> {
         chain_spec: Arc<BerachainChainSpec>,
         client_version: String,
         pog: Arc<PogCoordinator>,
-        attribution: Arc<PogAttributionStore>,
     ) -> Self {
-        let pog_db = pog.pog_db();
-        Self { network, provider, chain_spec, client_version, pog, attribution, pog_db }
+        let store = pog.store();
+        Self { network, provider, chain_spec, client_version, pog, store }
     }
 }
 
@@ -67,7 +65,7 @@ where
             .await
             .map_err(|e| ErrorObjectOwned::owned(-32000, e.to_string(), None::<()>))?;
 
-        let pog_statuses = self.pog_db.all_peer_statuses().map_err(|e| {
+        let pog_statuses = self.store.all_peer_statuses().map_err(|e| {
             ErrorObjectOwned::owned(
                 -32000,
                 format!("pog peer status query failed: {e}"),
@@ -421,80 +419,70 @@ where
         })
     }
 
-    async fn sealed_block_attribution(
+    /// Cursor-paginated sealed-tx-fact export (BERA-265 §5.7).
+    ///
+    /// Uses `PogSqliteStore::read_conn` exclusively (AC-R6). `effective_tip_wei` is
+    /// returned as the ethereum-spec "Quantity" hex-`u128` encoding via
+    /// `alloy_serde::quantity` on the `SealedTxFactRow` struct; storage holds the exact
+    /// wire string so no re-encoding happens here.
+    async fn export_sealed_tx_facts(
         &self,
-        block_number: Option<u64>,
-    ) -> RpcResult<SealedBlockAttributionResponse> {
-        let block_num = match block_number {
-            Some(n) => n,
-            None => self
-                .attribution
-                .sealed
-                .lock()
-                .map_err(|_| ErrorObjectOwned::owned(-32000, "lock poisoned", None::<()>))?
-                .latest()
-                .ok_or_else(|| {
-                    ErrorObjectOwned::owned(
-                        -32000,
-                        "no sealed blocks tracked by this node",
-                        None::<()>,
-                    )
-                })?,
-        };
+        request: ExportSealedTxFactsRequest,
+    ) -> RpcResult<ExportSealedTxFactsResponse> {
+        let ExportSealedTxFactsRequest { after_id, limit } = request;
 
-        let block = self
-            .provider
-            .block_by_number(block_num)
-            .map_err(|e| ErrorObjectOwned::owned(-32000, e.to_string(), None::<()>))?
-            .ok_or_else(|| {
-                ErrorObjectOwned::owned(-32000, format!("block {block_num} not found"), None::<()>)
+        // Range validation — reject, don't clamp. Server cap is CLI-configured
+        // (`--sealed-fact-export-max-limit`, default 10_000; see cli_ext).
+        if limit < 1 {
+            return Err(ErrorObjectOwned::owned(-32602, "limit must be >= 1", None::<()>));
+        }
+        let server_max = pog::sealed_fact_config().export_max_limit;
+        if limit > server_max {
+            return Err(ErrorObjectOwned::owned(
+                -32602,
+                format!("limit {limit} exceeds server max {server_max}"),
+                None::<()>,
+            ));
+        }
+
+        let outcome = self.store.export_sealed_tx_facts(after_id, limit).map_err(|e| {
+            ErrorObjectOwned::owned(-32000, format!("export query failed: {e}"), None::<()>)
+        })?;
+
+        let mut rows = Vec::with_capacity(outcome.rows.len());
+        for r in outcome.rows {
+            let tip = parse_u128_quantity(&r.effective_tip_wei).map_err(|e| {
+                ErrorObjectOwned::owned(
+                    -32000,
+                    format!("stored tip for fact id={} is not a valid u128 quantity ({e})", r.id),
+                    None::<()>,
+                )
             })?;
-
-        let in_sealed = self
-            .attribution
-            .sealed
-            .lock()
-            .map_err(|_| ErrorObjectOwned::owned(-32000, "lock poisoned", None::<()>))?
-            .contains(block_num);
-
-        if !in_sealed {
-            return Ok(SealedBlockAttributionResponse {
-                block_number: block_num,
-                transactions: vec![],
+            rows.push(SealedTxFactRow {
+                id: r.id,
+                sealed_block_number: r.sealed_block_number,
+                tx_hash: r.tx_hash,
+                first_peer_id: r.first_peer_id,
+                first_heard_ms: r.first_heard_ms,
+                effective_tip_wei: tip,
+                tip_formula_version: r.tip_formula_version,
+                extra_hears: Vec::new(),
             });
         }
 
-        let base_fee = block.header.base_fee_per_gas.unwrap_or(0) as u128;
-
-        let receipts = self
-            .provider
-            .receipts_by_block(BlockHashOrNumber::Number(block_num))
-            .map_err(|e| ErrorObjectOwned::owned(-32000, e.to_string(), None::<()>))?
-            .unwrap_or_default();
-
-        let prov = self
-            .attribution
-            .provenance
-            .lock()
-            .map_err(|_| ErrorObjectOwned::owned(-32000, "lock poisoned", None::<()>))?;
-
-        let mut prev_cumulative: u64 = 0;
-        let mut transactions = Vec::with_capacity(block.body.transactions.len());
-        for (tx, receipt) in block.body.transactions.iter().zip(receipts.iter()) {
-            let tx_hash = *TxHashRef::tx_hash(tx);
-            let gas_used = receipt.cumulative_gas_used.saturating_sub(prev_cumulative);
-            prev_cumulative = receipt.cumulative_gas_used;
-
-            let eff_price = tx.effective_gas_price(Some(base_fee as u64));
-            let effective_tip_wei = eff_price.saturating_sub(base_fee) * gas_used as u128;
-
-            let from_peer_id = prov.get(&tx_hash).map(|p| p.to_string());
-
-            transactions.push(TxAttribution { tx_hash, from_peer_id, effective_tip_wei });
-        }
-
-        Ok(SealedBlockAttributionResponse { block_number: block_num, transactions })
+        Ok(ExportSealedTxFactsResponse {
+            rows,
+            next_after_id: outcome.next_after_id,
+            high_water_id: outcome.high_water_id,
+            min_retained_id: outcome.min_retained_id,
+            truncated: outcome.truncated,
+        })
     }
+}
+
+fn parse_u128_quantity(s: &str) -> Result<u128, String> {
+    let stripped = s.strip_prefix("0x").unwrap_or(s);
+    u128::from_str_radix(stripped, 16).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -573,7 +561,7 @@ mod tests {
         assert_eq!(back.pog.as_ref().map(|p| p.failure_count), Some(0));
     }
 
-    // TP-5: nodeStatus includes ban_threshold
+    // nodeStatus includes ban_threshold
     #[test]
     fn node_status_ban_threshold_field_serializes() {
         let status = NodeStatusResponse {
@@ -601,7 +589,7 @@ mod tests {
         assert_eq!(obj["banThreshold"].as_i64(), Some(-51200));
     }
 
-    // TP-1: prepareCanary error cases (static logic tests)
+    // prepareCanary error cases (static logic tests)
     #[test]
     fn parse_peer_id_rejects_malformed() {
         assert!(parse_peer_id("notavalidpeerid").is_err());
@@ -616,51 +604,70 @@ mod tests {
         assert_eq!(parsed, peer);
     }
 
-    // TP-3/TP-4: sealedBlockAttribution logic (tip calculation unit test)
-    #[test]
-    fn effective_tip_calculation() {
-        let base_fee: u128 = 1_000_000_000;
-        let max_fee: u128 = 3_000_000_000;
-        let max_priority: u128 = 500_000_000;
-        let gas_used: u128 = 21000;
-
-        let eff_price = (base_fee + max_priority).min(max_fee);
-        let tip = eff_price.saturating_sub(base_fee) * gas_used;
-        assert_eq!(eff_price, 1_500_000_000);
-        assert_eq!(tip, 10_500_000_000_000u128);
-    }
+    // ---- Wire-shape tests for BERA-265 types ----
 
     #[test]
-    fn sealed_block_attribution_response_serializes() {
-        let r = SealedBlockAttributionResponse {
-            block_number: 42,
-            transactions: vec![TxAttribution {
-                tx_hash: B256::ZERO,
-                from_peer_id: Some("0xabc".to_string()),
-                effective_tip_wei: 1234,
-            }],
+    fn sealed_tx_fact_row_wire_shape_includes_empty_extra_hears() {
+        let row = SealedTxFactRow {
+            id: 12345,
+            sealed_block_number: 98765,
+            tx_hash: "0xdead".to_string(),
+            first_peer_id: Some("0xabc".to_string()),
+            first_heard_ms: 1_713_876_543_210,
+            effective_tip_wei: 0x1bc16d674ec80000_u128,
+            tip_formula_version: 1,
+            extra_hears: Vec::new(),
         };
-        let json = serde_json::to_value(&r).unwrap();
+        let json = serde_json::to_value(&row).unwrap();
         let obj = json.as_object().unwrap();
-        assert_eq!(obj["blockNumber"].as_u64(), Some(42));
-        let txs = obj["transactions"].as_array().unwrap();
-        assert_eq!(txs.len(), 1);
-        assert_eq!(txs[0]["fromPeerId"].as_str(), Some("0xabc"));
-        assert_eq!(txs[0]["effectiveTipWei"].as_u64(), Some(1234));
+        assert_eq!(obj["id"].as_u64(), Some(12345));
+        assert_eq!(obj["sealedBlockNumber"].as_u64(), Some(98765));
+        assert_eq!(obj["firstPeerId"].as_str(), Some("0xabc"));
+        assert_eq!(obj["effectiveTipWei"].as_str(), Some("0x1bc16d674ec80000"));
+        assert_eq!(obj["tipFormulaVersion"].as_u64(), Some(1));
+        let extras = obj["extraHears"].as_array().unwrap();
+        assert!(extras.is_empty(), "AC-R4: extra_hears must be [] in v1");
     }
 
     #[test]
-    fn sealed_block_attribution_null_from_peer_id() {
-        let r = SealedBlockAttributionResponse {
-            block_number: 1,
-            transactions: vec![TxAttribution {
-                tx_hash: B256::ZERO,
-                from_peer_id: None,
-                effective_tip_wei: 0,
-            }],
+    fn sealed_tx_fact_row_null_peer_id_round_trip() {
+        let row = SealedTxFactRow {
+            id: 1,
+            sealed_block_number: 1,
+            tx_hash: "0x00".to_string(),
+            first_peer_id: None,
+            first_heard_ms: 0,
+            effective_tip_wei: 0,
+            tip_formula_version: 1,
+            extra_hears: Vec::new(),
         };
-        let json = serde_json::to_value(&r).unwrap();
-        let txs = json["transactions"].as_array().unwrap();
-        assert!(txs[0]["fromPeerId"].is_null());
+        let json = serde_json::to_value(&row).unwrap();
+        assert!(json["firstPeerId"].is_null());
+        let back: SealedTxFactRow = serde_json::from_value(json).unwrap();
+        assert_eq!(back.effective_tip_wei, 0);
+        assert_eq!(back.first_peer_id, None);
+    }
+
+    #[test]
+    fn export_response_wire_shape() {
+        let resp = ExportSealedTxFactsResponse {
+            rows: vec![],
+            next_after_id: 0,
+            high_water_id: 0,
+            min_retained_id: 0,
+            truncated: false,
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+        for key in ["rows", "nextAfterId", "highWaterId", "minRetainedId", "truncated"] {
+            assert!(obj.contains_key(key), "missing key {key}");
+        }
+    }
+
+    #[test]
+    fn parse_u128_quantity_accepts_ethereum_spec_hex() {
+        assert_eq!(parse_u128_quantity("0x0").unwrap(), 0);
+        assert_eq!(parse_u128_quantity("0x1").unwrap(), 1);
+        assert_eq!(parse_u128_quantity("0x1bc16d674ec80000").unwrap(), 0x1bc16d674ec80000_u128);
     }
 }

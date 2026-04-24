@@ -45,9 +45,18 @@ struct PogTxProvenanceSink {
 
 impl TransactionProvenanceSink for PogTxProvenanceSink {
     fn record_accepted_from_peer(&self, peer_id: PeerId, accepted_tx_hashes: &[TxHash]) {
-        if let Ok(mut p) = self.store.provenance.lock() {
+        // reth fires this callback once per tx hash that was just successfully added to
+        // the pool by this peer (first-seen-wins already enforced upstream by
+        // `TransactionsManager::on_new_pooled_transactions`' retain closure). We simply
+        // forward each hash to the InflightTransactions RAM store; the safety belt /
+        // metrics bookkeeping lives inside `record_first_hear`.
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or_default();
+        if let Ok(mut inflight) = self.store.inflight.lock() {
             for &hash in accepted_tx_hashes {
-                p.insert(hash, peer_id);
+                inflight.record_first_hear(hash, peer_id, now_ms);
             }
         }
     }

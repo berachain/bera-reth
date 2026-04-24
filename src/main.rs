@@ -81,6 +81,14 @@ fn main() {
                 cli_components_builder,
                 async move |builder, args: BerachainExt| {
                     bera_reth::pog::set_pog_cli_enabled(args.pog);
+                    bera_reth::pog::set_sealed_fact_config(bera_reth::pog::PogSealedFactConfig {
+                        retention_hours: args.sealed_fact_retention_hours,
+                        max_inflight_entries: usize::try_from(
+                            args.sealed_fact_max_inflight_entries,
+                        )
+                        .unwrap_or(usize::MAX),
+                        export_max_limit: args.sealed_fact_export_max_limit,
+                    });
 
                     info!(target: "reth::cli", "Launching Berachain node");
                     let NodeHandle { node: _node, node_exit_future } = builder

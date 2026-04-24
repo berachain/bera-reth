@@ -1,5 +1,5 @@
 //! `beradmin` JSON-RPC namespace (WP1): detailed peers, node status, ban/penalize,
-//! sentinel-driven PoG prepare/submit.
+//! sentinel-driven PoG prepare/submit, sealed-tx-fact export.
 
 mod helpers;
 mod rpc_impl;
@@ -36,9 +36,13 @@ pub trait BerAdminApi {
     #[method(name = "submitCanary")]
     async fn submit_canary(&self, signed_tx: String) -> RpcResult<SubmitCanaryResponse>;
 
-    #[method(name = "sealedBlockAttribution")]
-    async fn sealed_block_attribution(
+    /// Cursor-paginated sealed-tx-fact export (BERA-265).
+    ///
+    /// Consumed by bera-sentinel to mirror durable per-tx attribution. Reads only
+    /// `PogSqliteStore::read_conn`; see AC-R6.
+    #[method(name = "exportSealedTxFacts")]
+    async fn export_sealed_tx_facts(
         &self,
-        block_number: Option<u64>,
-    ) -> RpcResult<SealedBlockAttributionResponse>;
+        request: ExportSealedTxFactsRequest,
+    ) -> RpcResult<ExportSealedTxFactsResponse>;
 }

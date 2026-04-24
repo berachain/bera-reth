@@ -17,7 +17,7 @@ pub const BERA_ADMIN_METHOD_SUFFIXES: &[&str] = &[
     "penalizePeer",
     "prepareCanary",
     "submitCanary",
-    "sealedBlockAttribution",
+    "exportSealedTxFacts",
 ];
 
 /// `eth_*` methods from reth.
@@ -344,6 +344,10 @@ mod tests {
     fn bera_admin_dot_forms() {
         let v = dot_completions_for_namespace("beradmin");
         assert!(v.iter().any(|s| s == "beradmin.detailedPeers"));
-        assert!(v.iter().any(|s| s == "beradmin.sealedBlockAttribution"));
+        assert!(v.iter().any(|s| s == "beradmin.exportSealedTxFacts"));
+        assert!(
+            !v.iter().any(|s| s == "beradmin.sealedBlockAttribution"),
+            "completion must drop the removed method"
+        );
     }
 }

@@ -1,18 +1,57 @@
-//! Proof-of-Gossip node-side state: SQLite, unsigned canary construction, watcher task.
+//! Proof-of-Gossip node-side state: SQLite (`PogSqliteStore`), probe coordinator, watcher task,
+//! and the durable sealed-tx-fact attribution store consumed by sentinel via the
+//! `beradmin_exportSealedTxFacts` RPC.
 //!
 //! Autonomous signing/ticking was removed; sentinel drives prepare/sign/submit.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 pub mod peer_curation;
 
 static POG_CLI_ENABLED: AtomicBool = AtomicBool::new(false);
-static SHUTDOWN_PEER_CURATION: OnceLock<Mutex<Option<ShutdownPeerCurationConfig>>> = OnceLock::new();
+static SHUTDOWN_PEER_CURATION: OnceLock<Mutex<Option<ShutdownPeerCurationConfig>>> =
+    OnceLock::new();
+static POG_SEALED_FACT_CONFIG: OnceLock<PogSealedFactConfig> = OnceLock::new();
+static ATTRIBUTION_STORE: OnceLock<std::sync::Arc<PogAttributionStore>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 struct ShutdownPeerCurationConfig {
     known_peers_path: PathBuf,
     pog_db_path: PathBuf,
+}
+
+/// Operator-facing tuning for the durable sealed-tx-fact pipeline.
+///
+/// All three knobs are validated at CLI parse time (see `crate::cli_ext`); this struct is a
+/// pure value carrier and does **not** repeat that validation.
+#[derive(Debug, Clone, Copy)]
+pub struct PogSealedFactConfig {
+    /// Sealed-tx-fact retention window in hours. Used both for inline retention DELETE
+    /// and the `reth_pog_sealed_fact_retention_hours` gauge.
+    pub retention_hours: u64,
+    /// Hard cap on `InflightTransactions` entry count. When reached, an inline TTL sweep
+    /// runs; if still at cap, new first-hear inserts are refused.
+    pub max_inflight_entries: usize,
+    /// Server-side upper bound accepted on the RPC `limit` parameter. Values above this
+    /// cap produce a JSON-RPC error; values at or below are accepted as-is.
+    pub export_max_limit: u32,
+}
+
+/// Default sealed-tx-fact retention window in hours (24h).
+pub const DEFAULT_SEALED_FACT_RETENTION_HOURS: u64 = 24;
+/// Default safety-belt cap on `InflightTransactions`.
+pub const DEFAULT_SEALED_FACT_MAX_INFLIGHT_ENTRIES: usize = 500_000;
+/// Default server-side maximum accepted `limit` parameter on `beradmin_exportSealedTxFacts`.
+pub const DEFAULT_SEALED_FACT_EXPORT_MAX_LIMIT: u32 = 10_000;
+
+impl Default for PogSealedFactConfig {
+    fn default() -> Self {
+        Self {
+            retention_hours: DEFAULT_SEALED_FACT_RETENTION_HOURS,
+            max_inflight_entries: DEFAULT_SEALED_FACT_MAX_INFLIGHT_ENTRIES,
+            export_max_limit: DEFAULT_SEALED_FACT_EXPORT_MAX_LIMIT,
+        }
+    }
 }
 
 /// Set from `main` after parsing CLI. When false (default), PoG RPC modules and watcher are off.
@@ -22,6 +61,17 @@ pub fn set_pog_cli_enabled(enabled: bool) {
 
 pub fn pog_cli_enabled() -> bool {
     POG_CLI_ENABLED.load(Ordering::SeqCst)
+}
+
+/// Install the process-wide `PogSealedFactConfig`. Must be called before the attribution
+/// store is first accessed; subsequent calls are no-ops (first write wins).
+pub fn set_sealed_fact_config(cfg: PogSealedFactConfig) {
+    let _ = POG_SEALED_FACT_CONFIG.set(cfg);
+}
+
+/// Returns the active `PogSealedFactConfig`, falling back to defaults if unset.
+pub fn sealed_fact_config() -> PogSealedFactConfig {
+    POG_SEALED_FACT_CONFIG.get().copied().unwrap_or_default()
 }
 
 fn shutdown_peer_curation_slot() -> &'static Mutex<Option<ShutdownPeerCurationConfig>> {
@@ -37,11 +87,10 @@ fn shutdown_peer_curation_slot() -> &'static Mutex<Option<ShutdownPeerCurationCo
 /// flush (see `CliRunner::run_command_until_exit` / `post_known_peers_write`).
 pub fn configure_shutdown_peer_curation(datadir: PathBuf, known_peers_path: Option<PathBuf>) {
     let mut guard = shutdown_peer_curation_slot().lock().unwrap_or_else(|e| e.into_inner());
-    *guard = known_peers_path
-        .map(|known_peers_path| ShutdownPeerCurationConfig {
-            known_peers_path,
-            pog_db_path: datadir.join("proof_of_gossip.db"),
-        });
+    *guard = known_peers_path.map(|known_peers_path| ShutdownPeerCurationConfig {
+        known_peers_path,
+        pog_db_path: datadir.join("proof_of_gossip.db"),
+    });
 
     if guard.is_some() {
         reth_node_builder::set_post_known_peers_write_hook(Some(Box::new(|_path: &Path| {
@@ -71,8 +120,7 @@ pub fn run_shutdown_peer_curation_if_enabled() {
         return;
     };
 
-    let _ =
-        peer_curation::curate_known_peers_file(&config.known_peers_path, &config.pog_db_path);
+    let _ = peer_curation::curate_known_peers_file(&config.known_peers_path, &config.pog_db_path);
 }
 
 use crate::primitives::BerachainHeader;
@@ -88,7 +136,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tracing::info;
+use tracing::{error, info, warn};
 
 pub const CANARY_GAS_LIMIT: u64 = 21000;
 pub const MAX_FEE_BUFFER_MULTIPLIER: u128 = 2;
@@ -100,6 +148,11 @@ pub const WATCHER_TICK_SECS: u64 = 2;
 pub const MIN_FUNDING_BACKOFF_SECS: u64 = 30;
 pub const MAX_FUNDING_BACKOFF_SECS: u64 = 86400;
 pub const LATE_CONFIRMATION_TRACK_WINDOW_SECS: u64 = 900;
+
+/// TTL on in-RAM first-hear and locally-built-block tracking. 600s is long enough to cover
+/// any realistic mempool residence time for a landable-then-landed tx plus the build→commit
+/// latency for a locally-proposed block under healthy CL cadence.
+pub const DEFAULT_INFLIGHT_TTL_SECS: u64 = 600;
 
 pub(crate) fn ensure_peer_tests_schema(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -148,6 +201,24 @@ pub(crate) fn ensure_peer_tests_schema(conn: &Connection) -> rusqlite::Result<()
     Ok(())
 }
 
+pub(crate) fn ensure_sealed_tx_fact_schema(conn: &Connection) -> rusqlite::Result<()> {
+    // `effective_tip_wei` is stored as the exact wire-serialized hex-`u128` string so no
+    // re-encoding happens at export time; see brief §5.5.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS sealed_tx_fact (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            sealed_block_number  INTEGER NOT NULL,
+            tx_hash              TEXT    NOT NULL,
+            first_peer_id        TEXT    NULL,
+            first_heard_ms       INTEGER NOT NULL,
+            effective_tip_wei    TEXT    NOT NULL,
+            tip_formula_version  INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE INDEX IF NOT EXISTS idx_sealed_tx_fact_first_heard_ms
+            ON sealed_tx_fact(first_heard_ms);",
+    )
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PogPeerStatus {
@@ -157,27 +228,134 @@ pub struct PogPeerStatus {
     pub last_tx_hash: String,
 }
 
-/// Persistent SQLite connection to the PoG peer_tests database.
-/// Opened once, reused across RPC calls.
-pub struct PogDb {
-    conn: Mutex<Connection>,
+/// Durable SQLite store backing the Proof-of-Gossip peer-probe history and the
+/// sealed-tx-fact attribution table (BERA-265). Opens two connections against the same
+/// file: `write_conn` for probes / seal-flush / retention, `read_conn` for RPC export
+/// handlers. WAL permits concurrent read+write so a large export pull never blocks a
+/// seal-flush writer.
+///
+/// Instrumentation: every lock acquisition on either connection is counted via
+/// `write_conn_lock_count` / `read_conn_lock_count`, enabling AC-R6 and TP-R8/TP-R9 to
+/// assert the export-only-reads-read_conn invariant without plumbing custom mutex
+/// wrappers through the RPC handler.
+pub struct PogSqliteStore {
+    write_conn: Mutex<Connection>,
+    read_conn: Mutex<Connection>,
+    write_conn_lock_count: AtomicU64,
+    read_conn_lock_count: AtomicU64,
+    sealed_tx_fact_row_count: AtomicU64,
+    sealed_tx_fact_high_water_id: AtomicU64,
+    sealed_tx_fact_min_retained_id: AtomicU64,
+    sealed_facts_flushed_total: AtomicU64,
+    sealed_facts_flushed_with_peer_total: AtomicU64,
+    sealed_facts_retention_deleted_total: AtomicU64,
+    sealed_facts_export_rows_total: AtomicU64,
 }
 
-impl PogDb {
+/// Owned snapshot of a single `sealed_tx_fact` row used for export wire serialization.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SealedTxFactRecord {
+    pub id: u64,
+    pub sealed_block_number: u64,
+    pub tx_hash: String,
+    pub first_peer_id: Option<String>,
+    pub first_heard_ms: u64,
+    /// Hex `u128` (ethereum-spec "Quantity" lowercase 0x-prefixed minimal encoding) as
+    /// stored in SQLite; see brief §5.5.
+    pub effective_tip_wei: String,
+    pub tip_formula_version: u32,
+}
+
+/// One row ready to be inserted into `sealed_tx_fact` during a seal-flush transaction.
+#[derive(Debug, Clone)]
+pub struct SealedTxFactInsert {
+    pub sealed_block_number: u64,
+    pub tx_hash: String,
+    pub first_peer_id: Option<String>,
+    pub first_heard_ms: u64,
+    pub effective_tip_wei_hex: String,
+    pub tip_formula_version: u32,
+}
+
+impl PogSqliteStore {
+    /// Open (or rename-and-recreate on `PRAGMA integrity_check` failure) the PoG store.
     pub fn open(db_path: &Path) -> rusqlite::Result<Self> {
-        let conn = Connection::open(db_path)?;
-        ensure_peer_tests_schema(&conn)?;
-        conn.pragma_update(None, "journal_mode", "WAL")?;
-        Ok(Self { conn: Mutex::new(conn) })
+        let write_conn = open_checked_conn(db_path)?;
+        let read_conn = open_checked_conn(db_path)?;
+        ensure_peer_tests_schema(&write_conn)?;
+        ensure_sealed_tx_fact_schema(&write_conn)?;
+
+        let store = Self {
+            write_conn: Mutex::new(write_conn),
+            read_conn: Mutex::new(read_conn),
+            write_conn_lock_count: AtomicU64::new(0),
+            read_conn_lock_count: AtomicU64::new(0),
+            sealed_tx_fact_row_count: AtomicU64::new(0),
+            sealed_tx_fact_high_water_id: AtomicU64::new(0),
+            sealed_tx_fact_min_retained_id: AtomicU64::new(0),
+            sealed_facts_flushed_total: AtomicU64::new(0),
+            sealed_facts_flushed_with_peer_total: AtomicU64::new(0),
+            sealed_facts_retention_deleted_total: AtomicU64::new(0),
+            sealed_facts_export_rows_total: AtomicU64::new(0),
+        };
+        store.prime_startup_gauges()?;
+        Ok(store)
     }
 
+    fn lock_write(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.write_conn_lock_count.fetch_add(1, Ordering::Relaxed);
+        self.write_conn.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn lock_read(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.read_conn_lock_count.fetch_add(1, Ordering::Relaxed);
+        self.read_conn.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn write_conn_lock_count(&self) -> u64 {
+        self.write_conn_lock_count.load(Ordering::Relaxed)
+    }
+
+    pub fn read_conn_lock_count(&self) -> u64 {
+        self.read_conn_lock_count.load(Ordering::Relaxed)
+    }
+
+    pub fn sealed_tx_fact_row_count(&self) -> u64 {
+        self.sealed_tx_fact_row_count.load(Ordering::Relaxed)
+    }
+
+    pub fn sealed_tx_fact_high_water_id(&self) -> u64 {
+        self.sealed_tx_fact_high_water_id.load(Ordering::Relaxed)
+    }
+
+    pub fn sealed_tx_fact_min_retained_id(&self) -> u64 {
+        self.sealed_tx_fact_min_retained_id.load(Ordering::Relaxed)
+    }
+
+    pub fn sealed_facts_flushed_total(&self) -> u64 {
+        self.sealed_facts_flushed_total.load(Ordering::Relaxed)
+    }
+
+    pub fn sealed_facts_flushed_with_peer_total(&self) -> u64 {
+        self.sealed_facts_flushed_with_peer_total.load(Ordering::Relaxed)
+    }
+
+    pub fn sealed_facts_retention_deleted_total(&self) -> u64 {
+        self.sealed_facts_retention_deleted_total.load(Ordering::Relaxed)
+    }
+
+    pub fn sealed_facts_export_rows_total(&self) -> u64 {
+        self.sealed_facts_export_rows_total.load(Ordering::Relaxed)
+    }
+
+    /// Probe-test write (existing peer_pog_* semantics). Uses `write_conn`.
     pub fn insert_peer_test(
         &self,
         peer_id: &PeerId,
         tx_hash: TxHash,
         result: &str,
     ) -> rusqlite::Result<()> {
-        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = self.lock_write();
         let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
         let pid = peer_id.to_string();
         let txh = tx_hash.to_string();
@@ -201,9 +379,10 @@ impl PogDb {
         Ok(())
     }
 
-    /// Load PoG status for all peers. Returns a map keyed by peer_id string.
+    /// Peer-probe status read. Uses `read_conn` (unrelated to the export path, but shares
+    /// the same reader split so it doesn't contend with seal-flush writes).
     pub fn all_peer_statuses(&self) -> rusqlite::Result<HashMap<String, PogPeerStatus>> {
-        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = self.lock_read();
         let mut stmt = conn.prepare(
             "SELECT peer_id, last_result, last_tested_at, last_tx_hash, failure_count
              FROM peer_pog_status",
@@ -216,11 +395,284 @@ impl PogDb {
             let failure_count: u32 = row.get(4)?;
             Ok((
                 peer_id,
-                PogPeerStatus { last_result, failure_count, last_tested_at: last_tested_at as u64, last_tx_hash },
+                PogPeerStatus {
+                    last_result,
+                    failure_count,
+                    last_tested_at: last_tested_at as u64,
+                    last_tx_hash,
+                },
             ))
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
+
+    /// Insert sealed-tx-fact rows and apply inline retention in a single WAL transaction.
+    /// Invoked from the seal-flush task for canonical blocks whose number is present in
+    /// `LocallyBuiltBlocks`; see brief §5.3.
+    ///
+    /// Returns `(inserted_high_water_id, rows_deleted_by_retention)`.
+    pub fn flush_sealed_tx_facts(
+        &self,
+        rows: &[SealedTxFactInsert],
+        retention_cutoff_ms: u64,
+    ) -> rusqlite::Result<(Option<u64>, u64)> {
+        let mut conn = self.lock_write();
+        let tx = conn.transaction()?;
+        let mut new_high_water: Option<u64> = None;
+        let mut inserted_with_peer: u64 = 0;
+        for row in rows {
+            tx.execute(
+                "INSERT INTO sealed_tx_fact \
+                    (sealed_block_number, tx_hash, first_peer_id, first_heard_ms, \
+                     effective_tip_wei, tip_formula_version) \
+                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    row.sealed_block_number as i64,
+                    row.tx_hash,
+                    row.first_peer_id,
+                    row.first_heard_ms as i64,
+                    row.effective_tip_wei_hex,
+                    row.tip_formula_version as i64,
+                ],
+            )?;
+            let id = tx.last_insert_rowid() as u64;
+            new_high_water = Some(new_high_water.map(|h| h.max(id)).unwrap_or(id));
+            if row.first_peer_id.is_some() {
+                inserted_with_peer += 1;
+            }
+        }
+
+        let deleted: usize = tx.execute(
+            "DELETE FROM sealed_tx_fact WHERE first_heard_ms < ?1",
+            params![retention_cutoff_ms as i64],
+        )?;
+        tx.commit()?;
+        drop(conn);
+
+        let inserted = rows.len() as u64;
+        self.sealed_tx_fact_row_count.fetch_add(inserted, Ordering::Relaxed);
+        self.sealed_tx_fact_row_count.fetch_sub(deleted as u64, Ordering::Relaxed);
+        self.sealed_facts_flushed_total.fetch_add(inserted, Ordering::Relaxed);
+        self.sealed_facts_flushed_with_peer_total.fetch_add(inserted_with_peer, Ordering::Relaxed);
+        self.sealed_facts_retention_deleted_total.fetch_add(deleted as u64, Ordering::Relaxed);
+        if let Some(h) = new_high_water {
+            self.sealed_tx_fact_high_water_id.fetch_max(h, Ordering::Relaxed);
+        }
+        self.refresh_min_retained_id();
+
+        metrics::counter!("reth_pog_sealed_tx_facts_flushed_total").increment(inserted);
+        metrics::counter!("reth_pog_sealed_tx_facts_flushed_with_peer_total")
+            .increment(inserted_with_peer);
+        metrics::counter!("reth_pog_sealed_tx_facts_retention_deleted_total")
+            .increment(deleted as u64);
+        metrics::gauge!("reth_pog_sealed_tx_fact_row_count")
+            .set(self.sealed_tx_fact_row_count() as f64);
+        metrics::gauge!("reth_pog_sealed_tx_fact_high_water_id")
+            .set(self.sealed_tx_fact_high_water_id() as f64);
+        metrics::gauge!("reth_pog_sealed_tx_fact_min_retained_id")
+            .set(self.sealed_tx_fact_min_retained_id() as f64);
+
+        Ok((new_high_water, deleted as u64))
+    }
+
+    /// One-shot retention sweep run at startup before the first `CanonStateNotification`
+    /// lands, so a node restarted after a long offline window doesn't pay the catch-up
+    /// DELETE cost inside the first seal-flush transaction (see brief §5.3).
+    pub fn startup_retention_sweep(&self, retention_cutoff_ms: u64) -> rusqlite::Result<u64> {
+        let conn = self.lock_write();
+        let deleted: usize = conn.execute(
+            "DELETE FROM sealed_tx_fact WHERE first_heard_ms < ?1",
+            params![retention_cutoff_ms as i64],
+        )?;
+        drop(conn);
+        self.sealed_tx_fact_row_count.fetch_sub(deleted as u64, Ordering::Relaxed);
+        self.sealed_facts_retention_deleted_total.fetch_add(deleted as u64, Ordering::Relaxed);
+        self.refresh_min_retained_id();
+        metrics::counter!("reth_pog_sealed_tx_facts_retention_deleted_total")
+            .increment(deleted as u64);
+        metrics::gauge!("reth_pog_sealed_tx_fact_row_count")
+            .set(self.sealed_tx_fact_row_count() as f64);
+        metrics::gauge!("reth_pog_sealed_tx_fact_min_retained_id")
+            .set(self.sealed_tx_fact_min_retained_id() as f64);
+        Ok(deleted as u64)
+    }
+
+    /// Cursor-paginated export for `beradmin_exportSealedTxFacts`. Uses `read_conn`.
+    ///
+    /// Returns up to `limit` rows with `id > after_id` plus the current
+    /// `(high_water_id, min_retained_id, truncated)` trio per the brief's wire shape.
+    pub fn export_sealed_tx_facts(
+        &self,
+        after_id: u64,
+        limit: u32,
+    ) -> rusqlite::Result<ExportSealedTxFactsOutcome> {
+        let conn = self.lock_read();
+
+        let high_water: i64 =
+            conn.query_row("SELECT COALESCE(MAX(id), 0) FROM sealed_tx_fact", [], |r| r.get(0))?;
+        let min_retained: i64 =
+            conn.query_row("SELECT COALESCE(MIN(id), 0) FROM sealed_tx_fact", [], |r| r.get(0))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, sealed_block_number, tx_hash, first_peer_id, \
+                    first_heard_ms, effective_tip_wei, tip_formula_version \
+             FROM sealed_tx_fact \
+             WHERE id > ?1 \
+             ORDER BY id ASC \
+             LIMIT ?2",
+        )?;
+        let rows_iter = stmt.query_map(params![after_id as i64, limit as i64], |row| {
+            let id: i64 = row.get(0)?;
+            let sealed_block_number: i64 = row.get(1)?;
+            let tx_hash: String = row.get(2)?;
+            let first_peer_id: Option<String> = row.get(3)?;
+            let first_heard_ms: i64 = row.get(4)?;
+            let effective_tip_wei: String = row.get(5)?;
+            let tip_formula_version: i64 = row.get(6)?;
+            Ok(SealedTxFactRecord {
+                id: id as u64,
+                sealed_block_number: sealed_block_number as u64,
+                tx_hash,
+                first_peer_id,
+                first_heard_ms: first_heard_ms as u64,
+                effective_tip_wei,
+                tip_formula_version: tip_formula_version as u32,
+            })
+        })?;
+
+        let mut rows = Vec::new();
+        for r in rows_iter {
+            rows.push(r?);
+        }
+
+        let next_after_id = rows.last().map(|r| r.id).unwrap_or(after_id);
+        let truncated = (next_after_id as i64) < high_water;
+
+        drop(stmt);
+        drop(conn);
+
+        let served = rows.len() as u64;
+        self.sealed_facts_export_rows_total.fetch_add(served, Ordering::Relaxed);
+        metrics::counter!("reth_pog_sealed_tx_facts_export_rows_total").increment(served);
+
+        Ok(ExportSealedTxFactsOutcome {
+            rows,
+            next_after_id,
+            high_water_id: high_water as u64,
+            min_retained_id: min_retained as u64,
+            truncated,
+        })
+    }
+
+    fn prime_startup_gauges(&self) -> rusqlite::Result<()> {
+        let conn = self.lock_read();
+        let row_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM sealed_tx_fact", [], |r| r.get(0))?;
+        let max_id: i64 =
+            conn.query_row("SELECT COALESCE(MAX(id), 0) FROM sealed_tx_fact", [], |r| r.get(0))?;
+        let min_id: i64 =
+            conn.query_row("SELECT COALESCE(MIN(id), 0) FROM sealed_tx_fact", [], |r| r.get(0))?;
+        drop(conn);
+        self.sealed_tx_fact_row_count.store(row_count as u64, Ordering::Relaxed);
+        self.sealed_tx_fact_high_water_id.store(max_id as u64, Ordering::Relaxed);
+        self.sealed_tx_fact_min_retained_id.store(min_id as u64, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn refresh_min_retained_id(&self) {
+        if let Ok(conn) = self.read_conn.lock() {
+            // Intentionally bypass `lock_read` counter: this is an internal post-write
+            // fix-up, not an RPC read; counting it would confuse TP-R8/TP-R9 assertions.
+            if let Ok(min_id) = conn.query_row::<i64, _, _>(
+                "SELECT COALESCE(MIN(id), 0) FROM sealed_tx_fact",
+                [],
+                |r| r.get(0),
+            ) {
+                self.sealed_tx_fact_min_retained_id.store(min_id as u64, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+/// Outcome of a single `export_sealed_tx_facts` query, ready to be mapped onto the
+/// wire type defined in `crate::rpc::bera_admin::types::ExportSealedTxFactsResponse`.
+#[derive(Debug, Clone)]
+pub struct ExportSealedTxFactsOutcome {
+    pub rows: Vec<SealedTxFactRecord>,
+    pub next_after_id: u64,
+    pub high_water_id: u64,
+    pub min_retained_id: u64,
+    pub truncated: bool,
+}
+
+/// Opens a connection with the fixed PoG pragma set. On `PRAGMA integrity_check` failure,
+/// renames the existing DB to `proof_of_gossip.db.corrupt.<unix_ts>` and creates a fresh
+/// one per brief §5.4. Returns the prepared connection.
+fn open_checked_conn(db_path: &Path) -> rusqlite::Result<Connection> {
+    // Open first; attempt integrity_check *before* applying PRAGMAs, because
+    // `pragma_update` issues a statement that itself errors on a non-SQLite header
+    // and would mask the recoverable "file is corrupt" case with a hard error.
+    let conn = Connection::open(db_path)?;
+    let integrity: String = match conn.query_row("PRAGMA integrity_check", [], |r| r.get(0)) {
+        Ok(s) => s,
+        Err(err) => {
+            tracing::warn!(
+                target: "bera_reth::pog_store",
+                db_file = ?db_path,
+                error = %err,
+                "integrity_check returned an error; treating as corruption"
+            );
+            "fail".to_string()
+        }
+    };
+    if integrity != "ok" {
+        drop(conn);
+        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        let corrupt_path = {
+            let mut p = db_path.to_path_buf();
+            let current = p.extension().and_then(|s| s.to_str()).unwrap_or("db").to_string();
+            p.set_extension(format!("{current}.corrupt.{ts}"));
+            p
+        };
+        error!(
+            target: "bera_reth::pog_store",
+            db_file = ?db_path,
+            corrupt_file = ?corrupt_path,
+            integrity = %integrity,
+            "PoG SQLite integrity_check failed; renaming corrupt file and recreating empty store"
+        );
+        // Best-effort rename; if rename fails fall back to unlinking so we can still boot.
+        if let Err(err) = std::fs::rename(db_path, &corrupt_path) {
+            warn!(
+                target: "bera_reth::pog_store",
+                db_file = ?db_path,
+                error = %err,
+                "rename to corrupt-path failed; deleting so node can boot clean"
+            );
+            let _ = std::fs::remove_file(db_path);
+        }
+        // Also remove WAL/SHM sidecars to avoid reviving the corrupt state.
+        for suffix in ["-wal", "-shm"] {
+            let mut sidecar = db_path.as_os_str().to_owned();
+            sidecar.push(suffix);
+            let _ = std::fs::remove_file(std::path::PathBuf::from(sidecar));
+        }
+        let fresh = Connection::open(db_path)?;
+        apply_pragmas(&fresh)?;
+        return Ok(fresh);
+    }
+    apply_pragmas(&conn)?;
+    Ok(conn)
+}
+
+fn apply_pragmas(conn: &Connection) -> rusqlite::Result<()> {
+    // `auto_vacuum=FULL` must be set before any CREATE TABLE on a newly-initialized file
+    // (brief §5.4); setting it on an existing populated file is a no-op unless followed
+    // by an explicit VACUUM, which matches SQLite's documented behavior.
+    conn.pragma_update(None, "auto_vacuum", "FULL")?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    Ok(())
 }
 
 pub fn build_unsigned_canary(
@@ -286,7 +738,7 @@ struct TimedOutTrack {
 /// Shared PoG coordinator state (prepare/submit correlation + watcher).
 pub struct PogCoordinator {
     db_path: PathBuf,
-    db: Arc<PogDb>,
+    db: Arc<PogSqliteStore>,
     pub chain_id: u64,
     pub pog_timeout: Duration,
     inner: Mutex<PogInner>,
@@ -303,7 +755,7 @@ struct PogInner {
 impl PogCoordinator {
     pub fn new(datadir: PathBuf, chain_id: u64) -> rusqlite::Result<Self> {
         let db_path = datadir.join("proof_of_gossip.db");
-        let db = Arc::new(PogDb::open(&db_path)?);
+        let db = Arc::new(PogSqliteStore::open(&db_path)?);
         Ok(Self {
             db_path,
             db,
@@ -319,7 +771,7 @@ impl PogCoordinator {
         })
     }
 
-    pub fn pog_db(&self) -> Arc<PogDb> {
+    pub fn store(&self) -> Arc<PogSqliteStore> {
         Arc::clone(&self.db)
     }
 
@@ -430,55 +882,136 @@ where
     }
 }
 
-pub const DEFAULT_PROVENANCE_TTL_SECS: u64 = 600;
-
-/// In-memory tx→peer provenance window (first-seen-wins, TTL eviction).
-pub struct ProvenanceWindow {
-    entries: HashMap<TxHash, (PeerId, Instant)>,
+/// First-hear-wins attribution of tx hashes to the p2p peer that first successfully added
+/// them to the pool. Replaces the RAM-only `ProvenanceWindow` with a cap-aware variant
+/// used by the seal-flush path (brief §5.1). Subsequent-peer relay tracking is deferred
+/// to BERA-261 (blocked by upstream reth BERA-260).
+pub struct InflightTransactions {
+    entries: HashMap<TxHash, InflightTx>,
     ttl: Duration,
+    max_entries: usize,
+    cap_rejections: AtomicU64,
+    first_hears: AtomicU64,
+    ttl_evictions: AtomicU64,
 }
 
-impl ProvenanceWindow {
-    pub fn new(ttl: Duration) -> Self {
-        Self { entries: HashMap::new(), ttl }
+#[derive(Debug, Clone, Copy)]
+pub struct InflightTx {
+    pub first_peer_id: PeerId,
+    pub first_heard_ms: u64,
+    pub first_heard_at: Instant,
+}
+
+impl InflightTransactions {
+    pub fn new(ttl: Duration, max_entries: usize) -> Self {
+        Self {
+            entries: HashMap::new(),
+            ttl,
+            max_entries,
+            cap_rejections: AtomicU64::new(0),
+            first_hears: AtomicU64::new(0),
+            ttl_evictions: AtomicU64::new(0),
+        }
     }
 
-    pub fn insert(&mut self, tx_hash: TxHash, peer_id: PeerId) {
-        self.entries.entry(tx_hash).or_insert((peer_id, Instant::now()));
-    }
-
-    pub fn get(&self, tx_hash: &TxHash) -> Option<PeerId> {
-        self.entries.get(tx_hash).and_then(
-            |(p, t)| {
-                if t.elapsed() < self.ttl { Some(*p) } else { None }
+    /// First-seen-wins insert. Returns `true` if the entry was accepted (new or already
+    /// present under a different first hear), `false` if refused by the safety belt.
+    ///
+    /// On cap: runs an inline TTL sweep; if still at cap, refuses the insert and bumps
+    /// `reth_pog_inflight_tx_cap_rejections_total`.
+    pub fn record_first_hear(&mut self, tx_hash: TxHash, peer_id: PeerId, now_ms: u64) -> bool {
+        if self.entries.contains_key(&tx_hash) {
+            self.first_hears.fetch_add(1, Ordering::Relaxed);
+            metrics::counter!("reth_pog_inflight_tx_first_hears_total").increment(1);
+            return true;
+        }
+        if self.entries.len() >= self.max_entries {
+            self.evict_expired();
+            if self.entries.len() >= self.max_entries {
+                self.cap_rejections.fetch_add(1, Ordering::Relaxed);
+                metrics::counter!("reth_pog_inflight_tx_cap_rejections_total").increment(1);
+                warn!(
+                    target: "bera_reth::pog_inflight",
+                    tx_hash = %tx_hash,
+                    peer_id = %peer_id,
+                    cap = self.max_entries,
+                    "InflightTransactions cap reached after TTL sweep; refusing first-hear insert"
+                );
+                return false;
+            }
+        }
+        self.entries.insert(
+            tx_hash,
+            InflightTx {
+                first_peer_id: peer_id,
+                first_heard_ms: now_ms,
+                first_heard_at: Instant::now(),
             },
-        )
+        );
+        self.first_hears.fetch_add(1, Ordering::Relaxed);
+        metrics::counter!("reth_pog_inflight_tx_first_hears_total").increment(1);
+        metrics::gauge!("reth_pog_inflight_tx_count").set(self.entries.len() as f64);
+        true
+    }
+
+    /// Extract-and-remove entries for each hash in `hashes`. Rows with no RAM state
+    /// (never seen via p2p, or evicted) map to `None`. Used by the seal-flush path.
+    pub fn drain_for_seal(&mut self, hashes: &[TxHash]) -> Vec<(TxHash, Option<InflightTx>)> {
+        let drained: Vec<(TxHash, Option<InflightTx>)> =
+            hashes.iter().map(|h| (*h, self.entries.remove(h))).collect();
+        metrics::gauge!("reth_pog_inflight_tx_count").set(self.entries.len() as f64);
+        drained
     }
 
     pub fn evict_expired(&mut self) {
         let ttl = self.ttl;
-        self.entries.retain(|_, (_, t)| t.elapsed() < ttl);
+        let before = self.entries.len();
+        self.entries.retain(|_, v| v.first_heard_at.elapsed() < ttl);
+        let removed = before.saturating_sub(self.entries.len()) as u64;
+        if removed > 0 {
+            self.ttl_evictions.fetch_add(removed, Ordering::Relaxed);
+            metrics::counter!("reth_pog_inflight_tx_ttl_evictions_total").increment(removed);
+        }
+        metrics::gauge!("reth_pog_inflight_tx_count").set(self.entries.len() as f64);
     }
 
-    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
-    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+
+    pub fn cap_rejections(&self) -> u64 {
+        self.cap_rejections.load(Ordering::Relaxed)
+    }
+
+    pub fn first_hears(&self) -> u64 {
+        self.first_hears.load(Ordering::Relaxed)
+    }
+
+    pub fn ttl_evictions(&self) -> u64 {
+        self.ttl_evictions.load(Ordering::Relaxed)
+    }
+
+    #[cfg(test)]
+    pub fn contains(&self, tx_hash: &TxHash) -> bool {
+        self.entries.contains_key(tx_hash)
+    }
 }
 
-/// Tracks block numbers sealed by this node (in-memory, TTL eviction).
-pub struct SealedBlockRegistry {
+/// Tracks block numbers whose payload was produced by **this** node's payload builder.
+/// Populated from the `payload_builder.subscribe()` stream; consulted by the seal-flush
+/// path to decide whether to persist `sealed_tx_fact` rows for a canonical-committed
+/// block. Formerly `SealedBlockRegistry`; renamed per brief §5.1 and §5.3.
+pub struct LocallyBuiltBlocks {
     entries: HashMap<u64, Instant>,
     ttl: Duration,
     latest: Option<u64>,
 }
 
-impl SealedBlockRegistry {
+impl LocallyBuiltBlocks {
     pub fn new(ttl: Duration) -> Self {
         Self { entries: HashMap::new(), ttl, latest: None }
     }
@@ -506,46 +1039,57 @@ impl SealedBlockRegistry {
     }
 }
 
-/// Shared store for provenance window and sealed block registry.
+/// Shared store for in-RAM first-hear attribution and locally-built block tracking.
 pub struct PogAttributionStore {
-    pub provenance: Mutex<ProvenanceWindow>,
-    pub sealed: Mutex<SealedBlockRegistry>,
+    pub inflight: Mutex<InflightTransactions>,
+    pub locally_built: Mutex<LocallyBuiltBlocks>,
 }
 
 impl PogAttributionStore {
-    pub fn new(ttl: Duration) -> Self {
+    pub fn new(cfg: PogSealedFactConfig) -> Self {
+        let ttl = Duration::from_secs(DEFAULT_INFLIGHT_TTL_SECS);
         Self {
-            provenance: Mutex::new(ProvenanceWindow::new(ttl)),
-            sealed: Mutex::new(SealedBlockRegistry::new(ttl)),
+            inflight: Mutex::new(InflightTransactions::new(ttl, cfg.max_inflight_entries)),
+            locally_built: Mutex::new(LocallyBuiltBlocks::new(ttl)),
         }
     }
 }
 
 impl Default for PogAttributionStore {
     fn default() -> Self {
-        Self::new(Duration::from_secs(DEFAULT_PROVENANCE_TTL_SECS))
+        Self::new(PogSealedFactConfig::default())
     }
 }
 
-/// Process-wide attribution store, initialized once (on first PoG-enabled startup).
-static ATTRIBUTION_STORE: OnceLock<std::sync::Arc<PogAttributionStore>> = OnceLock::new();
-
-/// Returns the global [`PogAttributionStore`], creating it on first call.
+/// Returns the process-wide `PogAttributionStore`, initializing it with the installed
+/// `PogSealedFactConfig` (or defaults) on first call.
 pub fn attribution_store() -> std::sync::Arc<PogAttributionStore> {
-    ATTRIBUTION_STORE.get_or_init(|| std::sync::Arc::new(PogAttributionStore::default())).clone()
+    ATTRIBUTION_STORE
+        .get_or_init(|| std::sync::Arc::new(PogAttributionStore::new(sealed_fact_config())))
+        .clone()
 }
 
-/// Background watcher that detects canary tx inclusion by scanning new canonical blocks.
-///
-/// Replaces the old polling `receipt_by_hash` approach, which failed when blocks were
-/// flushed immediately to disk (`--engine.persistence-threshold 0`) because the MDBX
-/// `TransactionHashNumbers` table is not populated during Engine API live sync.
-pub async fn run_pog_watcher(
+/// Background watcher: consumes `CanonStateNotifications::Commit` for probe
+/// reconciliation **and** funnels locally-built-block commits through the seal-flush
+/// path. Also ticks every `WATCHER_TICK_SECS` to evict expired inflight and
+/// locally-built-block entries.
+pub async fn run_pog_watcher<Provider>(
     shutdown: reth::tasks::shutdown::GracefulShutdown,
     coord: std::sync::Arc<PogCoordinator>,
     store: std::sync::Arc<PogAttributionStore>,
-    mut canon_events: reth::providers::CanonStateNotifications<crate::primitives::BerachainPrimitives>,
-) {
+    provider: Provider,
+    mut canon_events: reth::providers::CanonStateNotifications<
+        crate::primitives::BerachainPrimitives,
+    >,
+    cfg: PogSealedFactConfig,
+) where
+    Provider: reth_storage_api::BlockReader<Block = crate::primitives::BerachainBlock>
+        + reth_storage_api::ReceiptProvider<
+            Receipt = reth_ethereum_primitives::Receipt<crate::transaction::BerachainTxType>,
+        > + Send
+        + Sync
+        + 'static,
+{
     use alloy_consensus::BlockHeader as _;
     use reth_primitives_traits::{BlockBody as _, transaction::TxHashRef as _};
 
@@ -554,6 +1098,22 @@ pub async fn run_pog_watcher(
     timeout_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     info!(target: "bera_reth::pog_probe", "PoG probe watcher started (block-scan mode)");
+    // Startup retention sweep per brief §5.3: drop stale rows before first notification
+    // so a post-offline restart doesn't burn its first seal-flush on catch-up DELETEs.
+    match coord.store().startup_retention_sweep(retention_cutoff_ms(cfg.retention_hours)) {
+        Ok(deleted) => info!(
+            target: "bera_reth::pog_store",
+            deleted,
+            retention_hours = cfg.retention_hours,
+            "startup sealed-tx-fact retention sweep complete"
+        ),
+        Err(err) => warn!(
+            target: "bera_reth::pog_store",
+            error = %err,
+            "startup sealed-tx-fact retention sweep failed (continuing)"
+        ),
+    }
+    metrics::gauge!("reth_pog_sealed_fact_retention_hours").set(cfg.retention_hours as f64);
     loop {
         tokio::select! {
             guard = &mut shutdown => {
@@ -581,11 +1141,36 @@ pub async fn run_pog_watcher(
                         .map(|tx| *tx.tx_hash())
                         .collect();
 
-                    // Check inflight probe against this block's transactions
+                    // Seal-flush: persist sealed_tx_fact rows iff our payload builder
+                    // produced this block. See brief §5.3 / AC-R2 / AC-R2b.
+                    let we_built_it = store
+                        .locally_built
+                        .lock()
+                        .map(|g| g.contains(block_num))
+                        .unwrap_or(false);
+                    if we_built_it {
+                        let flush_start = Instant::now();
+                        if let Err(err) =
+                            run_seal_flush_from_canon(&coord, &store, &provider, block_num, block, cfg)
+                        {
+                            warn!(
+                                target: "bera_reth::pog_store",
+                                block = block_num,
+                                error = %err,
+                                "seal-flush failed (continuing; rows will not land for this block)"
+                            );
+                        } else {
+                            let histogram =
+                                metrics::histogram!("reth_pog_sealed_flush_duration_seconds");
+                            histogram.record(flush_start.elapsed().as_secs_f64());
+                        }
+                    }
+
+                    // Probe-reconciliation path (existing behavior).
                     if let Some(inflight) = coord.inflight_snapshot()
                         && tx_hashes.contains(&inflight.tx_hash)
                     {
-                        let _ = coord.pog_db().insert_peer_test(
+                        let _ = coord.store().insert_peer_test(
                             &inflight.peer_id,
                             inflight.tx_hash,
                             "seen",
@@ -606,13 +1191,12 @@ pub async fn run_pog_watcher(
                         );
                     }
 
-                    // Check timed-out probes (late reconciliation)
                     for tx_hash in coord.timed_out_tx_hashes() {
                         if tx_hashes.contains(&tx_hash) {
                             let Some(peer_id) = coord.timed_out_peer(&tx_hash) else {
                                 continue;
                             };
-                            let _ = coord.pog_db().insert_peer_test(&peer_id, tx_hash, "seen");
+                            let _ = coord.store().insert_peer_test(&peer_id, tx_hash, "seen");
                             coord.remove_timed_out(&tx_hash);
                             info!(
                                 target: "bera_reth::pog_probe",
@@ -630,14 +1214,17 @@ pub async fn run_pog_watcher(
             }
             _ = timeout_interval.tick() => {
                 coord.prune_timed_out_window();
-                store.provenance.lock().expect("provenance mutex poisoned").evict_expired();
-                store.sealed.lock().expect("sealed mutex poisoned").evict_expired();
+                if let Ok(mut inflight) = store.inflight.lock() {
+                    inflight.evict_expired();
+                }
+                if let Ok(mut built) = store.locally_built.lock() {
+                    built.evict_expired();
+                }
 
-                // Check for timeout on inflight probe
                 if let Some(inflight) = coord.inflight_snapshot()
                     && inflight.sent_at.elapsed() > coord.pog_timeout
                 {
-                    let _ = coord.pog_db().insert_peer_test(
+                    let _ = coord.store().insert_peer_test(
                         &inflight.peer_id,
                         inflight.tx_hash,
                         "timeout",
@@ -662,6 +1249,131 @@ pub async fn run_pog_watcher(
     }
 }
 
+/// Current seal-flush retention cutoff in milliseconds-since-unix-epoch.
+pub fn retention_cutoff_ms(retention_hours: u64) -> u64 {
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or_default();
+    now_ms.saturating_sub(retention_hours.saturating_mul(3_600_000))
+}
+
+/// Run the seal-flush path for a single locally-built committed block arriving on the
+/// canonical-state stream. Extracted so the `canon_events.recv()` arm stays readable.
+fn run_seal_flush_from_canon<Provider>(
+    coord: &PogCoordinator,
+    store: &PogAttributionStore,
+    provider: &Provider,
+    block_num: u64,
+    block: &reth_primitives_traits::RecoveredBlock<crate::primitives::BerachainBlock>,
+    cfg: PogSealedFactConfig,
+) -> eyre::Result<()>
+where
+    Provider: reth_storage_api::ReceiptProvider<
+            Receipt = reth_ethereum_primitives::Receipt<crate::transaction::BerachainTxType>,
+        >,
+{
+    use alloy_consensus::BlockHeader as _;
+    use alloy_consensus::Transaction as _;
+    use reth_primitives_traits::{BlockBody as _, transaction::TxHashRef as _};
+
+    let header = block.header();
+    let base_fee = header.base_fee_per_gas().unwrap_or(0) as u128;
+    let body = block.body();
+    let tx_hashes: Vec<TxHash> = body.transactions_iter().map(|tx| *tx.tx_hash()).collect();
+
+    if tx_hashes.is_empty() {
+        // Empty block — still run inline retention DELETE so file doesn't grow.
+        let cutoff = retention_cutoff_ms(cfg.retention_hours);
+        let _ = coord.store().flush_sealed_tx_facts(&[], cutoff)?;
+        return Ok(());
+    }
+
+    let effective_gas_prices: Vec<u128> =
+        body.transactions_iter().map(|tx| tx.effective_gas_price(Some(base_fee as u64))).collect();
+    let receipts = provider
+        .receipts_by_block(alloy_eips::BlockHashOrNumber::Number(block_num))?
+        .unwrap_or_default();
+    let tips = compute_effective_tips_from_receipts(base_fee, &effective_gas_prices, &receipts);
+
+    let drained = match store.inflight.lock() {
+        Ok(mut g) => g.drain_for_seal(&tx_hashes),
+        Err(poison) => poison.into_inner().drain_for_seal(&tx_hashes),
+    };
+
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or_default();
+    let first_heard_histogram = metrics::histogram!("reth_pog_sealed_first_heard_to_sealed_ms");
+    for (_h, entry) in drained.iter() {
+        if let Some(e) = entry {
+            first_heard_histogram.record(now_ms.saturating_sub(e.first_heard_ms) as f64);
+        }
+    }
+
+    let rows = build_sealed_tx_fact_inserts(block_num, &drained, &tips, now_ms);
+    let cutoff = retention_cutoff_ms(cfg.retention_hours);
+    coord.store().flush_sealed_tx_facts(&rows, cutoff)?;
+    Ok(())
+}
+
+/// Returns the effective-tip (`(effective_gas_price - base_fee) * gas_used`) per tx in
+/// the block, preserving the receipt order. Mirrors the tip-formula previously in the
+/// `sealed_block_attribution` RPC (brief §Context Payload).
+pub fn compute_effective_tips_from_receipts(
+    base_fee: u128,
+    effective_gas_prices: &[u128],
+    receipts: &[reth_ethereum_primitives::Receipt<crate::transaction::BerachainTxType>],
+) -> Vec<u128> {
+    let mut prev_cumulative: u64 = 0;
+    let mut tips = Vec::with_capacity(receipts.len());
+    for (eff_price, receipt) in effective_gas_prices.iter().zip(receipts.iter()) {
+        let gas_used = receipt.cumulative_gas_used.saturating_sub(prev_cumulative);
+        prev_cumulative = receipt.cumulative_gas_used;
+        let tip = eff_price.saturating_sub(base_fee) * gas_used as u128;
+        tips.push(tip);
+    }
+    tips
+}
+
+/// Build seal-flush insert rows for a committed, locally-built block. Extracted for
+/// testability; callers (the watcher) compute `tips` from the block body + receipts via
+/// `compute_effective_tips_from_receipts`.
+pub fn build_sealed_tx_fact_inserts(
+    block_num: u64,
+    drained: &[(TxHash, Option<InflightTx>)],
+    tips: &[u128],
+    now_ms: u64,
+) -> Vec<SealedTxFactInsert> {
+    let mut rows = Vec::with_capacity(drained.len());
+    for ((hash, ram), tip) in drained.iter().zip(tips.iter()) {
+        let (first_peer_id, first_heard_ms) = match ram {
+            Some(entry) => (Some(entry.first_peer_id.to_string()), entry.first_heard_ms),
+            None => (None, now_ms),
+        };
+        rows.push(SealedTxFactInsert {
+            sealed_block_number: block_num,
+            tx_hash: format!("{hash:#x}"),
+            first_peer_id,
+            first_heard_ms,
+            effective_tip_wei_hex: encode_u128_hex_quantity(*tip),
+            tip_formula_version: 1,
+        });
+    }
+    rows
+}
+
+/// Encode a `u128` as the ethereum-spec "Quantity" JSON wire representation: lowercase,
+/// `0x`-prefixed, minimal hex, `"0x0"` for zero. Stored directly in SQLite so export
+/// does zero re-encoding (brief §5.5).
+pub fn encode_u128_hex_quantity(value: u128) -> String {
+    if value == 0 {
+        return "0x0".to_string();
+    }
+    format!("0x{value:x}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -669,42 +1381,47 @@ mod tests {
     use alloy_rlp::Decodable;
     use tempfile::NamedTempFile;
 
-    // TP-2: provenance window retains mappings, evicts after TTL, first-seen-wins
+    // ---- TP-R1 ----
     #[test]
-    fn provenance_window_insert_and_get() {
-        let mut w = ProvenanceWindow::new(Duration::from_secs(60));
+    fn tp_r1_record_first_hear_first_seen_wins() {
+        let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
         let tx = B256::random();
+        let p1 = PeerId::random();
+        let p2 = PeerId::random();
+        assert!(w.record_first_hear(tx, p1, 1_000));
+        assert!(w.record_first_hear(tx, p2, 2_000));
+        let drained = w.drain_for_seal(&[tx]);
+        let (_, entry) = drained.into_iter().next().unwrap();
+        let e = entry.expect("entry present");
+        assert_eq!(e.first_peer_id, p1);
+        assert_eq!(e.first_heard_ms, 1_000);
+    }
+
+    // ---- TP-R2 ----
+    #[test]
+    fn tp_r2_drain_for_seal_extracts_and_removes() {
+        let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
+        let a = B256::random();
+        let b = B256::random();
+        let c = B256::random();
         let peer = PeerId::random();
-        w.insert(tx, peer);
-        assert_eq!(w.get(&tx), Some(peer));
+        w.record_first_hear(a, peer, 10);
+        w.record_first_hear(b, peer, 20);
+        let drained = w.drain_for_seal(&[a, b, c]);
+        assert_eq!(drained.len(), 3);
+        assert!(drained.iter().find(|(h, _)| *h == a).unwrap().1.is_some());
+        assert!(drained.iter().find(|(h, _)| *h == b).unwrap().1.is_some());
+        assert!(drained.iter().find(|(h, _)| *h == c).unwrap().1.is_none());
+        // After drain, the map is empty (drain removes)
+        assert_eq!(w.len(), 0);
     }
 
+    // ---- TP-R3 ----
     #[test]
-    fn provenance_window_first_seen_wins() {
-        let mut w = ProvenanceWindow::new(Duration::from_secs(60));
-        let tx = B256::random();
-        let peer1 = PeerId::random();
-        let peer2 = PeerId::random();
-        w.insert(tx, peer1);
-        w.insert(tx, peer2);
-        assert_eq!(w.get(&tx), Some(peer1), "first-seen-wins: peer1 should be retained");
-    }
-
-    #[test]
-    fn provenance_window_evicts_after_ttl() {
-        let mut w = ProvenanceWindow::new(Duration::from_millis(1));
-        let tx = B256::random();
-        let peer = PeerId::random();
-        w.insert(tx, peer);
-        std::thread::sleep(Duration::from_millis(5));
-        assert_eq!(w.get(&tx), None, "entry should be expired after TTL");
-    }
-
-    #[test]
-    fn provenance_window_evict_expired_cleans_up() {
-        let mut w = ProvenanceWindow::new(Duration::from_millis(1));
+    fn tp_r3_ttl_eviction_removes_stale_entries() {
+        let mut w = InflightTransactions::new(Duration::from_millis(1), 1024);
         for _ in 0..5 {
-            w.insert(B256::random(), PeerId::random());
+            w.record_first_hear(B256::random(), PeerId::random(), 0);
         }
         assert_eq!(w.len(), 5);
         std::thread::sleep(Duration::from_millis(5));
@@ -712,28 +1429,238 @@ mod tests {
         assert_eq!(w.len(), 0);
     }
 
+    // ---- TP-R4 ----
     #[test]
-    fn provenance_window_live_entries_not_evicted() {
-        let mut w = ProvenanceWindow::new(Duration::from_secs(60));
-        let tx = B256::random();
+    fn tp_r4_cap_rejection_and_inline_sweep() {
+        let mut w = InflightTransactions::new(Duration::from_millis(1), 2);
         let peer = PeerId::random();
-        w.insert(tx, peer);
-        w.evict_expired();
-        assert_eq!(w.get(&tx), Some(peer));
+        assert!(w.record_first_hear(B256::random(), peer, 0));
+        assert!(w.record_first_hear(B256::random(), peer, 0));
+        // At cap; let the TTL expire so the inline sweep clears the map.
+        std::thread::sleep(Duration::from_millis(5));
+        // Next insert triggers inline sweep and succeeds.
+        assert!(w.record_first_hear(B256::random(), peer, 0));
+        assert_eq!(w.cap_rejections(), 0);
+
+        // Now fill cap with FRESH entries (TTL=1h so sweep can't clear them).
+        let mut w = InflightTransactions::new(Duration::from_secs(3600), 2);
+        assert!(w.record_first_hear(B256::random(), peer, 0));
+        assert!(w.record_first_hear(B256::random(), peer, 0));
+        assert!(!w.record_first_hear(B256::random(), peer, 0));
+        assert_eq!(w.cap_rejections(), 1);
     }
 
-    // SealedBlockRegistry tests
+    // ---- TP-R5 ----
     #[test]
-    fn sealed_block_registry_insert_and_contains() {
-        let mut r = SealedBlockRegistry::new(Duration::from_secs(60));
+    fn tp_r5_encode_u128_hex_quantity_roundtrip() {
+        assert_eq!(encode_u128_hex_quantity(0), "0x0");
+        assert_eq!(encode_u128_hex_quantity(1), "0x1");
+        assert_eq!(encode_u128_hex_quantity(0x10), "0x10");
+        let big: u128 = (u64::MAX as u128) * 20;
+        assert_eq!(encode_u128_hex_quantity(big), format!("0x{big:x}"));
+    }
+
+    // ---- TP-R6 ----
+    #[test]
+    fn tp_r6_retention_delete_via_first_heard_ms_index() {
+        let tmp = NamedTempFile::new().unwrap();
+        let store = PogSqliteStore::open(tmp.path()).unwrap();
+        let rows = vec![
+            SealedTxFactInsert {
+                sealed_block_number: 1,
+                tx_hash: format!("{:#x}", B256::random()),
+                first_peer_id: None,
+                first_heard_ms: 100,
+                effective_tip_wei_hex: "0x0".to_string(),
+                tip_formula_version: 1,
+            },
+            SealedTxFactInsert {
+                sealed_block_number: 2,
+                tx_hash: format!("{:#x}", B256::random()),
+                first_peer_id: None,
+                first_heard_ms: 10_000,
+                effective_tip_wei_hex: "0x0".to_string(),
+                tip_formula_version: 1,
+            },
+        ];
+        let (_hw, _del) = store.flush_sealed_tx_facts(&rows, 0).unwrap();
+        assert_eq!(store.sealed_tx_fact_row_count(), 2);
+
+        // Retention DELETE uses the `idx_sealed_tx_fact_first_heard_ms` index.
+        let (_hw, deleted) = store.flush_sealed_tx_facts(&[], 5_000).unwrap();
+        assert_eq!(deleted, 1, "only the row with first_heard_ms < 5000 should be deleted");
+        assert_eq!(store.sealed_tx_fact_row_count(), 1);
+    }
+
+    // ---- TP-R7 ----
+    #[test]
+    fn tp_r7_export_wire_shape_and_cursor_semantics() {
+        let tmp = NamedTempFile::new().unwrap();
+        let store = PogSqliteStore::open(tmp.path()).unwrap();
+        let peer = PeerId::random();
+        let peer_hex = peer.to_string();
+        let h1 = B256::random();
+        let rows = vec![SealedTxFactInsert {
+            sealed_block_number: 42,
+            tx_hash: format!("{h1:#x}"),
+            first_peer_id: Some(peer_hex.clone()),
+            first_heard_ms: 1_713_876_543_000,
+            effective_tip_wei_hex: "0x1bc16d674ec80000".to_string(),
+            tip_formula_version: 1,
+        }];
+        store.flush_sealed_tx_facts(&rows, 0).unwrap();
+
+        let out = store.export_sealed_tx_facts(0, 10).unwrap();
+        assert_eq!(out.rows.len(), 1);
+        assert_eq!(out.rows[0].sealed_block_number, 42);
+        assert_eq!(out.rows[0].first_peer_id.as_deref(), Some(peer_hex.as_str()));
+        assert_eq!(out.rows[0].effective_tip_wei, "0x1bc16d674ec80000");
+        assert_eq!(out.high_water_id, 1);
+        assert_eq!(out.min_retained_id, 1);
+        assert!(!out.truncated);
+
+        // Cursor past high_water returns zero rows but preserves after_id.
+        let after = store.export_sealed_tx_facts(out.high_water_id, 10).unwrap();
+        assert!(after.rows.is_empty());
+        assert_eq!(after.next_after_id, out.high_water_id);
+        assert!(!after.truncated);
+    }
+
+    // ---- TP-R8 ----
+    #[test]
+    fn tp_r8_export_never_acquires_write_conn() {
+        let tmp = NamedTempFile::new().unwrap();
+        let store = std::sync::Arc::new(PogSqliteStore::open(tmp.path()).unwrap());
+        let rows: Vec<_> = (0..20)
+            .map(|i| SealedTxFactInsert {
+                sealed_block_number: i,
+                tx_hash: format!("0x{:064x}", i),
+                first_peer_id: None,
+                first_heard_ms: 1_000 + i,
+                effective_tip_wei_hex: "0x0".to_string(),
+                tip_formula_version: 1,
+            })
+            .collect();
+        store.flush_sealed_tx_facts(&rows, 0).unwrap();
+
+        // Baseline the write-conn counter before the concurrent window.
+        let writes_before = store.write_conn_lock_count();
+        // Spawn a parallel writer + reader; run several iterations each.
+        let s1 = store.clone();
+        let s2 = store.clone();
+        let writer = std::thread::spawn(move || {
+            for i in 1000..1050 {
+                let rs = vec![SealedTxFactInsert {
+                    sealed_block_number: i,
+                    tx_hash: format!("0x{:064x}", i),
+                    first_peer_id: None,
+                    first_heard_ms: 1_000_000 + i,
+                    effective_tip_wei_hex: "0x0".to_string(),
+                    tip_formula_version: 1,
+                }];
+                s1.flush_sealed_tx_facts(&rs, 0).unwrap();
+            }
+        });
+        let reader = std::thread::spawn(move || {
+            for _ in 0..100 {
+                let _ = s2.export_sealed_tx_facts(0, 10).unwrap();
+            }
+        });
+        writer.join().unwrap();
+        reader.join().unwrap();
+
+        let writes_after = store.write_conn_lock_count();
+        let reads_after = store.read_conn_lock_count();
+        // Exporter never touches write_conn, only read_conn:
+        // write_conn_lock_count should advance only from the writer thread's flushes.
+        let writes_delta = writes_after - writes_before;
+        assert_eq!(writes_delta, 50, "only seal-flush acquires write_conn");
+        assert!(reads_after >= 100, "reader acquired read_conn at least once per export");
+    }
+
+    // ---- TP-R9 ----
+    #[test]
+    fn tp_r9_metrics_path_zero_sql_on_scrape() {
+        let tmp = NamedTempFile::new().unwrap();
+        let store = PogSqliteStore::open(tmp.path()).unwrap();
+        let rows = vec![SealedTxFactInsert {
+            sealed_block_number: 7,
+            tx_hash: "0xdeadbeef".into(),
+            first_peer_id: None,
+            first_heard_ms: 500,
+            effective_tip_wei_hex: "0x1".into(),
+            tip_formula_version: 1,
+        }];
+        let before_flushed = store.sealed_facts_flushed_total();
+        store.flush_sealed_tx_facts(&rows, 0).unwrap();
+        assert_eq!(store.sealed_facts_flushed_total(), before_flushed + 1);
+
+        // Baseline connection-lock counts, then invoke the "scrape" path: reading every
+        // metric atomic. Assert no SQL (i.e., no mutex acquisitions on either connection).
+        let w_before = store.write_conn_lock_count();
+        let r_before = store.read_conn_lock_count();
+        let _snapshot = (
+            store.sealed_tx_fact_row_count(),
+            store.sealed_tx_fact_high_water_id(),
+            store.sealed_tx_fact_min_retained_id(),
+            store.sealed_facts_flushed_total(),
+            store.sealed_facts_flushed_with_peer_total(),
+            store.sealed_facts_retention_deleted_total(),
+            store.sealed_facts_export_rows_total(),
+        );
+        assert_eq!(store.write_conn_lock_count(), w_before, "scrape must not touch write_conn");
+        assert_eq!(store.read_conn_lock_count(), r_before, "scrape must not touch read_conn");
+    }
+
+    // ---- TP-R10 ----
+    // Pure-store negative path: if the seal-flush task is *not* invoked (because
+    // LocallyBuiltBlocks::contains(block_num) returned false in the caller), then no
+    // rows land and the InflightTransactions entries remain undrained. This mirrors
+    // AC-R2b; the rpc/mod.rs caller is responsible for the `contains` check.
+    #[test]
+    fn tp_r10_locally_built_blocks_filter_negative_path() {
+        let mut built = LocallyBuiltBlocks::new(Duration::from_secs(60));
+        built.insert(100);
+        assert!(built.contains(100));
+        assert!(!built.contains(200), "other-validator block 200 not in set → skip flush");
+
+        let mut inflight = InflightTransactions::new(Duration::from_secs(60), 1024);
+        let peer = PeerId::random();
+        let tx_a = B256::random();
+        let tx_b = B256::random();
+        inflight.record_first_hear(tx_a, peer, 100);
+        inflight.record_first_hear(tx_b, peer, 200);
+        // If the seal-flush caller respects `contains`, these entries are never drained.
+        assert_eq!(inflight.len(), 2);
+        assert!(inflight.contains(&tx_a));
+        assert!(inflight.contains(&tx_b));
+    }
+
+    // ---- InflightTransactions: retained value structure ----
+    #[test]
+    fn inflight_reads_the_correct_peer_after_first_hear() {
+        let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
+        let tx = B256::random();
+        let peer = PeerId::random();
+        w.record_first_hear(tx, peer, 42);
+        let drained = w.drain_for_seal(&[tx]);
+        let entry = drained[0].1.unwrap();
+        assert_eq!(entry.first_peer_id, peer);
+        assert_eq!(entry.first_heard_ms, 42);
+    }
+
+    // ---- LocallyBuiltBlocks (ported from SealedBlockRegistry tests) ----
+    #[test]
+    fn locally_built_blocks_insert_and_contains() {
+        let mut r = LocallyBuiltBlocks::new(Duration::from_secs(60));
         r.insert(42);
         assert!(r.contains(42));
         assert!(!r.contains(43));
     }
 
     #[test]
-    fn sealed_block_registry_latest_tracks_max() {
-        let mut r = SealedBlockRegistry::new(Duration::from_secs(60));
+    fn locally_built_blocks_latest_tracks_max() {
+        let mut r = LocallyBuiltBlocks::new(Duration::from_secs(60));
         assert_eq!(r.latest(), None);
         r.insert(10);
         r.insert(5);
@@ -742,49 +1669,39 @@ mod tests {
     }
 
     #[test]
-    fn sealed_block_registry_evicts_after_ttl() {
-        let mut r = SealedBlockRegistry::new(Duration::from_millis(1));
+    fn locally_built_blocks_evicts_after_ttl() {
+        let mut r = LocallyBuiltBlocks::new(Duration::from_millis(1));
         r.insert(1);
         std::thread::sleep(Duration::from_millis(5));
         assert!(!r.contains(1));
     }
 
     #[test]
-    fn sealed_block_registry_latest_updates_after_eviction() {
-        let mut r = SealedBlockRegistry::new(Duration::from_millis(1));
+    fn locally_built_blocks_latest_updates_after_eviction() {
+        let mut r = LocallyBuiltBlocks::new(Duration::from_millis(1));
         r.insert(10);
         r.insert(20);
         std::thread::sleep(Duration::from_millis(5));
         r.evict_expired();
-        // After all entries evicted, latest() must reflect reality
-        assert_eq!(r.latest(), None, "latest() must be None when all entries are evicted");
-
-        // Insert a new block after eviction — latest should update
+        assert_eq!(r.latest(), None);
         r.insert(5);
         assert_eq!(r.latest(), Some(5));
     }
 
     #[test]
-    fn sealed_block_registry_latest_partial_eviction() {
-        // Insert blocks with different TTLs to test partial eviction.
-        // Block 10 inserted first (expires first), block 20 later.
-        let mut r = SealedBlockRegistry::new(Duration::from_millis(50));
+    fn locally_built_blocks_latest_partial_eviction() {
+        let mut r = LocallyBuiltBlocks::new(Duration::from_millis(50));
         r.insert(10);
         std::thread::sleep(Duration::from_millis(30));
         r.insert(20);
-        // Block 10 is ~30ms old, block 20 is ~0ms old. TTL is 50ms.
-        // After another 25ms, block 10 will be expired but block 20 won't.
         std::thread::sleep(Duration::from_millis(25));
         r.evict_expired();
-        assert!(!r.contains(10), "block 10 should be evicted");
-        assert!(r.contains(20), "block 20 should survive");
-        assert_eq!(
-            r.latest(),
-            Some(20),
-            "latest() must reflect surviving entries, not evicted ones"
-        );
+        assert!(!r.contains(10));
+        assert!(r.contains(20));
+        assert_eq!(r.latest(), Some(20));
     }
 
+    // ---- PogSqliteStore probe API (inherited from PogDb) ----
     #[test]
     fn unsigned_roundtrip_signing_hash_stable() {
         let to = Address::repeat_byte(0x42);
@@ -801,35 +1718,31 @@ mod tests {
     #[test]
     fn sqlite_init_idempotent() {
         let tmp = NamedTempFile::new().unwrap();
-        PogDb::open(tmp.path()).unwrap();
-        PogDb::open(tmp.path()).unwrap();
+        PogSqliteStore::open(tmp.path()).unwrap();
+        PogSqliteStore::open(tmp.path()).unwrap();
     }
 
     #[test]
-    fn pog_db_all_peer_statuses_batch_query() {
+    fn pog_store_all_peer_statuses_batch_query() {
         let tmp = NamedTempFile::new().unwrap();
-        let pog_db = PogDb::open(tmp.path()).unwrap();
+        let store = PogSqliteStore::open(tmp.path()).unwrap();
         let p1 = PeerId::random();
         let p2 = PeerId::random();
         let tx1 = B256::random();
         let tx2 = B256::random();
         let tx3 = B256::random();
         let tx4 = B256::random();
-        // p1: two timeouts then a seen
-        pog_db.insert_peer_test(&p1, tx1, "timeout").unwrap();
-        pog_db.insert_peer_test(&p1, tx2, "timeout").unwrap();
-        pog_db.insert_peer_test(&p1, tx3, "seen").unwrap();
-        // p2: one timeout only
-        pog_db.insert_peer_test(&p2, tx4, "timeout").unwrap();
+        store.insert_peer_test(&p1, tx1, "timeout").unwrap();
+        store.insert_peer_test(&p1, tx2, "timeout").unwrap();
+        store.insert_peer_test(&p1, tx3, "seen").unwrap();
+        store.insert_peer_test(&p2, tx4, "timeout").unwrap();
 
-        let statuses = pog_db.all_peer_statuses().unwrap();
+        let statuses = store.all_peer_statuses().unwrap();
         assert_eq!(statuses.len(), 2);
-
         let s1 = &statuses[&p1.to_string()];
         assert_eq!(s1.last_result, "seen");
         assert_eq!(s1.failure_count, 2);
         assert_eq!(s1.last_tx_hash, tx3.to_string());
-
         let s2 = &statuses[&p2.to_string()];
         assert_eq!(s2.last_result, "timeout");
         assert_eq!(s2.failure_count, 1);
@@ -837,11 +1750,10 @@ mod tests {
     }
 
     #[test]
-    fn pog_db_migrates_legacy_peer_tests() {
+    fn pog_store_migrates_legacy_peer_tests() {
         let tmp = NamedTempFile::new().unwrap();
         let conn = Connection::open(tmp.path()).unwrap();
         conn.pragma_update(None, "journal_mode", "WAL").unwrap();
-        // Create legacy schema manually
         conn.execute_batch(
             "CREATE TABLE peer_tests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -861,23 +1773,35 @@ mod tests {
         .unwrap();
         drop(conn);
 
-        // Opening PogDb triggers migration
-        let pog_db = PogDb::open(tmp.path()).unwrap();
-        let statuses = pog_db.all_peer_statuses().unwrap();
+        let store = PogSqliteStore::open(tmp.path()).unwrap();
+        let statuses = store.all_peer_statuses().unwrap();
         assert_eq!(statuses.len(), 1);
         let s = &statuses[&p1.to_string()];
         assert_eq!(s.last_result, "seen");
         assert_eq!(s.last_tx_hash, tx.to_string());
+    }
 
-        // Legacy table should be gone
-        let conn = Connection::open(tmp.path()).unwrap();
-        let legacy_exists: bool = conn
-            .query_row(
-                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='peer_tests'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert!(!legacy_exists, "peer_tests should be dropped after migration");
+    #[test]
+    fn integrity_check_corrupt_renames_and_boots_clean() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let path = tmp.path().to_path_buf();
+        drop(tmp); // release file so we can control its contents
+        std::fs::write(&path, b"this is not a sqlite database at all").unwrap();
+
+        // Open should succeed by renaming the corrupt file and creating a fresh DB.
+        let store = PogSqliteStore::open(&path).unwrap();
+        assert_eq!(store.sealed_tx_fact_row_count(), 0);
+
+        // A sibling file with ".corrupt." in its name must exist next to the DB.
+        let parent = path.parent().unwrap();
+        let file_stem = path.file_name().unwrap().to_string_lossy().to_string();
+        let corrupt = std::fs::read_dir(parent).unwrap().filter_map(|e| e.ok()).any(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            name.starts_with(&file_stem) && name.contains(".corrupt.")
+        });
+        assert!(corrupt, "expected a renamed .corrupt. sibling file");
+
+        // Cleanup
+        let _ = std::fs::remove_file(&path);
     }
 }

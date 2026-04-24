@@ -194,10 +194,8 @@ where
         let chain_spec = ctx.node.provider().chain_spec();
         let chain_id = chain_spec.chain().id();
         let datadir = ctx.config.datadir().data_dir().to_path_buf();
-        let known_peers_file = ctx
-            .config
-            .network
-            .persistent_peers_file(ctx.config.datadir().known_peers());
+        let known_peers_file =
+            ctx.config.network.persistent_peers_file(ctx.config.datadir().known_peers());
         crate::pog::configure_shutdown_peer_curation(datadir.clone(), known_peers_file);
         let client_version = std::env::var("BERA_RETH_P2P_CLIENT_VERSION")
             .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
@@ -207,28 +205,26 @@ where
                 .map_err(|e| eyre::eyre!("PoG database init failed: {e}"))?,
         );
         let attribution = crate::pog::attribution_store();
-        let bera_admin = Arc::new(BerAdminImpl::new(
-            network,
-            provider,
-            chain_spec,
-            client_version,
-            pog.clone(),
-            attribution.clone(),
-        ));
+        let bera_admin =
+            Arc::new(BerAdminImpl::new(network, provider, chain_spec, client_version, pog.clone()));
 
-        // Write path 2: sealed block detection via payload builder events.
+        // Write path 2: locally-built-block detection via payload builder events
+        // (populates `LocallyBuiltBlocks`, the write-side filter for the seal-flush task;
+        // see brief §5.1 / §5.3).
         let payload_builder = ctx.node.payload_builder_handle().clone();
         let attribution_for_sealing = attribution.clone();
         task_executor.spawn_task(async move {
             let Ok(payload_events) = payload_builder.subscribe().await else {
-                tracing::warn!("payload builder subscribe failed — sealed block attribution will be unavailable");
+                tracing::warn!(
+                    "payload builder subscribe failed — sealed-tx-fact attribution will be unavailable"
+                );
                 return;
             };
             let mut stream = payload_events.into_built_payload_stream();
             while let Some(payload) = stream.next().await {
                 let block_number = payload.block().number();
-                if let Ok(mut sealed) = attribution_for_sealing.sealed.lock() {
-                    sealed.insert(block_number);
+                if let Ok(mut built) = attribution_for_sealing.locally_built.lock() {
+                    built.insert(block_number);
                 }
             }
         });
@@ -237,10 +233,23 @@ where
             use reth::providers::CanonStateSubscriptions as _;
             provider_watcher.subscribe_to_canonical_state()
         };
+        let sealed_fact_cfg = crate::pog::sealed_fact_config();
+        let provider_for_watcher = provider_watcher.clone();
         task_executor.spawn_with_graceful_shutdown_signal(move |shutdown| {
             let coord = pog.clone();
             let store = attribution.clone();
-            async move { crate::pog::run_pog_watcher(shutdown, coord, store, canon_events).await }
+            let provider = provider_for_watcher;
+            async move {
+                crate::pog::run_pog_watcher(
+                    shutdown,
+                    coord,
+                    store,
+                    provider,
+                    canon_events,
+                    sealed_fact_cfg,
+                )
+                .await
+            }
         });
 
         let bera_for_rpc = bera_admin.clone();
