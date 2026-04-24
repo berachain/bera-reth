@@ -29,7 +29,7 @@ pub struct BerachainExt {
     /// Hard cap on the in-memory `InflightTransactions` map.
     ///
     /// When the cap is reached, an inline TTL sweep runs; if still at cap, new first-hear
-    /// inserts are refused and `reth_pog_inflight_tx_cap_rejections_total` is incremented.
+    /// inserts are refused and `pog_inflight_tx_cap_rejections_total` is incremented.
     /// Range: 1000..=10_000_000.
     #[arg(
         long = "sealed-fact-max-inflight-entries",

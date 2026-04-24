@@ -27,7 +27,7 @@ struct ShutdownPeerCurationConfig {
 #[derive(Debug, Clone, Copy)]
 pub struct PogSealedFactConfig {
     /// Sealed-tx-fact retention window in hours. Used both for inline retention DELETE
-    /// and the `reth_pog_sealed_fact_retention_hours` gauge.
+    /// and the `pog_sealed_fact_retention_hours` gauge.
     pub retention_hours: u64,
     /// Hard cap on `InflightTransactions` entry count. When reached, an inline TTL sweep
     /// runs; if still at cap, new first-hear inserts are refused.
@@ -460,16 +460,16 @@ impl PogSqliteStore {
         }
         self.refresh_min_retained_id();
 
-        metrics::counter!("reth_pog_sealed_tx_facts_flushed_total").increment(inserted);
-        metrics::counter!("reth_pog_sealed_tx_facts_flushed_with_peer_total")
+        metrics::counter!("pog_sealed_tx_facts_flushed_total").increment(inserted);
+        metrics::counter!("pog_sealed_tx_facts_flushed_with_peer_total")
             .increment(inserted_with_peer);
-        metrics::counter!("reth_pog_sealed_tx_facts_retention_deleted_total")
+        metrics::counter!("pog_sealed_tx_facts_retention_deleted_total")
             .increment(deleted as u64);
-        metrics::gauge!("reth_pog_sealed_tx_fact_row_count")
+        metrics::gauge!("pog_sealed_tx_fact_row_count")
             .set(self.sealed_tx_fact_row_count() as f64);
-        metrics::gauge!("reth_pog_sealed_tx_fact_high_water_id")
+        metrics::gauge!("pog_sealed_tx_fact_high_water_id")
             .set(self.sealed_tx_fact_high_water_id() as f64);
-        metrics::gauge!("reth_pog_sealed_tx_fact_min_retained_id")
+        metrics::gauge!("pog_sealed_tx_fact_min_retained_id")
             .set(self.sealed_tx_fact_min_retained_id() as f64);
 
         Ok((new_high_water, deleted as u64))
@@ -488,11 +488,11 @@ impl PogSqliteStore {
         self.sealed_tx_fact_row_count.fetch_sub(deleted as u64, Ordering::Relaxed);
         self.sealed_facts_retention_deleted_total.fetch_add(deleted as u64, Ordering::Relaxed);
         self.refresh_min_retained_id();
-        metrics::counter!("reth_pog_sealed_tx_facts_retention_deleted_total")
+        metrics::counter!("pog_sealed_tx_facts_retention_deleted_total")
             .increment(deleted as u64);
-        metrics::gauge!("reth_pog_sealed_tx_fact_row_count")
+        metrics::gauge!("pog_sealed_tx_fact_row_count")
             .set(self.sealed_tx_fact_row_count() as f64);
-        metrics::gauge!("reth_pog_sealed_tx_fact_min_retained_id")
+        metrics::gauge!("pog_sealed_tx_fact_min_retained_id")
             .set(self.sealed_tx_fact_min_retained_id() as f64);
         Ok(deleted as u64)
     }
@@ -553,7 +553,7 @@ impl PogSqliteStore {
 
         let served = rows.len() as u64;
         self.sealed_facts_export_rows_total.fetch_add(served, Ordering::Relaxed);
-        metrics::counter!("reth_pog_sealed_tx_facts_export_rows_total").increment(served);
+        metrics::counter!("pog_sealed_tx_facts_export_rows_total").increment(served);
 
         Ok(ExportSealedTxFactsOutcome {
             rows,
@@ -918,18 +918,18 @@ impl InflightTransactions {
     /// present under a different first hear), `false` if refused by the safety belt.
     ///
     /// On cap: runs an inline TTL sweep; if still at cap, refuses the insert and bumps
-    /// `reth_pog_inflight_tx_cap_rejections_total`.
+    /// `pog_inflight_tx_cap_rejections_total`.
     pub fn record_first_hear(&mut self, tx_hash: TxHash, peer_id: PeerId, now_ms: u64) -> bool {
         if self.entries.contains_key(&tx_hash) {
             self.first_hears.fetch_add(1, Ordering::Relaxed);
-            metrics::counter!("reth_pog_inflight_tx_first_hears_total").increment(1);
+            metrics::counter!("pog_inflight_tx_first_hears_total").increment(1);
             return true;
         }
         if self.entries.len() >= self.max_entries {
             self.evict_expired();
             if self.entries.len() >= self.max_entries {
                 self.cap_rejections.fetch_add(1, Ordering::Relaxed);
-                metrics::counter!("reth_pog_inflight_tx_cap_rejections_total").increment(1);
+                metrics::counter!("pog_inflight_tx_cap_rejections_total").increment(1);
                 warn!(
                     target: "bera_reth::pog_inflight",
                     tx_hash = %tx_hash,
@@ -949,8 +949,8 @@ impl InflightTransactions {
             },
         );
         self.first_hears.fetch_add(1, Ordering::Relaxed);
-        metrics::counter!("reth_pog_inflight_tx_first_hears_total").increment(1);
-        metrics::gauge!("reth_pog_inflight_tx_count").set(self.entries.len() as f64);
+        metrics::counter!("pog_inflight_tx_first_hears_total").increment(1);
+        metrics::gauge!("pog_inflight_tx_count").set(self.entries.len() as f64);
         true
     }
 
@@ -959,7 +959,7 @@ impl InflightTransactions {
     pub fn drain_for_seal(&mut self, hashes: &[TxHash]) -> Vec<(TxHash, Option<InflightTx>)> {
         let drained: Vec<(TxHash, Option<InflightTx>)> =
             hashes.iter().map(|h| (*h, self.entries.remove(h))).collect();
-        metrics::gauge!("reth_pog_inflight_tx_count").set(self.entries.len() as f64);
+        metrics::gauge!("pog_inflight_tx_count").set(self.entries.len() as f64);
         drained
     }
 
@@ -970,9 +970,9 @@ impl InflightTransactions {
         let removed = before.saturating_sub(self.entries.len()) as u64;
         if removed > 0 {
             self.ttl_evictions.fetch_add(removed, Ordering::Relaxed);
-            metrics::counter!("reth_pog_inflight_tx_ttl_evictions_total").increment(removed);
+            metrics::counter!("pog_inflight_tx_ttl_evictions_total").increment(removed);
         }
-        metrics::gauge!("reth_pog_inflight_tx_count").set(self.entries.len() as f64);
+        metrics::gauge!("pog_inflight_tx_count").set(self.entries.len() as f64);
     }
 
     pub fn len(&self) -> usize {
@@ -1113,7 +1113,7 @@ pub async fn run_pog_watcher<Provider>(
             "startup sealed-tx-fact retention sweep failed (continuing)"
         ),
     }
-    metrics::gauge!("reth_pog_sealed_fact_retention_hours").set(cfg.retention_hours as f64);
+    metrics::gauge!("pog_sealed_fact_retention_hours").set(cfg.retention_hours as f64);
     loop {
         tokio::select! {
             guard = &mut shutdown => {
@@ -1161,7 +1161,7 @@ pub async fn run_pog_watcher<Provider>(
                             );
                         } else {
                             let histogram =
-                                metrics::histogram!("reth_pog_sealed_flush_duration_seconds");
+                                metrics::histogram!("pog_sealed_flush_duration_seconds");
                             histogram.record(flush_start.elapsed().as_secs_f64());
                         }
                     }
@@ -1305,7 +1305,7 @@ where
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or_default();
-    let first_heard_histogram = metrics::histogram!("reth_pog_sealed_first_heard_to_sealed_ms");
+    let first_heard_histogram = metrics::histogram!("pog_sealed_first_heard_to_sealed_ms");
     for (_h, entry) in drained.iter() {
         if let Some(e) = entry {
             first_heard_histogram.record(now_ms.saturating_sub(e.first_heard_ms) as f64);
