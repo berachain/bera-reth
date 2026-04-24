@@ -3,8 +3,6 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Transport {
-    Http,
-    Ws,
     Ipc,
 }
 
@@ -36,12 +34,6 @@ pub fn resolve_endpoint(endpoint: Option<&str>) -> Result<ResolvedEndpoint> {
 
 fn detect_transport(endpoint: &str) -> Result<Transport> {
     let lower = endpoint.to_ascii_lowercase();
-    if lower.starts_with("http://") || lower.starts_with("https://") {
-        return Ok(Transport::Http);
-    }
-    if lower.starts_with("ws://") || lower.starts_with("wss://") {
-        return Ok(Transport::Ws);
-    }
     if lower.contains("://") {
         bail!("unsupported endpoint scheme in {endpoint:?}");
     }
@@ -57,26 +49,6 @@ mod tests {
         let got = resolve_endpoint(None).unwrap();
         assert_eq!(got.transport, Transport::Ipc);
         assert!(got.raw.ends_with("reth.ipc"));
-    }
-
-    #[test]
-    fn parses_http() {
-        let got = resolve_endpoint(Some("http://127.0.0.1:8545")).unwrap();
-        assert_eq!(got.transport, Transport::Http);
-    }
-
-    #[test]
-    fn parses_http_uppercase_scheme_preserves_raw() {
-        let raw = "HTTP://127.0.0.1:8545";
-        let got = resolve_endpoint(Some(raw)).unwrap();
-        assert_eq!(got.transport, Transport::Http);
-        assert_eq!(got.raw, raw);
-    }
-
-    #[test]
-    fn parses_ws() {
-        let got = resolve_endpoint(Some("ws://127.0.0.1:8546")).unwrap();
-        assert_eq!(got.transport, Transport::Ws);
     }
 
     #[test]

@@ -1,14 +1,5 @@
 use super::endpoint::{ResolvedEndpoint, Transport};
 use eyre::{Result, eyre};
-use jsonrpsee::{
-    core::{
-        client::ClientT,
-        params::{ArrayParams, ObjectParams},
-    },
-    http_client::{HttpClient, HttpClientBuilder},
-    rpc_params,
-    ws_client::{WsClient, WsClientBuilder},
-};
 use serde_json::{Map, Value};
 use std::{
     collections::BTreeMap,
@@ -23,22 +14,12 @@ use tokio::{
 
 #[derive(Debug)]
 pub enum RpcClient {
-    Http(HttpClient),
-    Ws(WsClient),
     Ipc(IpcClientLite),
 }
 
 impl RpcClient {
     pub async fn connect(endpoint: &ResolvedEndpoint) -> Result<Self> {
         match endpoint.transport {
-            Transport::Http => {
-                let client = HttpClientBuilder::default().build(&endpoint.raw)?;
-                Ok(Self::Http(client))
-            }
-            Transport::Ws => {
-                let client = WsClientBuilder::default().build(&endpoint.raw).await?;
-                Ok(Self::Ws(client))
-            }
             Transport::Ipc => {
                 validate_ipc_endpoint(&endpoint.raw)?;
                 let client = IpcClientLite::new(endpoint.raw.clone());
@@ -50,8 +31,6 @@ impl RpcClient {
     pub async fn request_value(&self, method: &str, params: Option<Value>) -> Result<Value> {
         let params = RpcParams::from_value(params)?;
         match self {
-            Self::Http(client) => params.request(client, method).await,
-            Self::Ws(client) => params.request(client, method).await,
             Self::Ipc(client) => client.request(method, params.into_value()).await,
         }
     }
@@ -65,8 +44,8 @@ impl RpcClient {
 
 enum RpcParams {
     None,
-    Array(ArrayParams, Vec<Value>),
-    Object(ObjectParams, Map<String, Value>),
+    Array(Vec<Value>),
+    Object(Map<String, Value>),
 }
 
 impl RpcParams {
@@ -76,45 +55,19 @@ impl RpcParams {
         };
         match value {
             Value::Null => Ok(Self::None),
-            Value::Array(values) => {
-                let mut out = ArrayParams::new();
-                for v in &values {
-                    out.insert(v).map_err(|e| eyre!("invalid rpc array params: {e}"))?;
-                }
-                Ok(Self::Array(out, values))
-            }
-            Value::Object(values) => Ok(Self::Object(object_params(values.clone())?, values)),
+            Value::Array(values) => Ok(Self::Array(values)),
+            Value::Object(values) => Ok(Self::Object(values)),
             _ => Err(eyre!("rpc params must be null, JSON array, or JSON object")),
         }
-    }
-
-    async fn request<C>(&self, client: &C, method: &str) -> Result<Value>
-    where
-        C: ClientT,
-    {
-        let value = match self {
-            Self::None => client.request(method, rpc_params![]).await?,
-            Self::Array(params, _) => client.request(method, params.clone()).await?,
-            Self::Object(params, _) => client.request(method, params.clone()).await?,
-        };
-        Ok(value)
     }
 
     fn into_value(self) -> Value {
         match self {
             Self::None => Value::Array(vec![]),
-            Self::Array(_, values) => Value::Array(values),
-            Self::Object(_, values) => Value::Object(values),
+            Self::Array(values) => Value::Array(values),
+            Self::Object(values) => Value::Object(values),
         }
     }
-}
-
-fn object_params(values: Map<String, Value>) -> Result<ObjectParams> {
-    let mut params = ObjectParams::new();
-    for (k, v) in values {
-        params.insert(k.as_str(), v).map_err(|e| eyre!("invalid rpc object params: {e}"))?;
-    }
-    Ok(params)
 }
 
 fn validate_ipc_endpoint(path: &str) -> Result<()> {
@@ -199,8 +152,8 @@ impl IpcClientLite {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::console::endpoint::{ResolvedEndpoint, Transport};
-    use jsonrpsee::{RpcModule, server::ServerBuilder};
+    
+    
     use serde_json::json;
     use tempfile::tempdir;
     use tokio::{
@@ -245,86 +198,6 @@ mod tests {
         std::fs::write(&file_path, b"not a socket").expect("write file");
         let err = validate_ipc_endpoint(file_path.to_string_lossy().as_ref()).unwrap_err();
         assert!(err.to_string().contains("not a unix socket"));
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn rpc_client_http_request_and_supported_modules() {
-        let server = ServerBuilder::default().build("127.0.0.1:0").await.expect("server starts");
-        let addr = server.local_addr().expect("local addr");
-
-        let mut module = RpcModule::new(());
-        module
-            .register_method("eth_blockNumber", |_params, _ctx, _ext| {
-                Ok::<Value, jsonrpsee::types::ErrorObjectOwned>(json!("0x10"))
-            })
-            .expect("register eth_blockNumber");
-        module
-            .register_method("rpc_modules", |_params, _ctx, _ext| {
-                Ok::<Value, jsonrpsee::types::ErrorObjectOwned>(json!({
-                    "eth": "1.0",
-                    "net": "1.0"
-                }))
-            })
-            .expect("register rpc_modules");
-
-        let handle = server.start(module);
-        let endpoint =
-            ResolvedEndpoint { raw: format!("http://{addr}"), transport: Transport::Http };
-
-        let client = RpcClient::connect(&endpoint).await.unwrap();
-        let block = client.request_value("eth_blockNumber", None).await.unwrap();
-        assert_eq!(block, json!("0x10"));
-
-        let modules = client.supported_modules().await.unwrap();
-        assert_eq!(modules.get("eth"), Some(&"1.0".to_owned()));
-        assert_eq!(modules.get("net"), Some(&"1.0".to_owned()));
-
-        handle.stop().expect("stop server");
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn rpc_client_ws_request_path() {
-        let server = ServerBuilder::default().build("127.0.0.1:0").await.expect("server starts");
-        let addr = server.local_addr().expect("local addr");
-
-        let mut module = RpcModule::new(());
-        module
-            .register_method("web3_clientVersion", |_params, _ctx, _ext| {
-                Ok::<Value, jsonrpsee::types::ErrorObjectOwned>(json!("reth/1.0.0"))
-            })
-            .expect("register method");
-
-        let handle = server.start(module);
-        let endpoint = ResolvedEndpoint { raw: format!("ws://{addr}"), transport: Transport::Ws };
-
-        let client = RpcClient::connect(&endpoint).await.unwrap();
-        let version = client.request_value("web3_clientVersion", None).await.unwrap();
-        assert_eq!(version, json!("reth/1.0.0"));
-
-        handle.stop().expect("stop server");
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn supported_modules_errors_on_invalid_shape() {
-        let server = ServerBuilder::default().build("127.0.0.1:0").await.expect("server starts");
-        let addr = server.local_addr().expect("local addr");
-
-        let mut module = RpcModule::new(());
-        module
-            .register_method("rpc_modules", |_params, _ctx, _ext| {
-                Ok::<Value, jsonrpsee::types::ErrorObjectOwned>(json!(["eth", "net"]))
-            })
-            .expect("register rpc_modules");
-
-        let handle = server.start(module);
-        let endpoint =
-            ResolvedEndpoint { raw: format!("http://{addr}"), transport: Transport::Http };
-        let client = RpcClient::connect(&endpoint).await.unwrap();
-
-        let err = client.supported_modules().await.unwrap_err();
-        assert!(err.to_string().contains("invalid type"));
-
-        handle.stop().expect("stop server");
     }
 
     #[tokio::test(flavor = "multi_thread")]
