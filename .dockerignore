@@ -8,6 +8,10 @@
 !build.rs
 !rustfmt.toml
 
+# include genesis fixtures baked into binary
+!/tests/fixtures/mainnet-genesis.json
+!/tests/fixtures/bepolia-genesis.json
+
 # include for vergen constants
 !/.git
 
