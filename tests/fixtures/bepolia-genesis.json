@@ -68,6 +68,7 @@
     "constantinopleBlock": 0,
     "daoForkBlock": 0,
     "daoForkSupport": true,
+    "depositContractAddress": "0x4242424242424242424242424242424242424242",
     "eip150Block": 0,
     "eip155Block": 0,
     "eip158Block": 0,

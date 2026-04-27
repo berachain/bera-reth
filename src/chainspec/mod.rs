@@ -812,9 +812,12 @@ mod tests {
     use reth_chainspec::ForkHash;
 
     #[test]
-    fn test_deposit_contract_default_regression() {
-        let chain_spec = BerachainChainSpec::default();
-        assert!(chain_spec.deposit_contract().is_none());
+    fn test_builtin_genesis_deposit_contract() {
+        let expected = address!("4242424242424242424242424242424242424242");
+        let mainnet = BerachainChainSpecParser::parse(BERACHAIN_MAINNET).unwrap();
+        let bepolia = BerachainChainSpecParser::parse(BERACHAIN_BEPOLIA).unwrap();
+        assert_eq!(mainnet.deposit_contract().map(|c| c.address), Some(expected));
+        assert_eq!(bepolia.deposit_contract().map(|c| c.address), Some(expected));
     }
 
     #[test]
