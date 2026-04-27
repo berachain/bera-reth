@@ -288,9 +288,11 @@ impl TryFrom<BerachainBuiltPayload> for BerachainExecutionPayloadEnvelopeV4 {
     }
 }
 
-impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
-    fn from(_value: BerachainBuiltPayload) -> Self {
-        panic!("ExecutionPayloadV5 conversion not yet supported for Berachain")
+impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
+    type Error = BuiltPayloadConversionError;
+
+    fn try_from(_value: BerachainBuiltPayload) -> Result<Self, Self::Error> {
+        Err(BuiltPayloadConversionError::UnexpectedEip4844Sidecars)
     }
 }
 
@@ -542,5 +544,33 @@ mod tests {
             envelope.execution_requests.is_empty(),
             "execution_requests must default to empty when payload has no requests"
         );
+    }
+
+    #[test]
+    fn test_try_into_v5_returns_error_not_panic() {
+        let header = BerachainHeader {
+            prev_proposer_pubkey: None,
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            ..Default::default()
+        };
+        let block = alloy_consensus::Block {
+            header,
+            body: alloy_consensus::BlockBody {
+                transactions: vec![],
+                ommers: vec![],
+                withdrawals: None,
+            },
+        };
+        let sealed = SealedBlock::new_unhashed(block);
+        let payload = BerachainBuiltPayload::new(
+            PayloadId::new([3; 8]),
+            std::sync::Arc::new(sealed),
+            U256::ZERO,
+            None,
+        );
+
+        let result: Result<ExecutionPayloadEnvelopeV5, _> = payload.try_into();
+        assert!(result.is_err(), "V5 conversion must return an error, never panic");
     }
 }

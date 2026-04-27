@@ -46,6 +46,13 @@ pub struct BerachainEngineApiBuilder<EV> {
 pub const BERACHAIN_ADDITIONAL_CAPABILITIES: &[&str] =
     &["engine_newPayloadV4P11", "engine_forkchoiceUpdatedV3P11", "engine_getPayloadV4P11"];
 
+/// Capabilities inherited from upstream Reth that Berachain does not support.
+///
+/// Berachain serves the Osaka payload via `engine_getPayloadV4P11`, so the V5
+/// method is implemented but never advertised, and any direct call returns
+/// `UnsupportedFork`.
+pub const BERACHAIN_REMOVED_CAPABILITIES: &[&str] = &["engine_getPayloadV5"];
+
 impl<N, EV> EngineApiBuilder<N> for BerachainEngineApiBuilder<EV>
 where
     N: FullNodeComponents<
@@ -585,10 +592,13 @@ where
 
     async fn get_payload_v5(
         &self,
-        payload_id: PayloadId,
+        _payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV5> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadV5");
-        Ok(self.inner.get_payload_v5_metered(payload_id).await?)
+        Err(EngineApiError::EngineObjectValidationError(
+            EngineObjectValidationError::UnsupportedFork,
+        )
+        .into())
     }
 
     async fn get_payload_bodies_by_hash_v1(
@@ -618,6 +628,7 @@ where
 
     async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
         let mut caps = self.inner.capabilities().list();
+        caps.retain(|c| !BERACHAIN_REMOVED_CAPABILITIES.contains(&c.as_str()));
         for &cap in BERACHAIN_ADDITIONAL_CAPABILITIES {
             let s = cap.to_string();
             if !caps.contains(&s) {
