@@ -288,9 +288,22 @@ impl TryFrom<BerachainBuiltPayload> for BerachainExecutionPayloadEnvelopeV4 {
     }
 }
 
-impl From<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
-    fn from(_value: BerachainBuiltPayload) -> Self {
-        panic!("ExecutionPayloadV5 conversion not yet supported for Berachain")
+/// Error returned when a [`BerachainBuiltPayload`] is converted into an
+/// [`ExecutionPayloadEnvelopeV5`].
+///
+/// Berachain serves the Osaka payload via `engine_getPayloadV4P11`, so the V5
+/// envelope is never produced. The trait bound on [`reth_engine_primitives::EngineTypes`]
+/// requires the conversion to exist; this error makes the unsupported case
+/// explicit instead of panicking.
+#[derive(Debug, thiserror::Error)]
+#[error("ExecutionPayloadEnvelopeV5 is not supported on Berachain; use engine_getPayloadV4P11")]
+pub struct UnsupportedPayloadEnvelopeV5;
+
+impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
+    type Error = UnsupportedPayloadEnvelopeV5;
+
+    fn try_from(_value: BerachainBuiltPayload) -> Result<Self, Self::Error> {
+        Err(UnsupportedPayloadEnvelopeV5)
     }
 }
 
@@ -541,6 +554,38 @@ mod tests {
         assert!(
             envelope.execution_requests.is_empty(),
             "execution_requests must default to empty when payload has no requests"
+        );
+    }
+
+    #[test]
+    fn test_try_into_v5_returns_error_not_panic() {
+        let header = BerachainHeader {
+            prev_proposer_pubkey: None,
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            ..Default::default()
+        };
+        let block = alloy_consensus::Block {
+            header,
+            body: alloy_consensus::BlockBody {
+                transactions: vec![],
+                ommers: vec![],
+                withdrawals: None,
+            },
+        };
+        let sealed = SealedBlock::new_unhashed(block);
+        let payload = BerachainBuiltPayload::new(
+            PayloadId::new([3; 8]),
+            std::sync::Arc::new(sealed),
+            U256::ZERO,
+            None,
+        );
+
+        let result: Result<ExecutionPayloadEnvelopeV5, UnsupportedPayloadEnvelopeV5> =
+            payload.try_into();
+        assert!(
+            matches!(result, Err(UnsupportedPayloadEnvelopeV5)),
+            "V5 conversion must return UnsupportedPayloadEnvelopeV5, never panic"
         );
     }
 }
