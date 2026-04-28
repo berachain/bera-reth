@@ -288,11 +288,22 @@ impl TryFrom<BerachainBuiltPayload> for BerachainExecutionPayloadEnvelopeV4 {
     }
 }
 
+/// Error returned when a [`BerachainBuiltPayload`] is converted into an
+/// [`ExecutionPayloadEnvelopeV5`].
+///
+/// Berachain serves the Osaka payload via `engine_getPayloadV4P11`, so the V5
+/// envelope is never produced. The trait bound on [`reth_engine_primitives::EngineTypes`]
+/// requires the conversion to exist; this error makes the unsupported case
+/// explicit instead of panicking.
+#[derive(Debug, thiserror::Error)]
+#[error("ExecutionPayloadEnvelopeV5 is not supported on Berachain; use engine_getPayloadV4P11")]
+pub struct UnsupportedPayloadEnvelopeV5;
+
 impl TryFrom<BerachainBuiltPayload> for ExecutionPayloadEnvelopeV5 {
-    type Error = BuiltPayloadConversionError;
+    type Error = UnsupportedPayloadEnvelopeV5;
 
     fn try_from(_value: BerachainBuiltPayload) -> Result<Self, Self::Error> {
-        Err(BuiltPayloadConversionError::UnexpectedEip4844Sidecars)
+        Err(UnsupportedPayloadEnvelopeV5)
     }
 }
 
