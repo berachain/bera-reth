@@ -30,6 +30,7 @@ jsonrpsee-core = { version = "0.26.0", features = ["server"] }
 jsonrpsee-proc-macros = "0.26.0"
 
 async-trait = "0.1.88"
+metrics = "0.24.3"
 modular-bitfield = "0.13.1"
 reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.3" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.3" }
