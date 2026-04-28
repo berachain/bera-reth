@@ -36,7 +36,7 @@ use reth_node_builder::{
 };
 use reth_payload_primitives::{PayloadAttributesBuilder, PayloadTypes};
 use reth_transaction_pool::{PoolPooledTx, PoolTransaction, TransactionPool};
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 #[derive(Clone)]
 struct PogTxProvenanceSink {
@@ -44,19 +44,29 @@ struct PogTxProvenanceSink {
 }
 
 impl TransactionProvenanceSink for PogTxProvenanceSink {
-    fn record_accepted_from_peer(&self, peer_id: PeerId, accepted_tx_hashes: &[TxHash]) {
+    fn record_accepted_from_peer(
+        &self,
+        peer_id: PeerId,
+        listening_addr: Option<SocketAddr>,
+        accepted_tx_hashes: &[TxHash],
+    ) {
         // reth fires this callback once per tx hash that was just successfully added to
         // the pool by this peer (first-seen-wins already enforced upstream by
         // `TransactionsManager::on_new_pooled_transactions`' retain closure). We simply
         // forward each hash to the InflightTransactions RAM store; the safety belt /
         // metrics bookkeeping lives inside `record_first_hear`.
+        //
+        // BERA-305: `listening_addr` (peer's first-hear advertised socket per devp2p Hello)
+        // is captured alongside `peer_id` so the seal-flush path can persist a re-dialable
+        // `first_enode` even for inbound-pure attribution-only peers. `None` here yields
+        // `first_enode = NULL` downstream — graceful degradation for `Hello.port == 0`.
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or_default();
         if let Ok(mut inflight) = self.store.inflight.lock() {
             for &hash in accepted_tx_hashes {
-                inflight.record_first_hear(hash, peer_id, now_ms);
+                inflight.record_first_hear(hash, peer_id, listening_addr, now_ms);
             }
         }
     }

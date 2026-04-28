@@ -1,7 +1,6 @@
 //! `BerAdminImpl` and [`BerAdminApiServer`](super::BerAdminApiServer) implementation.
 
-use super::BerAdminApiServer;
-use super::{helpers::*, types::*};
+use super::{BerAdminApiServer, helpers::*, types::*};
 
 use crate::{
     chainspec::BerachainChainSpec,
@@ -467,6 +466,7 @@ where
                 effective_tip_wei: tip,
                 tip_formula_version: r.tip_formula_version,
                 extra_hears: Vec::new(),
+                first_enode: r.first_enode,
             });
         }
 
@@ -617,6 +617,7 @@ mod tests {
             effective_tip_wei: 0x1bc16d674ec80000_u128,
             tip_formula_version: 1,
             extra_hears: Vec::new(),
+            first_enode: Some("enode://abc@1.2.3.4:30303".to_string()),
         };
         let json = serde_json::to_value(&row).unwrap();
         let obj = json.as_object().unwrap();
@@ -625,6 +626,7 @@ mod tests {
         assert_eq!(obj["firstPeerId"].as_str(), Some("0xabc"));
         assert_eq!(obj["effectiveTipWei"].as_str(), Some("0x1bc16d674ec80000"));
         assert_eq!(obj["tipFormulaVersion"].as_u64(), Some(1));
+        assert_eq!(obj["firstEnode"].as_str(), Some("enode://abc@1.2.3.4:30303"));
         let extras = obj["extraHears"].as_array().unwrap();
         assert!(extras.is_empty(), "AC-R4: extra_hears must be [] in v1");
     }
@@ -640,12 +642,34 @@ mod tests {
             effective_tip_wei: 0,
             tip_formula_version: 1,
             extra_hears: Vec::new(),
+            first_enode: None,
         };
         let json = serde_json::to_value(&row).unwrap();
         assert!(json["firstPeerId"].is_null());
+        assert!(json["firstEnode"].is_null());
         let back: SealedTxFactRow = serde_json::from_value(json).unwrap();
         assert_eq!(back.effective_tip_wei, 0);
         assert_eq!(back.first_peer_id, None);
+        assert_eq!(back.first_enode, None);
+    }
+
+    /// BERA-305 wire-compat: a payload missing `firstEnode` deserializes to
+    /// `first_enode = None` (older bera-reth nodes don't emit the field; sentinel mirror
+    /// must Option-tolerate). Mirrors the `serde(default)` annotation on the field.
+    #[test]
+    fn sealed_tx_fact_row_legacy_payload_without_first_enode_field_round_trips() {
+        let payload = serde_json::json!({
+            "id": 1,
+            "sealedBlockNumber": 1,
+            "txHash": "0x00",
+            "firstPeerId": null,
+            "firstHeardMs": 0,
+            "effectiveTipWei": "0x0",
+            "tipFormulaVersion": 1,
+            "extraHears": []
+        });
+        let parsed: SealedTxFactRow = serde_json::from_value(payload).unwrap();
+        assert!(parsed.first_enode.is_none());
     }
 
     #[test]

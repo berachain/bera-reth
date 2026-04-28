@@ -128,10 +128,11 @@ use alloy_consensus::{SignableTransaction, TxEip1559};
 use alloy_primitives::{Address, Bytes, TxHash, TxKind, U256, hex};
 use rand::Rng;
 use reth::providers::{BlockReaderIdExt, StateProviderFactory};
-use reth_network_peers::PeerId;
+use reth_network_peers::{NodeRecord, PeerId};
 use rusqlite::{Connection, params};
 use std::{
     collections::HashMap,
+    net::SocketAddr,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -204,6 +205,10 @@ pub(crate) fn ensure_peer_tests_schema(conn: &Connection) -> rusqlite::Result<()
 pub(crate) fn ensure_sealed_tx_fact_schema(conn: &Connection) -> rusqlite::Result<()> {
     // `effective_tip_wei` is stored as the exact wire-serialized hex-`u128` string so no
     // re-encoding happens at export time; see brief §5.5.
+    //
+    // `first_enode` (BERA-305) is the canonical `NodeRecord::Display` enode URL captured at
+    // the peer's first-hear session, NULL for sessions where the peer signalled
+    // `Hello.port == 0` and for pre-migration rows.
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS sealed_tx_fact (
             id                   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,11 +217,25 @@ pub(crate) fn ensure_sealed_tx_fact_schema(conn: &Connection) -> rusqlite::Resul
             first_peer_id        TEXT    NULL,
             first_heard_ms       INTEGER NOT NULL,
             effective_tip_wei    TEXT    NOT NULL,
-            tip_formula_version  INTEGER NOT NULL DEFAULT 1
+            tip_formula_version  INTEGER NOT NULL DEFAULT 1,
+            first_enode          TEXT    NULL
         );
         CREATE INDEX IF NOT EXISTS idx_sealed_tx_fact_first_heard_ms
             ON sealed_tx_fact(first_heard_ms);",
-    )
+    )?;
+
+    // BERA-305: probe-and-ALTER to backfill the `first_enode` column on databases that
+    // were created by pre-migration bera-reth (where the column is absent). Idempotent:
+    // re-running on an already-migrated DB is a no-op because the column already exists.
+    let has_first_enode: bool = conn.query_row(
+        "SELECT COUNT(*) > 0 FROM pragma_table_info('sealed_tx_fact') WHERE name = 'first_enode'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_first_enode {
+        conn.execute_batch("ALTER TABLE sealed_tx_fact ADD COLUMN first_enode TEXT NULL")?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -264,6 +283,10 @@ pub struct SealedTxFactRecord {
     /// stored in SQLite; see brief §5.5.
     pub effective_tip_wei: String,
     pub tip_formula_version: u32,
+    /// Canonical `enode://hex@ip:port` URL captured from the peer's first-hear session
+    /// (`NodeRecord::new(listening_addr, peer_id).to_string()`), `None` for pre-migration
+    /// rows or sessions whose `Hello.port == 0`. See BERA-305 brief.
+    pub first_enode: Option<String>,
 }
 
 /// One row ready to be inserted into `sealed_tx_fact` during a seal-flush transaction.
@@ -275,6 +298,9 @@ pub struct SealedTxFactInsert {
     pub first_heard_ms: u64,
     pub effective_tip_wei_hex: String,
     pub tip_formula_version: u32,
+    /// Pre-rendered enode URL (per `NodeRecord::Display`) for the peer's first-hear session,
+    /// `None` when no listening_addr was captured. BERA-305.
+    pub first_enode: Option<String>,
 }
 
 impl PogSqliteStore {
@@ -424,8 +450,8 @@ impl PogSqliteStore {
             tx.execute(
                 "INSERT INTO sealed_tx_fact \
                     (sealed_block_number, tx_hash, first_peer_id, first_heard_ms, \
-                     effective_tip_wei, tip_formula_version) \
-                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                     effective_tip_wei, tip_formula_version, first_enode) \
+                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     row.sealed_block_number as i64,
                     row.tx_hash,
@@ -433,6 +459,7 @@ impl PogSqliteStore {
                     row.first_heard_ms as i64,
                     row.effective_tip_wei_hex,
                     row.tip_formula_version as i64,
+                    row.first_enode,
                 ],
             )?;
             let id = tx.last_insert_rowid() as u64;
@@ -463,10 +490,8 @@ impl PogSqliteStore {
         metrics::counter!("pog_sealed_tx_facts_flushed_total").increment(inserted);
         metrics::counter!("pog_sealed_tx_facts_flushed_with_peer_total")
             .increment(inserted_with_peer);
-        metrics::counter!("pog_sealed_tx_facts_retention_deleted_total")
-            .increment(deleted as u64);
-        metrics::gauge!("pog_sealed_tx_fact_row_count")
-            .set(self.sealed_tx_fact_row_count() as f64);
+        metrics::counter!("pog_sealed_tx_facts_retention_deleted_total").increment(deleted as u64);
+        metrics::gauge!("pog_sealed_tx_fact_row_count").set(self.sealed_tx_fact_row_count() as f64);
         metrics::gauge!("pog_sealed_tx_fact_high_water_id")
             .set(self.sealed_tx_fact_high_water_id() as f64);
         metrics::gauge!("pog_sealed_tx_fact_min_retained_id")
@@ -488,10 +513,8 @@ impl PogSqliteStore {
         self.sealed_tx_fact_row_count.fetch_sub(deleted as u64, Ordering::Relaxed);
         self.sealed_facts_retention_deleted_total.fetch_add(deleted as u64, Ordering::Relaxed);
         self.refresh_min_retained_id();
-        metrics::counter!("pog_sealed_tx_facts_retention_deleted_total")
-            .increment(deleted as u64);
-        metrics::gauge!("pog_sealed_tx_fact_row_count")
-            .set(self.sealed_tx_fact_row_count() as f64);
+        metrics::counter!("pog_sealed_tx_facts_retention_deleted_total").increment(deleted as u64);
+        metrics::gauge!("pog_sealed_tx_fact_row_count").set(self.sealed_tx_fact_row_count() as f64);
         metrics::gauge!("pog_sealed_tx_fact_min_retained_id")
             .set(self.sealed_tx_fact_min_retained_id() as f64);
         Ok(deleted as u64)
@@ -515,7 +538,7 @@ impl PogSqliteStore {
 
         let mut stmt = conn.prepare(
             "SELECT id, sealed_block_number, tx_hash, first_peer_id, \
-                    first_heard_ms, effective_tip_wei, tip_formula_version \
+                    first_heard_ms, effective_tip_wei, tip_formula_version, first_enode \
              FROM sealed_tx_fact \
              WHERE id > ?1 \
              ORDER BY id ASC \
@@ -529,6 +552,7 @@ impl PogSqliteStore {
             let first_heard_ms: i64 = row.get(4)?;
             let effective_tip_wei: String = row.get(5)?;
             let tip_formula_version: i64 = row.get(6)?;
+            let first_enode: Option<String> = row.get(7)?;
             Ok(SealedTxFactRecord {
                 id: id as u64,
                 sealed_block_number: sealed_block_number as u64,
@@ -537,6 +561,7 @@ impl PogSqliteStore {
                 first_heard_ms: first_heard_ms as u64,
                 effective_tip_wei,
                 tip_formula_version: tip_formula_version as u32,
+                first_enode,
             })
         })?;
 
@@ -900,6 +925,10 @@ pub struct InflightTx {
     pub first_peer_id: PeerId,
     pub first_heard_ms: u64,
     pub first_heard_at: Instant,
+    /// The peer's first-hear advertised listening socket — see BERA-305 brief and
+    /// `TransactionProvenanceSink::record_accepted_from_peer`. `None` when the peer
+    /// signalled `Hello.port == 0`.
+    pub first_listening_addr: Option<SocketAddr>,
 }
 
 impl InflightTransactions {
@@ -919,7 +948,17 @@ impl InflightTransactions {
     ///
     /// On cap: runs an inline TTL sweep; if still at cap, refuses the insert and bumps
     /// `pog_inflight_tx_cap_rejections_total`.
-    pub fn record_first_hear(&mut self, tx_hash: TxHash, peer_id: PeerId, now_ms: u64) -> bool {
+    ///
+    /// `first_listening_addr` (BERA-305) is the peer's advertised devp2p Hello socket,
+    /// preserved through the seal-flush path so we can persist a re-dialable
+    /// `first_enode`. `None` is the legitimate `Hello.port == 0` case.
+    pub fn record_first_hear(
+        &mut self,
+        tx_hash: TxHash,
+        peer_id: PeerId,
+        first_listening_addr: Option<SocketAddr>,
+        now_ms: u64,
+    ) -> bool {
         if self.entries.contains_key(&tx_hash) {
             self.first_hears.fetch_add(1, Ordering::Relaxed);
             metrics::counter!("pog_inflight_tx_first_hears_total").increment(1);
@@ -946,6 +985,7 @@ impl InflightTransactions {
                 first_peer_id: peer_id,
                 first_heard_ms: now_ms,
                 first_heard_at: Instant::now(),
+                first_listening_addr,
             },
         );
         self.first_hears.fetch_add(1, Ordering::Relaxed);
@@ -1273,8 +1313,7 @@ where
             Receipt = reth_ethereum_primitives::Receipt<crate::transaction::BerachainTxType>,
         >,
 {
-    use alloy_consensus::BlockHeader as _;
-    use alloy_consensus::Transaction as _;
+    use alloy_consensus::{BlockHeader as _, Transaction as _};
     use reth_primitives_traits::{BlockBody as _, transaction::TxHashRef as _};
 
     let header = block.header();
@@ -1348,9 +1387,17 @@ pub fn build_sealed_tx_fact_inserts(
 ) -> Vec<SealedTxFactInsert> {
     let mut rows = Vec::with_capacity(drained.len());
     for ((hash, ram), tip) in drained.iter().zip(tips.iter()) {
-        let (first_peer_id, first_heard_ms) = match ram {
-            Some(entry) => (Some(entry.first_peer_id.to_string()), entry.first_heard_ms),
-            None => (None, now_ms),
+        let (first_peer_id, first_heard_ms, first_enode) = match ram {
+            Some(entry) => {
+                // BERA-305: render the canonical `enode://hex@ip:port` form via
+                // `NodeRecord::Display` when both peer_id and listening_addr are
+                // present. Hello.port=0 sessions yield None → first_enode = NULL.
+                let enode = entry
+                    .first_listening_addr
+                    .map(|addr| NodeRecord::new(addr, entry.first_peer_id).to_string());
+                (Some(entry.first_peer_id.to_string()), entry.first_heard_ms, enode)
+            }
+            None => (None, now_ms, None),
         };
         rows.push(SealedTxFactInsert {
             sealed_block_number: block_num,
@@ -1359,6 +1406,7 @@ pub fn build_sealed_tx_fact_inserts(
             first_heard_ms,
             effective_tip_wei_hex: encode_u128_hex_quantity(*tip),
             tip_formula_version: 1,
+            first_enode,
         });
     }
     rows
@@ -1381,6 +1429,157 @@ mod tests {
     use alloy_rlp::Decodable;
     use tempfile::NamedTempFile;
 
+    // ---- TP-4 (BERA-305): schema migration adds `first_enode` column ----
+    /// Confirms `ensure_sealed_tx_fact_schema` upgrades a pre-migration
+    /// `sealed_tx_fact` table (without the `first_enode` column) by adding the column,
+    /// preserving existing rows with `first_enode = NULL`, and that fresh INSERTs with a
+    /// populated `first_enode` round-trip through `export_sealed_tx_facts`.
+    #[test]
+    fn sealed_tx_fact_schema_migration_adds_first_enode() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+        let tmp = NamedTempFile::new().unwrap();
+
+        // Phase 1: create a DB with the *pre-migration* schema (no first_enode column).
+        let conn = Connection::open(tmp.path()).unwrap();
+        conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+        conn.execute_batch(
+            "CREATE TABLE sealed_tx_fact (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                sealed_block_number  INTEGER NOT NULL,
+                tx_hash              TEXT    NOT NULL,
+                first_peer_id        TEXT    NULL,
+                first_heard_ms       INTEGER NOT NULL,
+                effective_tip_wei    TEXT    NOT NULL,
+                tip_formula_version  INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE INDEX idx_sealed_tx_fact_first_heard_ms
+                ON sealed_tx_fact(first_heard_ms);",
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sealed_tx_fact \
+                (sealed_block_number, tx_hash, first_peer_id, first_heard_ms, \
+                 effective_tip_wei, tip_formula_version) \
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![1_i64, "0xfeed", Option::<String>::None, 100_i64, "0x0", 1_i64,],
+        )
+        .unwrap();
+
+        // Sanity: pre-migration column set has no first_enode.
+        let pre_has: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('sealed_tx_fact') WHERE name = 'first_enode'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!pre_has, "test setup expects pre-migration schema");
+        drop(conn);
+
+        // Phase 2: open the DB through PogSqliteStore::open, which runs the migration.
+        let store = PogSqliteStore::open(tmp.path()).unwrap();
+        // (a) migration succeeds: open returned Ok above.
+        // (b) first_enode column exists.
+        let post_has: bool = store
+            .lock_read()
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('sealed_tx_fact') WHERE name = 'first_enode'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(post_has, "migration must add the first_enode column");
+
+        // (c) pre-existing row preserved with first_enode = NULL.
+        let exported = store.export_sealed_tx_facts(0, 100).unwrap();
+        assert_eq!(exported.rows.len(), 1);
+        assert!(exported.rows[0].first_enode.is_none(), "legacy row must round-trip with NULL");
+
+        // (d) fresh INSERT with a populated first_enode round-trips.
+        let peer = PeerId::random();
+        let listening_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7)), 30303);
+        let expected_enode = NodeRecord::new(listening_addr, peer).to_string();
+        let insert = SealedTxFactInsert {
+            sealed_block_number: 99,
+            tx_hash: "0xbeef".to_string(),
+            first_peer_id: Some(peer.to_string()),
+            first_heard_ms: 200,
+            effective_tip_wei_hex: "0x0".to_string(),
+            tip_formula_version: 1,
+            first_enode: Some(expected_enode.clone()),
+        };
+        store.flush_sealed_tx_facts(&[insert], 0).unwrap();
+        let exported = store.export_sealed_tx_facts(0, 100).unwrap();
+        let new_row =
+            exported.rows.iter().find(|r| r.tx_hash == "0xbeef").expect("fresh row exported");
+        assert_eq!(
+            new_row.first_enode.as_deref(),
+            Some(expected_enode.as_str()),
+            "fresh INSERT with populated first_enode must round-trip through export",
+        );
+    }
+
+    // ---- TP-5 (BERA-305): PogTxProvenanceSink persists first_enode round trip ----
+    /// Drives the in-RAM `InflightTransactions` → `build_sealed_tx_fact_inserts` pipeline
+    /// directly (the same pipeline `PogTxProvenanceSink::record_accepted_from_peer` feeds)
+    /// and asserts that:
+    ///   - a `Some(addr)` listening_addr produces `first_enode == NodeRecord::new(addr,
+    ///     peer_id).to_string()` on the persisted row;
+    ///   - a `None` listening_addr (Hello.port=0) produces `first_enode = NULL`.
+    /// Routing through `flush_sealed_tx_facts` plus `export_sealed_tx_facts` exercises the
+    /// SQLite round-trip end-to-end.
+    #[test]
+    fn pog_sink_persists_first_enode_round_trip() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+        let tmp = NamedTempFile::new().unwrap();
+        let store = PogSqliteStore::open(tmp.path()).unwrap();
+
+        // Two parallel scenarios in one DB: peer A with listening_addr; peer B without.
+        let mut inflight = InflightTransactions::new(Duration::from_secs(60), 1024);
+        let peer_a = PeerId::random();
+        let listening = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7)), 30303);
+        let tx_a = B256::random();
+        inflight.record_first_hear(tx_a, peer_a, Some(listening), 1_000);
+
+        let peer_b = PeerId::random();
+        let tx_b = B256::random();
+        inflight.record_first_hear(tx_b, peer_b, None, 2_000);
+
+        let drained = inflight.drain_for_seal(&[tx_a, tx_b]);
+        let rows = build_sealed_tx_fact_inserts(99, &drained, &[100, 200], 9_999);
+        assert_eq!(rows.len(), 2);
+        let row_a = rows.iter().find(|r| r.tx_hash == format!("{tx_a:#x}")).unwrap();
+        let row_b = rows.iter().find(|r| r.tx_hash == format!("{tx_b:#x}")).unwrap();
+        let expected_enode = NodeRecord::new(listening, peer_a).to_string();
+        assert_eq!(row_a.first_enode.as_deref(), Some(expected_enode.as_str()));
+        assert!(row_b.first_enode.is_none());
+
+        store.flush_sealed_tx_facts(&rows, 0).unwrap();
+        let exported = store.export_sealed_tx_facts(0, 100).unwrap();
+        assert_eq!(exported.rows.len(), 2);
+        let exported_a = exported
+            .rows
+            .iter()
+            .find(|r| r.tx_hash == format!("{tx_a:#x}"))
+            .expect("populated row exported");
+        let exported_b = exported
+            .rows
+            .iter()
+            .find(|r| r.tx_hash == format!("{tx_b:#x}"))
+            .expect("NULL-enode row exported");
+        assert_eq!(
+            exported_a.first_enode.as_deref(),
+            Some(expected_enode.as_str()),
+            "Some(listening_addr) must round-trip as canonical enode URL",
+        );
+        assert!(
+            exported_b.first_enode.is_none(),
+            "Hello.port=0 must round-trip as NULL first_enode",
+        );
+    }
+
     // ---- TP-R1 ----
     #[test]
     fn tp_r1_record_first_hear_first_seen_wins() {
@@ -1388,8 +1587,8 @@ mod tests {
         let tx = B256::random();
         let p1 = PeerId::random();
         let p2 = PeerId::random();
-        assert!(w.record_first_hear(tx, p1, 1_000));
-        assert!(w.record_first_hear(tx, p2, 2_000));
+        assert!(w.record_first_hear(tx, p1, None, 1_000));
+        assert!(w.record_first_hear(tx, p2, None, 2_000));
         let drained = w.drain_for_seal(&[tx]);
         let (_, entry) = drained.into_iter().next().unwrap();
         let e = entry.expect("entry present");
@@ -1405,8 +1604,8 @@ mod tests {
         let b = B256::random();
         let c = B256::random();
         let peer = PeerId::random();
-        w.record_first_hear(a, peer, 10);
-        w.record_first_hear(b, peer, 20);
+        w.record_first_hear(a, peer, None, 10);
+        w.record_first_hear(b, peer, None, 20);
         let drained = w.drain_for_seal(&[a, b, c]);
         assert_eq!(drained.len(), 3);
         assert!(drained.iter().find(|(h, _)| *h == a).unwrap().1.is_some());
@@ -1421,7 +1620,7 @@ mod tests {
     fn tp_r3_ttl_eviction_removes_stale_entries() {
         let mut w = InflightTransactions::new(Duration::from_millis(1), 1024);
         for _ in 0..5 {
-            w.record_first_hear(B256::random(), PeerId::random(), 0);
+            w.record_first_hear(B256::random(), PeerId::random(), None, 0);
         }
         assert_eq!(w.len(), 5);
         std::thread::sleep(Duration::from_millis(5));
@@ -1434,19 +1633,19 @@ mod tests {
     fn tp_r4_cap_rejection_and_inline_sweep() {
         let mut w = InflightTransactions::new(Duration::from_millis(1), 2);
         let peer = PeerId::random();
-        assert!(w.record_first_hear(B256::random(), peer, 0));
-        assert!(w.record_first_hear(B256::random(), peer, 0));
+        assert!(w.record_first_hear(B256::random(), peer, None, 0));
+        assert!(w.record_first_hear(B256::random(), peer, None, 0));
         // At cap; let the TTL expire so the inline sweep clears the map.
         std::thread::sleep(Duration::from_millis(5));
         // Next insert triggers inline sweep and succeeds.
-        assert!(w.record_first_hear(B256::random(), peer, 0));
+        assert!(w.record_first_hear(B256::random(), peer, None, 0));
         assert_eq!(w.cap_rejections(), 0);
 
         // Now fill cap with FRESH entries (TTL=1h so sweep can't clear them).
         let mut w = InflightTransactions::new(Duration::from_secs(3600), 2);
-        assert!(w.record_first_hear(B256::random(), peer, 0));
-        assert!(w.record_first_hear(B256::random(), peer, 0));
-        assert!(!w.record_first_hear(B256::random(), peer, 0));
+        assert!(w.record_first_hear(B256::random(), peer, None, 0));
+        assert!(w.record_first_hear(B256::random(), peer, None, 0));
+        assert!(!w.record_first_hear(B256::random(), peer, None, 0));
         assert_eq!(w.cap_rejections(), 1);
     }
 
@@ -1473,6 +1672,7 @@ mod tests {
                 first_heard_ms: 100,
                 effective_tip_wei_hex: "0x0".to_string(),
                 tip_formula_version: 1,
+                first_enode: None,
             },
             SealedTxFactInsert {
                 sealed_block_number: 2,
@@ -1481,6 +1681,7 @@ mod tests {
                 first_heard_ms: 10_000,
                 effective_tip_wei_hex: "0x0".to_string(),
                 tip_formula_version: 1,
+                first_enode: None,
             },
         ];
         let (_hw, _del) = store.flush_sealed_tx_facts(&rows, 0).unwrap();
@@ -1507,6 +1708,7 @@ mod tests {
             first_heard_ms: 1_713_876_543_000,
             effective_tip_wei_hex: "0x1bc16d674ec80000".to_string(),
             tip_formula_version: 1,
+            first_enode: None,
         }];
         store.flush_sealed_tx_facts(&rows, 0).unwrap();
 
@@ -1539,6 +1741,7 @@ mod tests {
                 first_heard_ms: 1_000 + i,
                 effective_tip_wei_hex: "0x0".to_string(),
                 tip_formula_version: 1,
+                first_enode: None,
             })
             .collect();
         store.flush_sealed_tx_facts(&rows, 0).unwrap();
@@ -1557,6 +1760,7 @@ mod tests {
                     first_heard_ms: 1_000_000 + i,
                     effective_tip_wei_hex: "0x0".to_string(),
                     tip_formula_version: 1,
+                    first_enode: None,
                 }];
                 s1.flush_sealed_tx_facts(&rs, 0).unwrap();
             }
@@ -1590,6 +1794,7 @@ mod tests {
             first_heard_ms: 500,
             effective_tip_wei_hex: "0x1".into(),
             tip_formula_version: 1,
+            first_enode: None,
         }];
         let before_flushed = store.sealed_facts_flushed_total();
         store.flush_sealed_tx_facts(&rows, 0).unwrap();
@@ -1628,8 +1833,8 @@ mod tests {
         let peer = PeerId::random();
         let tx_a = B256::random();
         let tx_b = B256::random();
-        inflight.record_first_hear(tx_a, peer, 100);
-        inflight.record_first_hear(tx_b, peer, 200);
+        inflight.record_first_hear(tx_a, peer, None, 100);
+        inflight.record_first_hear(tx_b, peer, None, 200);
         // If the seal-flush caller respects `contains`, these entries are never drained.
         assert_eq!(inflight.len(), 2);
         assert!(inflight.contains(&tx_a));
@@ -1642,7 +1847,7 @@ mod tests {
         let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
         let tx = B256::random();
         let peer = PeerId::random();
-        w.record_first_hear(tx, peer, 42);
+        w.record_first_hear(tx, peer, None, 42);
         let drained = w.drain_for_seal(&[tx]);
         let entry = drained[0].1.unwrap();
         assert_eq!(entry.first_peer_id, peer);
