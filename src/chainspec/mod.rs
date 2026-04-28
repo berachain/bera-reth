@@ -809,9 +809,12 @@ mod tests {
     use reth_chainspec::ForkHash;
 
     #[test]
-    fn test_deposit_contract_default_regression() {
-        let chain_spec = BerachainChainSpec::default();
-        assert!(chain_spec.deposit_contract().is_none());
+    fn test_builtin_genesis_deposit_contract() {
+        let expected = address!("4242424242424242424242424242424242424242");
+        let mainnet = BerachainChainSpecParser::parse(BERACHAIN_MAINNET).unwrap();
+        let bepolia = BerachainChainSpecParser::parse(BERACHAIN_BEPOLIA).unwrap();
+        assert_eq!(mainnet.deposit_contract().map(|c| c.address), Some(expected));
+        assert_eq!(bepolia.deposit_contract().map(|c| c.address), Some(expected));
     }
 
     #[test]
@@ -2151,7 +2154,7 @@ mod tests {
             timestamp: 1754496000,
         };
 
-        // After Prague2
+        // After Prague2, before Osaka
         let head_prague2_active = Head {
             number: 100,
             hash: B256::ZERO,
@@ -2181,7 +2184,7 @@ mod tests {
         assert_eq!(fork_id_before_prague.next, 1746633600, "next fork should be Prague");
         assert_eq!(fork_id_prague.next, 1754496000, "next fork should be Prague1");
         assert_eq!(fork_id_prague1.next, 1758124800, "next fork should be Prague2");
-        assert_eq!(fork_id_prague2.next, 0, "no next fork after Prague2");
+        assert_eq!(fork_id_prague2.next, 9999999999999999, "next fork should be Osaka");
 
         // Expected fork hash values for Bepolia (matching bera-geth test values)
         assert_eq!(fork_id_before_prague.hash, ForkHash([0xae, 0x79, 0x53, 0x0c]));
@@ -2257,7 +2260,7 @@ mod tests {
             timestamp: 1762164459,
         };
 
-        // Prague4 active
+        // Prague4 active, before Osaka
         let head_prague4_active = Head {
             number: 100,
             hash: B256::ZERO,
@@ -2266,13 +2269,13 @@ mod tests {
             timestamp: 1762963200,
         };
 
-        // Far future
+        // After all configured forks, including Osaka
         let head_far_future = Head {
             number: 1000,
             hash: B256::ZERO,
             difficulty: Default::default(),
             total_difficulty: Default::default(),
-            timestamp: 2000000000,
+            timestamp: 10000000000000000,
         };
 
         // Calculate fork IDs
@@ -2312,7 +2315,7 @@ mod tests {
         assert_eq!(fork_id_prague1.next, 1759248000, "next fork should be Prague2");
         assert_eq!(fork_id_prague2.next, 1762164459, "next fork should be Prague3");
         assert_eq!(fork_id_prague3.next, 1762963200, "next fork should be Prague4");
-        assert_eq!(fork_id_prague4.next, 0, "no next fork after Prague4");
+        assert_eq!(fork_id_prague4.next, 9999999999999999, "next fork should be Osaka");
         assert_eq!(fork_id_future.next, 0, "no next fork in far future");
 
         // Expected fork hash values for mainnet (matching bera-geth test values)
@@ -2323,7 +2326,7 @@ mod tests {
         assert_eq!(fork_id_prague2.hash, ForkHash([0xcb, 0xbf, 0x6c, 0x9f]));
         assert_eq!(fork_id_prague3.hash, ForkHash([0x64, 0x94, 0xa1, 0x76]));
         assert_eq!(fork_id_prague4.hash, ForkHash([0x70, 0x1a, 0x09, 0x7f]));
-        assert_eq!(fork_id_future.hash, ForkHash([0x70, 0x1a, 0x09, 0x7f]));
+        assert_eq!(fork_id_future.hash, ForkHash([0x96, 0xd1, 0x6c, 0xa7]));
     }
 
     #[test]
@@ -2337,13 +2340,13 @@ mod tests {
 
         let latest_fork_id = spec.latest_fork_id();
 
-        // Create a head far in the future (after all Prague2 activation at 1758124800)
+        // Create a head after all configured Bepolia forks, including Osaka.
         let head_final = Head {
             number: 100,
             hash: B256::ZERO,
             difficulty: Default::default(),
             total_difficulty: Default::default(),
-            timestamp: 2000000000, // Far future
+            timestamp: 10000000000000000,
         };
         let current_fork_id = spec.fork_id(&head_final);
 
@@ -2353,8 +2356,8 @@ mod tests {
         );
         assert_eq!(latest_fork_id.next, 0, "latest fork should have no next fork");
 
-        // Verify this matches the final Prague2 state from bera-geth test
-        assert_eq!(latest_fork_id.hash, ForkHash([0x2e, 0xdd, 0x8d, 0x57]));
+        // Verify this matches the final Osaka state.
+        assert_eq!(latest_fork_id.hash, ForkHash([0x4b, 0xd5, 0x84, 0x03]));
     }
 
     #[test]

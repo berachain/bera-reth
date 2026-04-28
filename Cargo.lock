@@ -1475,6 +1475,7 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
+ "metrics",
  "modular-bitfield",
  "reth",
  "reth-basic-payload-builder",
