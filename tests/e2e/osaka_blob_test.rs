@@ -1,7 +1,6 @@
 //! Verifies EIP-4844 blob transactions are accepted and included in blocks once Osaka is active.
 
 use crate::e2e::{berachain_payload_attributes_generator, test_signer};
-use alloy_consensus::Transaction;
 use bera_reth::{chainspec::BerachainChainSpec, node::BerachainNode};
 use reth::tasks::Runtime;
 use reth_chainspec::EthChainSpec;
