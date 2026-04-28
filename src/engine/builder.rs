@@ -332,7 +332,7 @@ where
                 if sidecar.is_eip4844() {
                     Ok(sidecar)
                 } else {
-                    Err(Eip4844PoolTransactionError::UnexpectedEip7594SidecarBeforeOsaka)
+                    Err(Eip4844PoolTransactionError::Eip7594SidecarDisallowed)
                 }
             };
 

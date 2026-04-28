@@ -35,7 +35,7 @@ use reth_payload_primitives::{EngineObjectValidationError, PayloadAttributes, Pa
 use reth_rpc_engine_api::{EngineApi, EngineApiError, EngineCapabilities};
 use reth_transaction_pool::TransactionPool;
 use std::sync::Arc;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 /// Builder for [`BerachainEngineApi`] implementation.
 #[derive(Debug, Default)]
@@ -599,13 +599,33 @@ where
         // V4P11 is the canonical post-Prague1 getPayload variant on Berachain across
         // both Prague1 and Osaka. Resolve through the payload store directly because
         // upstream's `get_payload_v4_metered` rejects retrievals once Osaka is active.
-        let built = self
-            .payload_store
-            .resolve(payload_id)
-            .await
-            .ok_or(EngineApiError::UnknownPayload)?
-            .map_err(|_| EngineApiError::UnknownPayload)?;
-        built.try_into().map_err(|_| EngineApiError::UnknownPayload.into())
+        let built = match self.payload_store.resolve(payload_id).await {
+            None => return Err(EngineApiError::UnknownPayload.into()),
+            Some(Ok(built)) => built,
+            Some(Err(err)) => {
+                warn!(
+                    target: "rpc::engine",
+                    ?payload_id,
+                    error = ?err,
+                    "Failed to resolve payload for engine_getPayloadV4P11"
+                );
+                return Err(EngineApiError::GetPayloadError(err).into());
+            }
+        };
+
+        built.try_into().map_err(|err| {
+            let error_type = std::any::type_name_of_val(&err);
+            warn!(
+                target: "rpc::engine",
+                ?payload_id,
+                error_type,
+                "Failed to convert payload for engine_getPayloadV4P11"
+            );
+            EngineApiError::Internal(Box::new(std::io::Error::other(format!(
+                "failed to convert payload for engine_getPayloadV4P11: {error_type}"
+            ))))
+            .into()
+        })
     }
 
     async fn get_payload_v5(
