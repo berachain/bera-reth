@@ -581,7 +581,11 @@ mod tests {
             None,
         );
 
-        let result: Result<ExecutionPayloadEnvelopeV5, _> = payload.try_into();
-        assert!(result.is_err(), "V5 conversion must return an error, never panic");
+        let result: Result<ExecutionPayloadEnvelopeV5, UnsupportedPayloadEnvelopeV5> =
+            payload.try_into();
+        assert!(
+            matches!(result, Err(UnsupportedPayloadEnvelopeV5)),
+            "V5 conversion must return UnsupportedPayloadEnvelopeV5, never panic"
+        );
     }
 }
