@@ -98,7 +98,11 @@ where
             ctx.config.engine.accept_execution_requests_hash,
             ctx.node.network().clone(),
         );
-        Ok(BerachainEngineApi { inner, chain_spec: ctx.config.chain.clone() })
+        Ok(BerachainEngineApi {
+            inner,
+            chain_spec: ctx.config.chain.clone(),
+            payload_store: PayloadStore::new(ctx.node.payload_builder_handle().clone()),
+        })
     }
 }
 
@@ -352,6 +356,10 @@ pub trait BerachainEngineApi<Engine: EngineTypes> {
 pub struct BerachainEngineApi<Provider, PayloadT: PayloadTypes, Pool, Validator, ChainSpec> {
     inner: EngineApi<Provider, PayloadT, Pool, Validator, ChainSpec>,
     chain_spec: Arc<ChainSpec>,
+    /// Direct handle to the payload builder so `getPayloadV4P11` can resolve payloads
+    /// without going through upstream's V4 timestamp validation, which rejects
+    /// post-Osaka calls.
+    payload_store: PayloadStore<PayloadT>,
 }
 
 /// Validates Prague1 requirements for P11 methods
@@ -587,7 +595,17 @@ where
         payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV4> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadV4P11");
-        Ok(self.inner.get_payload_v4_metered(payload_id).await?)
+
+        // V4P11 is the canonical post-Prague1 getPayload variant on Berachain across
+        // both Prague1 and Osaka. Resolve through the payload store directly because
+        // upstream's `get_payload_v4_metered` rejects retrievals once Osaka is active.
+        let built = self
+            .payload_store
+            .resolve(payload_id)
+            .await
+            .ok_or(EngineApiError::UnknownPayload)?
+            .map_err(|_| EngineApiError::UnknownPayload)?;
+        built.try_into().map_err(|_| EngineApiError::UnknownPayload.into())
     }
 
     async fn get_payload_v5(
