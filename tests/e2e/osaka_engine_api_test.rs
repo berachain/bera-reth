@@ -6,8 +6,7 @@
 
 use crate::e2e::berachain_payload_attributes_generator;
 use bera_reth::{chainspec::BerachainChainSpec, node::BerachainNode};
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::rpc_params;
+use jsonrpsee::{core::client::ClientT, rpc_params};
 use reth::tasks::Runtime;
 use reth_cli::chainspec::parse_genesis;
 use reth_e2e_test_utils::node::NodeTestContext;

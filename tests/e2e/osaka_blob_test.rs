@@ -15,8 +15,7 @@ use std::sync::Arc;
 async fn test_eip4844_blob_tx_accepted_post_osaka() -> eyre::Result<()> {
     let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
 
-    let genesis_path =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
+    let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path)?;
     let genesis = parse_genesis(&genesis_json)?;
     let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
