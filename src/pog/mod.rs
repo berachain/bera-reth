@@ -446,6 +446,17 @@ impl PogSqliteStore {
         let tx = conn.transaction()?;
         let mut new_high_water: Option<u64> = None;
         let mut inserted_with_peer: u64 = 0;
+        // BERA-305 / VC-1: bucket sealed_tx_fact writes by `first_enode` outcome so VC-1
+        // (Hello.port hit-rate spike) can be graphed at insert time, not just by paging
+        // the SQLite table. Buckets:
+        //   - present:              first_peer_id IS NOT NULL && first_enode IS NOT NULL
+        //   - null_hello_port_zero: first_peer_id IS NOT NULL && first_enode IS NULL
+        //                            (peer attributed but Hello.port=0 — the VC-1 case)
+        //   - null_no_peer:         first_peer_id IS NULL (locally-built / RPC-only;
+        //                            first_enode is structurally NULL)
+        let mut sealed_first_enode_present: u64 = 0;
+        let mut sealed_first_enode_null_hello_port_zero: u64 = 0;
+        let mut sealed_first_enode_null_no_peer: u64 = 0;
         for row in rows {
             tx.execute(
                 "INSERT INTO sealed_tx_fact \
@@ -464,8 +475,18 @@ impl PogSqliteStore {
             )?;
             let id = tx.last_insert_rowid() as u64;
             new_high_water = Some(new_high_water.map(|h| h.max(id)).unwrap_or(id));
-            if row.first_peer_id.is_some() {
-                inserted_with_peer += 1;
+            match (row.first_peer_id.is_some(), row.first_enode.is_some()) {
+                (true, true) => {
+                    inserted_with_peer += 1;
+                    sealed_first_enode_present += 1;
+                }
+                (true, false) => {
+                    inserted_with_peer += 1;
+                    sealed_first_enode_null_hello_port_zero += 1;
+                }
+                (false, _) => {
+                    sealed_first_enode_null_no_peer += 1;
+                }
             }
         }
 
@@ -490,6 +511,22 @@ impl PogSqliteStore {
         metrics::counter!("pog_sealed_tx_facts_flushed_total").increment(inserted);
         metrics::counter!("pog_sealed_tx_facts_flushed_with_peer_total")
             .increment(inserted_with_peer);
+        // BERA-305 / VC-1 buckets — see comment above.
+        metrics::counter!(
+            "pog_sealed_tx_facts_flushed_first_enode_total",
+            "outcome" => "present",
+        )
+        .increment(sealed_first_enode_present);
+        metrics::counter!(
+            "pog_sealed_tx_facts_flushed_first_enode_total",
+            "outcome" => "null_hello_port_zero",
+        )
+        .increment(sealed_first_enode_null_hello_port_zero);
+        metrics::counter!(
+            "pog_sealed_tx_facts_flushed_first_enode_total",
+            "outcome" => "null_no_peer",
+        )
+        .increment(sealed_first_enode_null_no_peer);
         metrics::counter!("pog_sealed_tx_facts_retention_deleted_total").increment(deleted as u64);
         metrics::gauge!("pog_sealed_tx_fact_row_count").set(self.sealed_tx_fact_row_count() as f64);
         metrics::gauge!("pog_sealed_tx_fact_high_water_id")
@@ -959,9 +996,18 @@ impl InflightTransactions {
         first_listening_addr: Option<SocketAddr>,
         now_ms: u64,
     ) -> bool {
+        // BERA-305 / VC-1: split `first_hears_total` by whether the upstream provenance
+        // sink supplied a listening_addr (Hello.port != 0). Operators graph
+        // sum(rate{listening_addr_present="true"}) / sum(rate(...)) for the Hello.port
+        // hit-rate the brief calls out, without table-scanning sealed_tx_fact.
+        let listening_addr_present = if first_listening_addr.is_some() { "true" } else { "false" };
         if self.entries.contains_key(&tx_hash) {
             self.first_hears.fetch_add(1, Ordering::Relaxed);
-            metrics::counter!("pog_inflight_tx_first_hears_total").increment(1);
+            metrics::counter!(
+                "pog_inflight_tx_first_hears_total",
+                "listening_addr_present" => listening_addr_present,
+            )
+            .increment(1);
             return true;
         }
         if self.entries.len() >= self.max_entries {
@@ -989,7 +1035,11 @@ impl InflightTransactions {
             },
         );
         self.first_hears.fetch_add(1, Ordering::Relaxed);
-        metrics::counter!("pog_inflight_tx_first_hears_total").increment(1);
+        metrics::counter!(
+            "pog_inflight_tx_first_hears_total",
+            "listening_addr_present" => listening_addr_present,
+        )
+        .increment(1);
         metrics::gauge!("pog_inflight_tx_count").set(self.entries.len() as f64);
         true
     }

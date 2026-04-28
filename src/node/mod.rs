@@ -36,7 +36,20 @@ use reth_node_builder::{
 };
 use reth_payload_primitives::{PayloadAttributesBuilder, PayloadTypes};
 use reth_transaction_pool::{PoolPooledTx, PoolTransaction, TransactionPool};
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+use tracing::{debug, warn};
+
+/// BERA-305 / VC-1: latched once when the provenance sink first observes an accept-batch
+/// with `listening_addr = None` (i.e. a peer's devp2p `Hello.port == 0`). Surfaces a
+/// single `warn!` so operators get an actionable signal that some peers will only ever
+/// produce `first_enode = NULL` rows; subsequent occurrences are tracked via metrics.
+static OBSERVED_NONE_LISTENING_ADDR: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone)]
 struct PogTxProvenanceSink {
@@ -60,6 +73,34 @@ impl TransactionProvenanceSink for PogTxProvenanceSink {
         // is captured alongside `peer_id` so the seal-flush path can persist a re-dialable
         // `first_enode` even for inbound-pure attribution-only peers. `None` here yields
         // `first_enode = NULL` downstream — graceful degradation for `Hello.port == 0`.
+        //
+        // VC-1 observability: at trace/debug we log every accept-batch with whether the
+        // listening_addr was supplied. The first None observation in this process also
+        // emits a one-shot `warn!` so operators see an actionable signal without having
+        // to enable -vvvv. Per-tx outcomes are tracked via metric labels on
+        // `pog_inflight_tx_first_hears_total{listening_addr_present=...}` and at the
+        // SQL insert site via `pog_sealed_tx_facts_flushed_first_enode_total{outcome=...}`.
+        debug!(
+            target: "bera_reth::pog",
+            peer_id = %peer_id,
+            listening_addr_present = listening_addr.is_some(),
+            listening_addr = ?listening_addr,
+            n_hashes = accepted_tx_hashes.len(),
+            "record_accepted_from_peer",
+        );
+        if listening_addr.is_none()
+            && !OBSERVED_NONE_LISTENING_ADDR.swap(true, Ordering::Relaxed)
+        {
+            warn!(
+                target: "bera_reth::pog",
+                peer_id = %peer_id,
+                n_hashes = accepted_tx_hashes.len(),
+                "first peer accept with listening_addr=None observed (devp2p Hello.port=0); \
+                 sealed_tx_fact rows for this session will have first_enode=NULL. \
+                 Track Hello.port hit-rate via \
+                 pog_inflight_tx_first_hears_total{{listening_addr_present}}.",
+            );
+        }
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
