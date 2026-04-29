@@ -127,8 +127,8 @@ impl BerachainChainSpec {
             // We filter out TTD-based forks w/o a pre-known block since those do not show up in
             // the fork filter.
             Some(match condition {
-                ForkCondition::Block(block) |
-                ForkCondition::TTD { fork_block: Some(block), .. } => ForkFilterKey::Block(block),
+                ForkCondition::Block(block)
+                | ForkCondition::TTD { fork_block: Some(block), .. } => ForkFilterKey::Block(block),
                 ForkCondition::Timestamp(time) => ForkFilterKey::Time(time),
                 _ => return None,
             })
@@ -160,8 +160,8 @@ impl BerachainChainSpec {
         for (_, cond) in self.inner.hardforks.forks_iter() {
             // handle block based forks and the sepolia merge netsplit block edge case (TTD
             // ForkCondition with Some(block))
-            if let ForkCondition::Block(block) |
-            ForkCondition::TTD { fork_block: Some(block), .. } = cond
+            if let ForkCondition::Block(block)
+            | ForkCondition::TTD { fork_block: Some(block), .. } = cond
             {
                 if head.number >= block {
                     // skip duplicated hardforks: hardforks enabled at genesis block
@@ -573,8 +573,8 @@ impl From<Genesis> for BerachainChainSpec {
         }
 
         // Validate Prague3 ordering if configured (Prague3 must come at or after Prague2)
-        if let Some(prague3_config) = prague3_config_opt.as_ref() &&
-            prague3_config.time < prague2_config.time
+        if let Some(prague3_config) = prague3_config_opt.as_ref()
+            && prague3_config.time < prague2_config.time
         {
             panic!(
                 "Prague3 hardfork must activate at or after Prague2 hardfork. Prague2 time: {}, Prague3 time: {}.",

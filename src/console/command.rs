@@ -97,9 +97,9 @@ fn looks_like_implicit_rpc(line: &str) -> bool {
     // - eth_getBalance ["0x...", "latest"]
     // - eth.getBalance ["0x...", "latest"]
     // Single-token `eth.blockNumber`-style input is handled as MethodToken.
-    line.contains(char::is_whitespace) ||
-        (line.contains('(') && line.ends_with(')')) ||
-        (line.contains('_') && !line.contains(' '))
+    line.contains(char::is_whitespace)
+        || (line.contains('(') && line.ends_with(')'))
+        || (line.contains('_') && !line.contains(' '))
 }
 
 fn split_method_and_params(input: &str) -> Result<(String, Option<&str>)> {

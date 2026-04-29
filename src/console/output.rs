@@ -138,8 +138,8 @@ fn walk(path: &str, value: &Value, native_symbol: &str, out: &mut Vec<String>) {
             }
         }
         Value::Number(n) => {
-            if let Some(wei) = n.as_u64().map(u128::from) &&
-                looks_like_wei(wei)
+            if let Some(wei) = n.as_u64().map(u128::from)
+                && looks_like_wei(wei)
             {
                 out.push(format!("{path}: {wei} wei -> {} {native_symbol}", format_eth(wei)));
             }
@@ -289,12 +289,12 @@ fn try_format_detailed_peers(value: &Value) -> Option<String> {
 fn try_format_node_status(value: &Value) -> Option<String> {
     let obj = value.as_object()?;
 
-    if !obj.contains_key("chainId") &&
-        !obj.contains_key("chain_id") &&
-        !obj.contains_key("genesisHash") &&
-        !obj.contains_key("genesis_hash") &&
-        !obj.contains_key("headNumber") &&
-        !obj.contains_key("head_number")
+    if !obj.contains_key("chainId")
+        && !obj.contains_key("chain_id")
+        && !obj.contains_key("genesisHash")
+        && !obj.contains_key("genesis_hash")
+        && !obj.contains_key("headNumber")
+        && !obj.contains_key("head_number")
     {
         return None;
     }

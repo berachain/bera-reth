@@ -74,24 +74,24 @@ impl BerachainReceiptEnvelope {
     /// Returns inner receipt reference
     pub const fn as_receipt(&self) -> &Receipt<alloy_rpc_types_eth::Log> {
         match self {
-            Self::Legacy(receipt) |
-            Self::Eip2930(receipt) |
-            Self::Eip1559(receipt) |
-            Self::Eip4844(receipt) |
-            Self::Eip7702(receipt) |
-            Self::Berachain(receipt) => &receipt.receipt,
+            Self::Legacy(receipt)
+            | Self::Eip2930(receipt)
+            | Self::Eip1559(receipt)
+            | Self::Eip4844(receipt)
+            | Self::Eip7702(receipt)
+            | Self::Berachain(receipt) => &receipt.receipt,
         }
     }
 
     /// Returns the bloom filter for this receipt
     pub const fn bloom(&self) -> &Bloom {
         match self {
-            Self::Legacy(receipt) |
-            Self::Eip2930(receipt) |
-            Self::Eip1559(receipt) |
-            Self::Eip4844(receipt) |
-            Self::Eip7702(receipt) |
-            Self::Berachain(receipt) => &receipt.logs_bloom,
+            Self::Legacy(receipt)
+            | Self::Eip2930(receipt)
+            | Self::Eip1559(receipt)
+            | Self::Eip4844(receipt)
+            | Self::Eip7702(receipt)
+            | Self::Berachain(receipt) => &receipt.logs_bloom,
         }
     }
 }

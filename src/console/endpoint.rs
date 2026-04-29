@@ -15,8 +15,8 @@ pub struct ResolvedEndpoint {
 const DEFAULT_IPC_FILENAME: &str = "reth.ipc";
 
 pub fn default_datadir() -> PathBuf {
-    if cfg!(target_os = "macos") &&
-        let Some(home) = dirs::home_dir()
+    if cfg!(target_os = "macos")
+        && let Some(home) = dirs::home_dir()
     {
         return home.join("Library").join("Application Support").join("reth");
     }
