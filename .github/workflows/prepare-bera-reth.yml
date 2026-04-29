@@ -46,7 +46,7 @@ jobs:
 
       - name: Upload bera-reth image
         id: upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: artifacts
           path: ./artifacts

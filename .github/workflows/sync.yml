@@ -28,7 +28,7 @@ jobs:
       - name: Build bera-reth
         run: cargo build --profile maxperf
       - name: Upload bera-reth binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bera-reth-binary
           path: target/maxperf/bera-reth
