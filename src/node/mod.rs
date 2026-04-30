@@ -71,8 +71,8 @@ impl TransactionProvenanceSink for PogTxProvenanceSink {
         //
         // BERA-305: `listening_addr` (peer's first-hear advertised socket per devp2p Hello)
         // is captured alongside `peer_id` so the seal-flush path can persist a re-dialable
-        // `first_enode` even for inbound-pure attribution-only peers. `None` here yields
-        // `first_enode = NULL` downstream — graceful degradation for `Hello.port == 0`.
+        // `first_enode`. When it is `None` (`Hello.port == 0`), `InflightTransactions` skips
+        // the first-hear insert so sealed-tx facts do not attribute txs to undialable peers.
         //
         // VC-1 observability: at trace/debug we log every accept-batch with whether the
         // listening_addr was supplied. The first None observation in this process also
@@ -96,9 +96,10 @@ impl TransactionProvenanceSink for PogTxProvenanceSink {
                 peer_id = %peer_id,
                 n_hashes = accepted_tx_hashes.len(),
                 "first peer accept with listening_addr=None observed (devp2p Hello.port=0); \
-                 sealed_tx_fact rows for this session will have first_enode=NULL. \
+                 first-hear inserts for such accepts are skipped (no p2p peer attribution). \
                  Track Hello.port hit-rate via \
-                 pog_inflight_tx_first_hears_total{{listening_addr_present}}.",
+                 pog_inflight_tx_first_hears_total{{listening_addr_present}} and skips via \
+                 pog_inflight_tx_first_hears_skipped_no_listening_addr_total.",
             );
         }
         let now_ms = std::time::SystemTime::now()

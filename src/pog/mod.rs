@@ -988,7 +988,9 @@ impl InflightTransactions {
     ///
     /// `first_listening_addr` (BERA-305) is the peer's advertised devp2p Hello socket,
     /// preserved through the seal-flush path so we can persist a re-dialable
-    /// `first_enode`. `None` is the legitimate `Hello.port == 0` case.
+    /// `first_enode`. When it is `None` (`Hello.port == 0`), we **do not** insert an
+    /// inflight row: downstream cannot build an enode URL or join the sentinel fleet
+    /// registry from attribution alone, so attributing the tx to that peer is dropped.
     pub fn record_first_hear(
         &mut self,
         tx_hash: TxHash,
@@ -1008,6 +1010,11 @@ impl InflightTransactions {
                 "listening_addr_present" => listening_addr_present,
             )
             .increment(1);
+            return true;
+        }
+        if first_listening_addr.is_none() {
+            metrics::counter!("pog_inflight_tx_first_hears_skipped_no_listening_addr_total")
+                .increment(1);
             return true;
         }
         if self.entries.len() >= self.max_entries {
@@ -1576,7 +1583,8 @@ mod tests {
     /// and asserts that:
     ///   - a `Some(addr)` listening_addr produces `first_enode == NodeRecord::new(addr,
     ///     peer_id).to_string()` on the persisted row;
-    ///   - a `None` listening_addr (Hello.port=0) produces `first_enode = NULL`.
+    ///   - a `None` listening_addr (Hello.port=0) produces no inflight row → seal flush is
+    ///     non-p2p (`first_peer_id` and `first_enode` both unset).
     /// Routing through `flush_sealed_tx_facts` plus `export_sealed_tx_facts` exercises the
     /// SQLite round-trip end-to-end.
     #[test]
@@ -1604,7 +1612,10 @@ mod tests {
         let row_b = rows.iter().find(|r| r.tx_hash == format!("{tx_b:#x}")).unwrap();
         let expected_enode = NodeRecord::new(listening, peer_a).to_string();
         assert_eq!(row_a.first_enode.as_deref(), Some(expected_enode.as_str()));
-        assert!(row_b.first_enode.is_none());
+        assert!(
+            row_b.first_peer_id.is_none() && row_b.first_enode.is_none(),
+            "Hello.port=0 first-hear must not create a p2p attribution row",
+        );
 
         store.flush_sealed_tx_facts(&rows, 0).unwrap();
         let exported = store.export_sealed_tx_facts(0, 100).unwrap();
@@ -1618,27 +1629,31 @@ mod tests {
             .rows
             .iter()
             .find(|r| r.tx_hash == format!("{tx_b:#x}"))
-            .expect("NULL-enode row exported");
+            .expect("non-p2p row exported");
         assert_eq!(
             exported_a.first_enode.as_deref(),
             Some(expected_enode.as_str()),
             "Some(listening_addr) must round-trip as canonical enode URL",
         );
         assert!(
-            exported_b.first_enode.is_none(),
-            "Hello.port=0 must round-trip as NULL first_enode",
+            exported_b.first_peer_id.is_none() && exported_b.first_enode.is_none(),
+            "skipped first-hear must export as non-p2p (NULL peer + NULL enode)",
         );
     }
 
     // ---- TP-R1 ----
     #[test]
     fn tp_r1_record_first_hear_first_seen_wins() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
         let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
         let tx = B256::random();
         let p1 = PeerId::random();
         let p2 = PeerId::random();
-        assert!(w.record_first_hear(tx, p1, None, 1_000));
-        assert!(w.record_first_hear(tx, p2, None, 2_000));
+        let a1 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(198, 51, 100, 1)), 30303);
+        let a2 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(198, 51, 100, 2)), 30303);
+        assert!(w.record_first_hear(tx, p1, Some(a1), 1_000));
+        assert!(w.record_first_hear(tx, p2, Some(a2), 2_000));
         let drained = w.drain_for_seal(&[tx]);
         let (_, entry) = drained.into_iter().next().unwrap();
         let e = entry.expect("entry present");
@@ -1649,13 +1664,16 @@ mod tests {
     // ---- TP-R2 ----
     #[test]
     fn tp_r2_drain_for_seal_extracts_and_removes() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
         let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
         let a = B256::random();
         let b = B256::random();
         let c = B256::random();
         let peer = PeerId::random();
-        w.record_first_hear(a, peer, None, 10);
-        w.record_first_hear(b, peer, None, 20);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 1)), 30303);
+        w.record_first_hear(a, peer, Some(addr), 10);
+        w.record_first_hear(b, peer, Some(addr), 20);
         let drained = w.drain_for_seal(&[a, b, c]);
         assert_eq!(drained.len(), 3);
         assert!(drained.iter().find(|(h, _)| *h == a).unwrap().1.is_some());
@@ -1668,9 +1686,12 @@ mod tests {
     // ---- TP-R3 ----
     #[test]
     fn tp_r3_ttl_eviction_removes_stale_entries() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
         let mut w = InflightTransactions::new(Duration::from_millis(1), 1024);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 2)), 30303);
         for _ in 0..5 {
-            w.record_first_hear(B256::random(), PeerId::random(), None, 0);
+            w.record_first_hear(B256::random(), PeerId::random(), Some(addr), 0);
         }
         assert_eq!(w.len(), 5);
         std::thread::sleep(Duration::from_millis(5));
@@ -1681,21 +1702,24 @@ mod tests {
     // ---- TP-R4 ----
     #[test]
     fn tp_r4_cap_rejection_and_inline_sweep() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 3)), 30303);
         let mut w = InflightTransactions::new(Duration::from_millis(1), 2);
         let peer = PeerId::random();
-        assert!(w.record_first_hear(B256::random(), peer, None, 0));
-        assert!(w.record_first_hear(B256::random(), peer, None, 0));
+        assert!(w.record_first_hear(B256::random(), peer, Some(addr), 0));
+        assert!(w.record_first_hear(B256::random(), peer, Some(addr), 0));
         // At cap; let the TTL expire so the inline sweep clears the map.
         std::thread::sleep(Duration::from_millis(5));
         // Next insert triggers inline sweep and succeeds.
-        assert!(w.record_first_hear(B256::random(), peer, None, 0));
+        assert!(w.record_first_hear(B256::random(), peer, Some(addr), 0));
         assert_eq!(w.cap_rejections(), 0);
 
         // Now fill cap with FRESH entries (TTL=1h so sweep can't clear them).
         let mut w = InflightTransactions::new(Duration::from_secs(3600), 2);
-        assert!(w.record_first_hear(B256::random(), peer, None, 0));
-        assert!(w.record_first_hear(B256::random(), peer, None, 0));
-        assert!(!w.record_first_hear(B256::random(), peer, None, 0));
+        assert!(w.record_first_hear(B256::random(), peer, Some(addr), 0));
+        assert!(w.record_first_hear(B256::random(), peer, Some(addr), 0));
+        assert!(!w.record_first_hear(B256::random(), peer, Some(addr), 0));
         assert_eq!(w.cap_rejections(), 1);
     }
 
@@ -1879,12 +1903,15 @@ mod tests {
         assert!(built.contains(100));
         assert!(!built.contains(200), "other-validator block 200 not in set → skip flush");
 
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
         let mut inflight = InflightTransactions::new(Duration::from_secs(60), 1024);
         let peer = PeerId::random();
         let tx_a = B256::random();
         let tx_b = B256::random();
-        inflight.record_first_hear(tx_a, peer, None, 100);
-        inflight.record_first_hear(tx_b, peer, None, 200);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 4)), 30303);
+        inflight.record_first_hear(tx_a, peer, Some(addr), 100);
+        inflight.record_first_hear(tx_b, peer, Some(addr), 200);
         // If the seal-flush caller respects `contains`, these entries are never drained.
         assert_eq!(inflight.len(), 2);
         assert!(inflight.contains(&tx_a));
@@ -1894,14 +1921,34 @@ mod tests {
     // ---- InflightTransactions: retained value structure ----
     #[test]
     fn inflight_reads_the_correct_peer_after_first_hear() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
         let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
         let tx = B256::random();
         let peer = PeerId::random();
-        w.record_first_hear(tx, peer, None, 42);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 5)), 30303);
+        w.record_first_hear(tx, peer, Some(addr), 42);
         let drained = w.drain_for_seal(&[tx]);
         let entry = drained[0].1.unwrap();
         assert_eq!(entry.first_peer_id, peer);
         assert_eq!(entry.first_heard_ms, 42);
+    }
+
+    #[test]
+    fn tp_r1b_record_first_hear_skips_none_listening_then_some_inserts() {
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+        let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
+        let tx = B256::random();
+        let p_skip = PeerId::random();
+        let p_win = PeerId::random();
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(198, 51, 100, 10)), 30303);
+        assert!(w.record_first_hear(tx, p_skip, None, 1));
+        assert!(w.record_first_hear(tx, p_win, Some(addr), 2));
+        let drained = w.drain_for_seal(&[tx]);
+        let e = drained[0].1.expect("second hear with listening addr must insert");
+        assert_eq!(e.first_peer_id, p_win);
+        assert_eq!(e.first_heard_ms, 2);
     }
 
     // ---- LocallyBuiltBlocks (ported from SealedBlockRegistry tests) ----
