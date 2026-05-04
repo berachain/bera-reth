@@ -12,6 +12,7 @@ use reth_payload_primitives::PayloadBuilderAttributes;
 use std::{str::FromStr, sync::Arc};
 
 pub mod coinbase_system_state_change_test;
+pub mod deposit_test;
 pub mod gas_limit_regression_test;
 pub mod osaka_blob_test;
 pub mod osaka_engine_api_test;
