@@ -38,6 +38,7 @@ use reth_evm::{
     eth::{
         dao_fork, eip6110,
         receipt_builder::{ReceiptBuilder, ReceiptBuilderCtx},
+        spec::EthExecutorSpec,
     },
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
@@ -297,9 +298,12 @@ where
             .spec
             .is_prague_active_at_timestamp(self.evm.block().timestamp().saturating_to())
         {
-            // Collect all EIP-6110 deposits
+            let deposit_contract = self
+                .spec
+                .deposit_contract_address()
+                .unwrap_or(eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS);
             let deposit_requests =
-                eip6110::parse_deposits_from_receipts(&self.spec, &self.receipts)?;
+                crate::deposits::parse_deposits_from_receipts(deposit_contract, &self.receipts)?;
 
             let mut requests = Requests::default();
 
