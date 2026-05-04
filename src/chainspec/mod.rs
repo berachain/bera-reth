@@ -1,6 +1,7 @@
 //! Berachain chain specification with Ethereum hardforks plus Prague1 minimum base fee
 
 use crate::{
+    deposits::DEPOSIT_EVENT_SIGNATURE,
     genesis::{BerachainGenesisConfig, Prague3Config, Prague4Config},
     hardforks::{BerachainHardfork, BerachainHardforks},
     primitives::{BerachainHeader, header::BlsPublicKey},
@@ -19,7 +20,7 @@ use reth::{
         EthereumHardforks, ForkCondition, Hardfork, NamedChain::BerachainBepolia,
     },
     primitives::SealedHeader,
-    revm::primitives::{Address, B256, U256, b256},
+    revm::primitives::{Address, B256, U256},
 };
 use reth_chainspec::{
     ChainSpec, DepositContract, EthChainSpec, Hardforks, MAINNET_PRUNE_DELETE_LIMIT,
@@ -725,14 +726,10 @@ impl From<Genesis> for BerachainChainSpec {
         // have the deployment block in the genesis file, so we use block zero. We use the same
         // deposit topic as the mainnet contract if we have the deposit contract address in the
         // genesis json.
-        let deposit_contract =
-            genesis.config.deposit_contract_address.map(|address| DepositContract {
-                address,
-                block: 0,
-                // This value is copied from Reth mainnet. Berachain's deposit contract topic is
-                // different but also unused.
-                topic: b256!("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5"),
-            });
+        let deposit_contract = genesis
+            .config
+            .deposit_contract_address
+            .map(|address| DepositContract { address, block: 0, topic: DEPOSIT_EVENT_SIGNATURE });
 
         let hardforks = ChainHardforks::new(hardforks);
 
