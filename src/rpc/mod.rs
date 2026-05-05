@@ -3,7 +3,10 @@ use reth_rpc_eth_api::helpers::config::EthConfigApiServer;
 use std::sync::Arc;
 pub mod api;
 pub mod config;
+mod metrics;
 pub mod receipt;
+
+pub(crate) use metrics::{record_state_fallback, record_state_lookup};
 
 use crate::{
     chainspec::BerachainChainSpec,

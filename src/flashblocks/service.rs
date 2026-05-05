@@ -1,15 +1,14 @@
 use crate::flashblocks::{
-    FlashBlockCompleteSequence, InProgressFlashBlockRx,
+    FlashBlockCompleteSequence, FlashBlockServiceMetrics, InProgressFlashBlockRx,
     cache::SequenceManager,
     payload::PendingFlashBlock,
+    record_insert,
     traits::{FlashblockPayload, FlashblockPayloadBase},
     worker::FlashBlockBuilder,
 };
 use alloy_primitives::B256;
 use futures_util::{FutureExt, Stream, StreamExt};
-use metrics::{Gauge, Histogram};
 use reth_evm::ConfigureEvm;
-use reth_metrics::Metrics;
 use reth_primitives_traits::{AlloyBlockHeader, BlockTy, HeaderTy, NodePrimitives, ReceiptTy};
 use reth_revm::cached::CachedReads;
 use reth_storage_api::{BlockReaderIdExt, StateProviderFactory};
@@ -134,6 +133,7 @@ where
                 result = self.incoming_flashblock_rx.next() => {
                     match result {
                         Some(Ok(flashblock)) => {
+                            self.metrics.upstream_connected.set(1.0);
                             self.process_flashblock(flashblock);
 
                             while let Some(result) = self.incoming_flashblock_rx.next().now_or_never().flatten() {
@@ -146,6 +146,8 @@ where
                             self.try_start_build_job();
                         }
                         Some(Err(err)) => {
+                            self.metrics.upstream_connected.set(0.0);
+                            self.metrics.ws_reconnects_total.increment(1);
                             warn!(
                                 target: "flashblocks",
                                 %err,
@@ -155,6 +157,7 @@ where
                             sleep(CONNECTION_BACKOUT_PERIOD).await;
                         }
                         None => {
+                            self.metrics.upstream_connected.set(0.0);
                             warn!(target: "flashblocks", "Flashblock stream ended");
                             break;
                         }
@@ -171,8 +174,12 @@ where
             self.metrics.last_flashblock_length.record(self.sequences.pending().count() as f64);
         }
 
-        if let Err(err) = self.sequences.insert_flashblock(flashblock) {
-            warn!(target: "flashblocks", %err, "Failed to insert flashblock");
+        match self.sequences.insert_flashblock(flashblock) {
+            Ok(()) => record_insert("ok"),
+            Err(err) => {
+                record_insert("error");
+                warn!(target: "flashblocks", %err, "Failed to insert flashblock");
+            }
         }
     }
 
@@ -223,16 +230,3 @@ pub struct FlashBlockBuildInfo {
 
 type BuildJob<N> =
     (Instant, oneshot::Receiver<eyre::Result<Option<(PendingFlashBlock<N>, CachedReads)>>>);
-
-#[derive(Metrics)]
-#[metrics(scope = "flashblock_service")]
-struct FlashBlockServiceMetrics {
-    /// Number of flashblocks in the last completed sequence.
-    last_flashblock_length: Histogram,
-    /// Duration of the last flashblock execution in seconds.
-    execution_duration: Histogram,
-    /// Current block height being processed.
-    current_block_height: Gauge,
-    /// Current flashblock index within the sequence.
-    current_index: Gauge,
-}

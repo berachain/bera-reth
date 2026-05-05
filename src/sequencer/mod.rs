@@ -4,8 +4,14 @@
 //! at regular intervals (~200ms) and publishes them via WebSocket.
 
 mod builder;
+mod metrics;
 mod publisher;
 pub mod signing;
+
+pub(crate) use metrics::{
+    FlashblockSequencerMetrics, record_build_exit, record_emitted, record_publish_error,
+    record_ws_connection,
+};
 
 pub use builder::{FlashblockPayloadBuilder, FlashblockPayloadServiceBuilder};
 pub use publisher::WebSocketPublisher;
