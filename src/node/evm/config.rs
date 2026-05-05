@@ -510,7 +510,9 @@ mod osaka_config_tests {
         let config =
             BerachainEvmConfig::new_with_evm_factory(chain_spec.clone(), BerachainEvmFactory);
 
-        let before_osaka = header_at(9_999_999_999_999_998);
+        // Bepolia activates Osaka at 1_779_897_600; pick the second just before that so
+        // we exercise "Osaka not yet active" on the real bepolia chainspec.
+        let before_osaka = header_at(1_779_897_599);
         let env = config.evm_env(&before_osaka).expect("evm_env");
         assert!(env.cfg_env.tx_gas_limit_cap.is_none());
         assert!(env.cfg_env.limit_contract_code_size.is_none());
