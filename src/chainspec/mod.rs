@@ -2184,7 +2184,7 @@ mod tests {
         assert_eq!(fork_id_before_prague.next, 1746633600, "next fork should be Prague");
         assert_eq!(fork_id_prague.next, 1754496000, "next fork should be Prague1");
         assert_eq!(fork_id_prague1.next, 1758124800, "next fork should be Prague2");
-        assert_eq!(fork_id_prague2.next, 9999999999999999, "next fork should be Osaka");
+        assert_eq!(fork_id_prague2.next, 1779897600, "next fork should be Osaka");
 
         // Expected fork hash values for Bepolia (matching bera-geth test values)
         assert_eq!(fork_id_before_prague.hash, ForkHash([0xae, 0x79, 0x53, 0x0c]));
@@ -2357,7 +2357,7 @@ mod tests {
         assert_eq!(latest_fork_id.next, 0, "latest fork should have no next fork");
 
         // Verify this matches the final Osaka state.
-        assert_eq!(latest_fork_id.hash, ForkHash([0x4b, 0xd5, 0x84, 0x03]));
+        assert_eq!(latest_fork_id.hash, ForkHash([0x79, 0x16, 0x74, 0x96]));
     }
 
     #[test]
