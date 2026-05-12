@@ -1495,7 +1495,6 @@ dependencies = [
  "reth-chain-state",
  "reth-chainspec",
  "reth-cli",
- "reth-cli-commands",
  "reth-cli-util",
  "reth-codecs",
  "reth-consensus-common",
