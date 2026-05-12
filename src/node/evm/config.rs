@@ -522,14 +522,14 @@ mod osaka_config_tests {
 
     #[test]
     fn test_osaka_inactive_before_activation_timestamp() {
-        // Sanity: without osakaTime configured, Osaka stays inactive and no caps apply.
         let chain_spec = bepolia_chainspec();
         let config =
             BerachainEvmConfig::new_with_evm_factory(chain_spec.clone(), BerachainEvmFactory);
 
-        let far_future = header_at(u64::MAX);
-        let env = config.evm_env(&far_future).expect("evm_env");
-        // Bepolia fixture does not configure osakaTime, so Osaka is never active.
+        // Bepolia activates Osaka at 1_779_897_600; pick the second just before that so
+        // we exercise "Osaka not yet active" on the real bepolia chainspec.
+        let before_osaka = header_at(1_779_897_599);
+        let env = config.evm_env(&before_osaka).expect("evm_env");
         assert!(env.cfg_env.tx_gas_limit_cap.is_none());
         assert!(env.cfg_env.limit_contract_code_size.is_none());
         assert!(env.cfg_env.limit_contract_initcode_size.is_none());
