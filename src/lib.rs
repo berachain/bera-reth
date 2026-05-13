@@ -4,6 +4,7 @@
 
 pub mod chainspec;
 pub mod consensus;
+pub mod deposits;
 pub mod engine;
 pub mod evm;
 pub mod flashblocks;
