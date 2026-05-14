@@ -381,11 +381,6 @@
         "baseFeeUpdateFraction": 3338477,
         "max": 6,
         "target": 3
-      },
-      "osaka": {
-        "baseFeeUpdateFraction": 3338477,
-        "max": 6,
-        "target": 3
       }
     },
     "byzantiumBlock": 0,
@@ -404,7 +399,6 @@
     "londonBlock": 0,
     "mergeNetsplitBlock": 0,
     "muirGlacierBlock": 0,
-    "osakaTime": 0,
     "petersburgBlock": 0,
     "pragueTime": 0,
     "shanghaiTime": 0,

@@ -39,12 +39,6 @@ use std::{borrow::Cow, convert::Infallible, fmt::Debug, sync::Arc};
 
 const BERACHAIN_BLOCK_TIME_SECONDS: u64 = 2;
 
-/// BRIP-0010: Contract code size limit increase from 24 KB to 32 KB (Osaka)
-pub(crate) const MAX_CODE_SIZE_OSAKA: usize = 32_768;
-
-/// BRIP-0010: Contract initcode size limit increase from 48 KB to 64 KB (Osaka)
-pub(crate) const MAX_INITCODE_SIZE_OSAKA: usize = 65_536;
-
 #[derive(Debug, Clone)]
 pub struct BerachainEvmConfig {
     /// Receipt builder.
@@ -135,8 +129,6 @@ impl ConfigureEvm for BerachainEvmConfig {
 
         if self.chain_spec().is_osaka_active_at_timestamp(header.timestamp) {
             cfg_env.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
-            cfg_env.limit_contract_code_size = Some(MAX_CODE_SIZE_OSAKA);
-            cfg_env.limit_contract_initcode_size = Some(MAX_INITCODE_SIZE_OSAKA);
         }
 
         // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
@@ -184,8 +176,6 @@ impl ConfigureEvm for BerachainEvmConfig {
 
         if self.chain_spec().is_osaka_active_at_timestamp(attributes.timestamp) {
             cfg.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
-            cfg.limit_contract_code_size = Some(MAX_CODE_SIZE_OSAKA);
-            cfg.limit_contract_initcode_size = Some(MAX_INITCODE_SIZE_OSAKA);
         }
 
         // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
@@ -322,8 +312,6 @@ impl ConfigureEngineEvm<BerachainExecutionData> for BerachainEvmConfig {
 
         if self.chain_spec().is_osaka_active_at_timestamp(timestamp) {
             cfg_env.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
-            cfg_env.limit_contract_code_size = Some(MAX_CODE_SIZE_OSAKA);
-            cfg_env.limit_contract_initcode_size = Some(MAX_INITCODE_SIZE_OSAKA);
         }
 
         // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
@@ -375,147 +363,5 @@ impl ConfigureEngineEvm<BerachainExecutionData> for BerachainEvmConfig {
             let signer = tx.try_recover().map_err(AnyError::new)?;
             Ok::<_, AnyError>(tx.with_signer(signer))
         }))
-    }
-}
-
-#[cfg(test)]
-mod osaka_config_tests {
-    //! End-to-end verification that [`BerachainEvmConfig`] wires up the Osaka EIPs that
-    //! require configuration changes on top of the standard revm Osaka spec (BRIP-0010):
-    //!   - EIP-7825 (tx gas cap 2^24)
-    //!   - code size bump (32 KB runtime / 64 KB initcode)
-    //!   - EIP-7934 (block size cap 10 MiB — sourced from reth-consensus-common)
-    use super::*;
-    use crate::test_utils::bepolia_chainspec;
-    use alloy_genesis::Genesis;
-    use jsonrpsee_core::__reexports::serde_json::json;
-    use reth::revm::primitives::U256;
-    use reth_consensus_common::validation::MAX_RLP_BLOCK_SIZE;
-    use reth_primitives_traits::constants::MAX_TX_GAS_LIMIT_OSAKA;
-
-    fn genesis_with_osaka_at(osaka_time: u64) -> Genesis {
-        let mut genesis = Genesis::default();
-        genesis.config.london_block = Some(0);
-        genesis.config.cancun_time = Some(0);
-        genesis.config.prague_time = Some(0);
-        genesis.config.osaka_time = Some(osaka_time);
-        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
-        let extra_fields_json = json!({
-            "berachain": {
-                "prague1": {
-                    "time": 0,
-                    "baseFeeChangeDenominator": 48,
-                    "minimumBaseFeeWei": 1_000_000_000u64,
-                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
-                },
-                "prague2": { "time": 0, "minimumBaseFeeWei": 0 }
-            }
-        });
-        genesis.config.extra_fields =
-            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
-        genesis
-    }
-
-    fn config_for_genesis(genesis: Genesis) -> BerachainEvmConfig {
-        let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
-        BerachainEvmConfig::new_with_evm_factory(chain_spec, BerachainEvmFactory)
-    }
-
-    fn header_at(timestamp: u64) -> BerachainHeader {
-        BerachainHeader { number: 1, timestamp, base_fee_per_gas: Some(0), ..Default::default() }
-    }
-
-    #[test]
-    fn test_eip7825_tx_gas_cap_applied_post_osaka() {
-        let config = config_for_genesis(genesis_with_osaka_at(1_000));
-
-        let env_post = config.evm_env(&header_at(1_000)).expect("evm_env post-osaka");
-        assert_eq!(
-            env_post.cfg_env.tx_gas_limit_cap,
-            Some(MAX_TX_GAS_LIMIT_OSAKA),
-            "tx_gas_limit_cap must be set to MAX_TX_GAS_LIMIT_OSAKA (2^24) when Osaka is active"
-        );
-        assert_eq!(MAX_TX_GAS_LIMIT_OSAKA, 1 << 24, "Osaka tx gas cap is 2^24 per EIP-7825");
-
-        let env_pre = config.evm_env(&header_at(999)).expect("evm_env pre-osaka");
-        assert!(
-            env_pre.cfg_env.tx_gas_limit_cap.is_none(),
-            "tx_gas_limit_cap must not be set before Osaka"
-        );
-    }
-
-    #[test]
-    fn test_code_size_overrides_applied_post_osaka() {
-        let config = config_for_genesis(genesis_with_osaka_at(1_000));
-
-        let env_post = config.evm_env(&header_at(1_000)).expect("evm_env post-osaka");
-        assert_eq!(
-            env_post.cfg_env.limit_contract_code_size,
-            Some(32_768),
-            "limit_contract_code_size must be 32 KB under Osaka (BRIP-0010)"
-        );
-        assert_eq!(
-            env_post.cfg_env.limit_contract_initcode_size,
-            Some(65_536),
-            "limit_contract_initcode_size must be 64 KB under Osaka (BRIP-0010)"
-        );
-
-        let env_pre = config.evm_env(&header_at(999)).expect("evm_env pre-osaka");
-        assert!(
-            env_pre.cfg_env.limit_contract_code_size.is_none(),
-            "code size must not be overridden before Osaka"
-        );
-        assert!(
-            env_pre.cfg_env.limit_contract_initcode_size.is_none(),
-            "initcode size must not be overridden before Osaka"
-        );
-    }
-
-    #[test]
-    fn test_next_evm_env_applies_osaka_caps() {
-        let config = config_for_genesis(genesis_with_osaka_at(1_000));
-        let parent = header_at(500);
-        let parent_sealed = SealedHeader::new(parent, Default::default());
-
-        let attrs_post = BerachainNextBlockEnvAttributes {
-            timestamp: 1_000,
-            suggested_fee_recipient: Default::default(),
-            prev_randao: Default::default(),
-            gas_limit: 30_000_000,
-            parent_beacon_block_root: Some(Default::default()),
-            withdrawals: Some(Default::default()),
-            prev_proposer_pubkey: None,
-            extra_data: Default::default(),
-        };
-        let env = config.next_evm_env(&parent_sealed, &attrs_post).expect("next_evm_env");
-        assert_eq!(env.cfg_env.tx_gas_limit_cap, Some(MAX_TX_GAS_LIMIT_OSAKA));
-        assert_eq!(env.cfg_env.limit_contract_code_size, Some(32_768));
-        assert_eq!(env.cfg_env.limit_contract_initcode_size, Some(65_536));
-    }
-
-    #[test]
-    fn test_eip7934_max_rlp_block_size_is_8_mib_payload_cap() {
-        // BRIP-0010 specifies a 10 MiB block cap with a 2 MiB safety margin, giving an 8 MiB
-        // effective payload cap. The engine builder rejects payloads with rlp_length > this value.
-        assert_eq!(
-            MAX_RLP_BLOCK_SIZE,
-            8 * 1024 * 1024,
-            "EIP-7934 effective payload cap is 8 MiB (10 MiB - 2 MiB safety margin)"
-        );
-    }
-
-    #[test]
-    fn test_osaka_inactive_before_activation_timestamp() {
-        let chain_spec = bepolia_chainspec();
-        let config =
-            BerachainEvmConfig::new_with_evm_factory(chain_spec.clone(), BerachainEvmFactory);
-
-        // Bepolia activates Osaka at 1_779_897_600; pick the second just before that so
-        // we exercise "Osaka not yet active" on the real bepolia chainspec.
-        let before_osaka = header_at(1_779_897_599);
-        let env = config.evm_env(&before_osaka).expect("evm_env");
-        assert!(env.cfg_env.tx_gas_limit_cap.is_none());
-        assert!(env.cfg_env.limit_contract_code_size.is_none());
-        assert!(env.cfg_env.limit_contract_initcode_size.is_none());
     }
 }

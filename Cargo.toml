@@ -15,72 +15,91 @@ alloy-rlp = "0.3.13"
 alloy-rpc-types = "1.6.3"
 alloy-rpc-types-eth = "1.6.3"
 alloy-serde = "1.6.3"
+alloy-signer = "1.6.3"
 alloy-signer-local = "1.6.3"
 alloy-sol-macro = "1.5.6"
 alloy-sol-types = "1.5.6"
 bytes = "1.10.1"
 clap = { version = "4.5.40", features = ["derive"] }
 derive_more = "2.0.1"
+dirs = "6.0.0"
 eyre = "0.6.12"
+libc = "0.2.177"
+reedline = "0.47"
 sha2 = "0.10"
 
 # rpc
-jsonrpsee = "0.26.0"
+jsonrpsee = { version = "0.26.0", features = ["http-client", "ws-client"] }
 jsonrpsee-core = { version = "0.26.0", features = ["server"] }
 jsonrpsee-proc-macros = "0.26.0"
 
 async-trait = "0.1.88"
+futures = "0.3.32"
 metrics = "0.24.3"
 modular-bitfield = "0.13.1"
-reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-codecs = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-consensus-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-engine-local = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-engine-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-network-peers = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-payload-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-payload-validator = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-rpc = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-rpc-convert = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-rpc-engine-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-rpc-eth-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-storage-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
+# RUSTSEC-2026-0097: use >=0.8.6 on the 0.8 release line.
+rand = "0.8.6"
+reth = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-basic-payload-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-chainspec = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-cli = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-cli-commands = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-cli-runner = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-cli-util = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-codecs = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-consensus-common = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-db = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-db-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-engine-local = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-engine-primitives = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-errors = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-eth-wire-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-ethereum-cli = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-ethereum-engine-primitives = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-ethereum-payload-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-ethereum-primitives = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-evm = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-evm-ethereum = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-metrics = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-network = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-network-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-network-peers = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-network-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-node-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-node-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-node-core = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-node-ethereum = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-payload-primitives = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-payload-validator = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-primitives-traits = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-rpc = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-rpc-convert = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-rpc-engine-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-rpc-eth-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-rpc-eth-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-rpc-server-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-storage-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-transaction-pool = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde_json = "1.0"
 thiserror = "2.0"
-tokio = "1.46.0"
+tokio = { version = "1.46.0", features = ["macros", "rt-multi-thread", "net", "io-util"] }
 tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 
 [dev-dependencies]
 alloy-provider = "1.6.3"
 alloy-rpc-client = "1.6.3"
 alloy-rpc-types-trace = "1.6.3"
 eyre = "0.6.12"
-reth-e2e-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-trie-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
+jsonrpsee = { version = "0.26.0", features = ["server"] }
+reth-e2e-test-utils = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-rpc-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-trie-common = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
 revm-inspectors = "0.34.2"
+serde_json = "1.0"
+tempfile = "3"
 test-fuzz = "7"
 
 [build-dependencies]
@@ -111,7 +130,26 @@ opt-level = 3
 lto = "thin"
 
 [package.metadata.cargo-machete]
-ignored = ["modular-bitfield"]
+# cargo-machete misses macro/build.rs/test-only uses; keep explicit allowlist in sync when deps change.
+ignored = [
+  "alloy-provider",
+  "alloy-rpc-client",
+  "alloy-signer",
+  "futures",
+  "modular-bitfield",
+  "rand",
+  "reth-eth-wire-types",
+  "reth-metrics",
+  "reth-network",
+  "reth-network-api",
+  "reth-network-types",
+  "reth-rpc-builder",
+  "rusqlite",
+  "test-fuzz",
+  "tracing-subscriber",
+  "vergen",
+  "vergen-git2",
+]
 
 # [patch."https://github.com/paradigmxyz/reth"]
 # reth = { path = "../reth/bin/reth" }
