@@ -260,19 +260,7 @@ impl HeaderValidator<BerachainHeader> for BerachainBeaconConsensus {
         <EthBeaconConsensus<BerachainChainSpec> as HeaderValidator<BerachainHeader>>::validate_header(
             &self.inner,
             header,
-        )?;
-
-        // Enforce the Prague1 fork gate on `prev_proposer_pubkey` here so the import path
-        // matches the Engine API and executor. Without this, peer-imported headers could
-        // bypass the invariant and only get caught later at execution time.
-        crate::engine::validate_proposer_pubkey_prague1(
-            &*self.chain_spec,
-            header.timestamp(),
-            header.prev_proposer_pubkey,
         )
-        .map_err(|err| ConsensusError::Other(err.to_string()))?;
-
-        Ok(())
     }
 
     fn validate_header_against_parent(
@@ -409,84 +397,5 @@ mod tests {
             result.is_ok(),
             "Pre-Prague1 block with normal transactions should pass validation"
         );
-    }
-
-    /// Build a header that satisfies upstream `EthBeaconConsensus::validate_header`
-    /// for the given timestamp on the bepolia chainspec, so any failure in
-    /// `BerachainBeaconConsensus::validate_header` is attributable to the
-    /// Berachain-specific gate.
-    fn upstream_valid_header(timestamp: u64, post_prague: bool) -> BerachainHeader {
-        BerachainHeader {
-            number: 1,
-            timestamp,
-            difficulty: U256::ZERO,
-            nonce: Default::default(),
-            ommers_hash: EMPTY_OMMER_ROOT_HASH,
-            gas_limit: 30_000_000,
-            gas_used: 0,
-            base_fee_per_gas: Some(1_000_000_000),
-            withdrawals_root: Some(EMPTY_WITHDRAWALS),
-            blob_gas_used: Some(0),
-            excess_blob_gas: Some(0),
-            parent_beacon_block_root: Some(BlockHash::ZERO),
-            requests_hash: post_prague.then_some(BlockHash::ZERO),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn test_validate_header_rejects_pre_prague1_proposer_pubkey() {
-        let chain_spec = bepolia_chainspec();
-        let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
-
-        let mut header = upstream_valid_header(0, false);
-        header.prev_proposer_pubkey = Some(mock_bls_pubkey());
-
-        assert!(!chain_spec.is_prague1_active_at_timestamp(header.timestamp));
-
-        let sealed = SealedHeader::new(header, BlockHash::ZERO);
-        let err = consensus.validate_header(&sealed).expect_err(
-            "pre-Prague1 header with prev_proposer_pubkey must be rejected by validate_header",
-        );
-        assert!(
-            err.to_string().contains("not allowed"),
-            "expected ProposerPubkeyNotAllowed, got: {err}"
-        );
-    }
-
-    #[test]
-    fn test_validate_header_rejects_post_prague1_missing_proposer_pubkey() {
-        let chain_spec = bepolia_chainspec();
-        let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
-
-        // Bepolia activates Prague1 at 1_754_496_000; pick a timestamp safely past it.
-        let timestamp = 1_754_496_000;
-        let mut header = upstream_valid_header(timestamp, true);
-        header.prev_proposer_pubkey = None;
-
-        assert!(chain_spec.is_prague1_active_at_timestamp(header.timestamp));
-
-        let sealed = SealedHeader::new(header, BlockHash::ZERO);
-        let err = consensus.validate_header(&sealed).expect_err(
-            "post-Prague1 header missing prev_proposer_pubkey must be rejected by validate_header",
-        );
-        assert!(
-            err.to_string().contains("Previous proposer public key is required"),
-            "expected MissingProposerPubkey, got: {err}"
-        );
-    }
-
-    #[test]
-    fn test_validate_header_accepts_pre_prague1_no_proposer_pubkey() {
-        let chain_spec = bepolia_chainspec();
-        let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
-
-        let header = upstream_valid_header(0, false);
-        assert!(header.prev_proposer_pubkey.is_none());
-
-        let sealed = SealedHeader::new(header, BlockHash::ZERO);
-        consensus
-            .validate_header(&sealed)
-            .expect("pre-Prague1 header without prev_proposer_pubkey should validate");
     }
 }

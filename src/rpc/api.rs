@@ -446,7 +446,7 @@ where
 
     async fn send_transaction(
         &self,
-        origin: TransactionOrigin,
+        _origin: TransactionOrigin,
         tx: reth_primitives_traits::WithEncoded<
             reth_primitives_traits::Recovered<reth_transaction_pool::PoolPooledTx<Self::Pool>>,
         >,
@@ -458,8 +458,11 @@ where
 
         let pool_transaction = <Self::Pool as TransactionPool>::Transaction::from_pooled(recovered);
 
+        // Upstream reth v1.11.1 changed eth_sendRawTransaction to pass External origin,
+        // but Berachain treats all RPC-submitted transactions as Local to bypass pool
+        // capacity limits and ensure consistent block gas utilization.
         let AddedTransactionOutcome { hash, .. } =
-            self.pool().add_transaction(origin, pool_transaction).await?;
+            self.pool().add_transaction(TransactionOrigin::Local, pool_transaction).await?;
 
         Ok(hash)
     }
