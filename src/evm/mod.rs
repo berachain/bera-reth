@@ -340,13 +340,6 @@ mod tests {
                 SpecId::ISTANBUL,  // Later spec - should have this precompile
                 "BLAKE2F",
             ),
-            // P256VERIFY (0x100) was added in Osaka (EIP-7951), should not exist in Prague
-            (
-                address!("0x0000000000000000000000000000000000000100"),
-                SpecId::PRAGUE, // Early spec - should NOT have this precompile
-                SpecId::OSAKA,  // Later spec - should have this precompile
-                "P256VERIFY",
-            ),
         ];
 
         for (precompile_addr, early_spec, later_spec, name) in specs_to_test {

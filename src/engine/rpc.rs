@@ -20,7 +20,6 @@ use alloy_rpc_types::engine::{
 
 use jsonrpsee_core::{RpcResult, server::RpcModule};
 use jsonrpsee_proc_macros::rpc;
-use metrics::Histogram;
 use reth::{
     api::NodeTypes,
     chainspec::EthereumHardforks,
@@ -35,8 +34,8 @@ use reth_node_core::version::{CLIENT_CODE, version_metadata};
 use reth_payload_primitives::{EngineObjectValidationError, PayloadAttributes, PayloadTypes};
 use reth_rpc_engine_api::{EngineApi, EngineApiError, EngineCapabilities};
 use reth_transaction_pool::TransactionPool;
-use std::{sync::Arc, time::Instant};
-use tracing::{debug, trace, warn};
+use std::sync::Arc;
+use tracing::{debug, trace};
 
 /// Builder for [`BerachainEngineApi`] implementation.
 #[derive(Debug, Default)]
@@ -46,13 +45,6 @@ pub struct BerachainEngineApiBuilder<EV> {
 
 pub const BERACHAIN_ADDITIONAL_CAPABILITIES: &[&str] =
     &["engine_newPayloadV4P11", "engine_forkchoiceUpdatedV3P11", "engine_getPayloadV4P11"];
-
-/// Capabilities inherited from upstream Reth that Berachain does not support.
-///
-/// Berachain serves the Osaka payload via `engine_getPayloadV4P11`, so the V5
-/// method is implemented but never advertised, and any direct call returns
-/// `UnsupportedFork`.
-pub const BERACHAIN_REMOVED_CAPABILITIES: &[&str] = &["engine_getPayloadV5"];
 
 impl<N, EV> EngineApiBuilder<N> for BerachainEngineApiBuilder<EV>
 where
@@ -67,9 +59,6 @@ where
     >,
     EV: PayloadValidatorBuilder<N>,
     EV::Validator: EngineApiValidator<<N::Types as NodeTypes>::Payload>,
-    <<<N::Types as NodeTypes>::Payload as PayloadTypes>::BuiltPayload as TryInto<
-        <<N::Types as NodeTypes>::Payload as EngineTypes>::ExecutionPayloadEnvelopeV4,
-    >>::Error: std::fmt::Debug,
 {
     type EngineApi = BerachainEngineApi<
         N::Provider,
@@ -102,12 +91,7 @@ where
             ctx.config.engine.accept_execution_requests_hash,
             ctx.node.network().clone(),
         );
-        Ok(BerachainEngineApi {
-            inner,
-            chain_spec: ctx.config.chain.clone(),
-            payload_store: PayloadStore::new(ctx.node.payload_builder_handle().clone()),
-            get_payload_v4p11_latency: metrics::histogram!("engine.rpc.get_payload_v4p11"),
-        })
+        Ok(BerachainEngineApi { inner, chain_spec: ctx.config.chain.clone() })
     }
 }
 
@@ -361,11 +345,6 @@ pub trait BerachainEngineApi<Engine: EngineTypes> {
 pub struct BerachainEngineApi<Provider, PayloadT: PayloadTypes, Pool, Validator, ChainSpec> {
     inner: EngineApi<Provider, PayloadT, Pool, Validator, ChainSpec>,
     chain_spec: Arc<ChainSpec>,
-    /// Direct handle to the payload builder so `getPayloadV4P11` can resolve payloads
-    /// without going through upstream's V4 timestamp validation, which rejects
-    /// post-Osaka calls.
-    payload_store: PayloadStore<PayloadT>,
-    get_payload_v4p11_latency: Histogram,
 }
 
 /// Validates Prague1 requirements for P11 methods
@@ -402,7 +381,6 @@ where
             ExecutionData = BerachainExecutionData,
             PayloadAttributes = BerachainPayloadAttributes,
         >,
-    <EngineT::BuiltPayload as TryInto<EngineT::ExecutionPayloadEnvelopeV4>>::Error: std::fmt::Debug,
     Pool: TransactionPool + 'static,
     Validator: EngineApiValidator<EngineT>,
     ChainSpec: EthereumHardforks + BerachainHardforks + Send + Sync + 'static,
@@ -602,49 +580,15 @@ where
         payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV4> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadV4P11");
-        let start = Instant::now();
-
-        // V4P11 is the canonical post-Prague1 getPayload variant on Berachain across
-        // both Prague1 and Osaka. Resolve through the payload store directly because
-        // upstream's `get_payload_v4_metered` rejects retrievals once Osaka is active.
-        let result = match self.payload_store.resolve(payload_id).await {
-            None => Err(EngineApiError::UnknownPayload.into()),
-            Some(Ok(built)) => built.try_into().map_err(|err| {
-                warn!(
-                    target: "rpc::engine",
-                    ?payload_id,
-                    error = ?err,
-                    "Failed to convert payload for engine_getPayloadV4P11"
-                );
-                EngineApiError::Internal(Box::new(std::io::Error::other(format!(
-                    "failed to convert payload for engine_getPayloadV4P11: {err:?}"
-                ))))
-                .into()
-            }),
-            Some(Err(err)) => {
-                warn!(
-                    target: "rpc::engine",
-                    ?payload_id,
-                    error = ?err,
-                    "Failed to resolve payload for engine_getPayloadV4P11"
-                );
-                Err(EngineApiError::GetPayloadError(err).into())
-            }
-        };
-
-        self.get_payload_v4p11_latency.record(start.elapsed());
-        result
+        Ok(self.inner.get_payload_v4_metered(payload_id).await?)
     }
 
     async fn get_payload_v5(
         &self,
-        _payload_id: PayloadId,
+        payload_id: PayloadId,
     ) -> RpcResult<EngineT::ExecutionPayloadEnvelopeV5> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadV5");
-        Err(EngineApiError::EngineObjectValidationError(
-            EngineObjectValidationError::UnsupportedFork,
-        )
-        .into())
+        Ok(self.inner.get_payload_v5_metered(payload_id).await?)
     }
 
     async fn get_payload_bodies_by_hash_v1(
@@ -674,7 +618,6 @@ where
 
     async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
         let mut caps = self.inner.capabilities().list();
-        caps.retain(|c| !BERACHAIN_REMOVED_CAPABILITIES.contains(&c.as_str()));
         for &cap in BERACHAIN_ADDITIONAL_CAPABILITIES {
             let s = cap.to_string();
             if !caps.contains(&s) {

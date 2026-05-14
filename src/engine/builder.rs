@@ -328,8 +328,6 @@ where
                 continue;
             }
 
-            // BRIP-0010 Osaka does not adopt EIP-7594 (PeerDAS); EIP-4844 sidecars remain the
-            // sole accepted format across forks.
             let blob_sidecar_result = 'sidecar: {
                 let Some(sidecar) =
                     pool.get_blob(*tx.hash()).map_err(PayloadBuilderError::other)?
@@ -337,10 +335,16 @@ where
                     break 'sidecar Err(Eip4844PoolTransactionError::MissingEip4844BlobSidecar);
                 };
 
-                if sidecar.is_eip4844() {
+                if is_osaka {
+                    if sidecar.is_eip7594() {
+                        Ok(sidecar)
+                    } else {
+                        Err(Eip4844PoolTransactionError::UnexpectedEip4844SidecarAfterOsaka)
+                    }
+                } else if sidecar.is_eip4844() {
                     Ok(sidecar)
                 } else {
-                    Err(Eip4844PoolTransactionError::Eip7594SidecarDisallowed)
+                    Err(Eip4844PoolTransactionError::UnexpectedEip7594SidecarBeforeOsaka)
                 }
             };
 
