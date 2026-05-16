@@ -124,6 +124,7 @@ pub fn run_shutdown_peer_curation_if_enabled() {
 }
 
 use crate::primitives::BerachainHeader;
+use crate::transaction::BerachainTxEnvelope;
 use alloy_consensus::{SignableTransaction, TxEip1559};
 use alloy_primitives::{Address, Bytes, TxHash, TxKind, U256, hex};
 use rand::Rng;
@@ -1355,6 +1356,56 @@ pub fn retention_cutoff_ms(retention_hours: u64) -> u64 {
     now_ms.saturating_sub(retention_hours.saturating_mul(3_600_000))
 }
 
+/// BERA-325: walks every `(tx, receipt)` in block order. `BerachainTxEnvelope::Berachain`
+/// (PoL / 0x7e) txs are omitted from the returned `tx_hashes` / `tips` (they never become
+/// `sealed_tx_fact` rows), but each receipt still advances the cumulative-gas running
+/// total so effective-tip arithmetic matches execution order.
+///
+/// Returns `(filtered_tx_hashes, tips_per_filtered_tx, system_tx_skipped_count)`.
+pub fn collect_seal_flush_tx_hashes_and_tips(
+    base_fee: u128,
+    transactions: &[&BerachainTxEnvelope],
+    receipts: &[reth_ethereum_primitives::Receipt<crate::transaction::BerachainTxType>],
+) -> eyre::Result<(Vec<TxHash>, Vec<u128>, u64)> {
+    use alloy_consensus::Transaction as _;
+    use reth_primitives_traits::transaction::TxHashRef as _;
+
+    if transactions.len() != receipts.len() {
+        return Err(eyre::eyre!(
+            "seal-flush tx/receipt length mismatch: {} txs vs {} receipts",
+            transactions.len(),
+            receipts.len()
+        ));
+    }
+    let mut tx_hashes = Vec::new();
+    let mut tips = Vec::new();
+    let mut system_skipped: u64 = 0;
+    let mut prev_cumulative: u64 = 0;
+
+    for (&tx, receipt) in transactions.iter().zip(receipts.iter()) {
+        let gas_used = receipt.cumulative_gas_used.saturating_sub(prev_cumulative);
+        prev_cumulative = receipt.cumulative_gas_used;
+
+        match tx {
+            BerachainTxEnvelope::Berachain(_) => {
+                system_skipped += 1;
+            }
+            BerachainTxEnvelope::Ethereum(_) => {
+                let eff_price = tx.effective_gas_price(Some(base_fee as u64));
+                let tip = eff_price.saturating_sub(base_fee) * gas_used as u128;
+                tips.push(tip);
+                tx_hashes.push(*tx.tx_hash());
+            }
+        }
+    }
+
+    eyre::ensure!(
+        tx_hashes.len() == tips.len(),
+        "internal: filtered tx_hashes / tips length mismatch"
+    );
+    Ok((tx_hashes, tips, system_skipped))
+}
+
 /// Run the seal-flush path for a single locally-built committed block arriving on the
 /// canonical-state stream. Extracted so the `canon_events.recv()` arm stays readable.
 fn run_seal_flush_from_canon<Provider>(
@@ -1370,27 +1421,45 @@ where
             Receipt = reth_ethereum_primitives::Receipt<crate::transaction::BerachainTxType>,
         >,
 {
-    use alloy_consensus::{BlockHeader as _, Transaction as _};
-    use reth_primitives_traits::{BlockBody as _, transaction::TxHashRef as _};
+    use alloy_consensus::BlockHeader as _;
+    use reth_primitives_traits::BlockBody as _;
 
     let header = block.header();
     let base_fee = header.base_fee_per_gas().unwrap_or(0) as u128;
     let body = block.body();
-    let tx_hashes: Vec<TxHash> = body.transactions_iter().map(|tx| *tx.tx_hash()).collect();
+    let txs: Vec<&BerachainTxEnvelope> = body.transactions_iter().collect();
 
-    if tx_hashes.is_empty() {
+    if txs.is_empty() {
         // Empty block — still run inline retention DELETE so file doesn't grow.
         let cutoff = retention_cutoff_ms(cfg.retention_hours);
         let _ = coord.store().flush_sealed_tx_facts(&[], cutoff)?;
         return Ok(());
     }
 
-    let effective_gas_prices: Vec<u128> =
-        body.transactions_iter().map(|tx| tx.effective_gas_price(Some(base_fee as u64))).collect();
     let receipts = provider
         .receipts_by_block(alloy_eips::BlockHashOrNumber::Number(block_num))?
         .unwrap_or_default();
-    let tips = compute_effective_tips_from_receipts(base_fee, &effective_gas_prices, &receipts);
+    if txs.len() != receipts.len() {
+        return Err(eyre::eyre!(
+            "seal-flush: block {block_num} has {} txs but {} receipts",
+            txs.len(),
+            receipts.len()
+        ));
+    }
+
+    let (tx_hashes, tips, system_skipped) =
+        collect_seal_flush_tx_hashes_and_tips(base_fee, &txs, &receipts)?;
+    if system_skipped > 0 {
+        metrics::counter!("pog_sealed_flush_tx_skipped_total", "reason" => "system_tx")
+            .increment(system_skipped);
+    }
+
+    if tx_hashes.is_empty() {
+        // All txs filtered (e.g. PoL-only block) — still run inline retention DELETE.
+        let cutoff = retention_cutoff_ms(cfg.retention_hours);
+        let _ = coord.store().flush_sealed_tx_facts(&[], cutoff)?;
+        return Ok(());
+    }
 
     let drained = match store.inflight.lock() {
         Ok(mut g) => g.drain_for_seal(&tx_hashes),
@@ -1417,6 +1486,9 @@ where
 /// Returns the effective-tip (`(effective_gas_price - base_fee) * gas_used`) per tx in
 /// the block, preserving the receipt order. Mirrors the tip-formula previously in the
 /// `sealed_block_attribution` RPC (brief §Context Payload).
+///
+/// Seal-flush uses [`collect_seal_flush_tx_hashes_and_tips`] instead, which applies the
+/// BERA-325 system-tx filter while still walking every receipt for cumulative gas.
 pub fn compute_effective_tips_from_receipts(
     base_fee: u128,
     effective_gas_prices: &[u128],
@@ -1435,7 +1507,8 @@ pub fn compute_effective_tips_from_receipts(
 
 /// Build seal-flush insert rows for a committed, locally-built block. Extracted for
 /// testability; callers (the watcher) compute `tips` from the block body + receipts via
-/// `compute_effective_tips_from_receipts`.
+/// [`collect_seal_flush_tx_hashes_and_tips`] (BERA-325: excludes PoL system txs while
+/// preserving cumulative-gas alignment).
 pub fn build_sealed_tx_fact_inserts(
     block_num: u64,
     drained: &[(TxHash, Option<InflightTx>)],
@@ -1482,9 +1555,14 @@ pub fn encode_u128_hex_quantity(value: u128) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::B256;
+    use alloy_consensus::{EthereumTxEnvelope, Signed, Transaction as _, TxEip1559, TxType};
+    use alloy_primitives::{B256, Bytes, ChainId, Sealed, Signature, TxKind, U256};
     use alloy_rlp::Decodable;
+    use reth_primitives_traits::transaction::TxHashRef as _;
     use tempfile::NamedTempFile;
+
+    use crate::transaction::{BerachainTxEnvelope, BerachainTxType, PoLTx};
+    use reth_ethereum_primitives::Receipt;
 
     // ---- TP-4 (BERA-305): schema migration adds `first_enode` column ----
     /// Confirms `ensure_sealed_tx_fact_schema` upgrades a pre-migration
@@ -1639,6 +1717,184 @@ mod tests {
             exported_b.first_peer_id.is_none() && exported_b.first_enode.is_none(),
             "skipped first-hear must export as non-p2p (NULL peer + NULL enode)",
         );
+    }
+
+    // ---- BERA-325: seal-flush excludes PoL / system txs ----
+    fn ber325_test_sig() -> Signature {
+        Signature::new(U256::from(1u64), U256::from(2u64), false)
+    }
+
+    fn ber325_eip1559(
+        distinct_nonce: u64,
+        gas_limit: u64,
+        max_fee_per_gas: u128,
+        max_priority_fee_per_gas: u128,
+    ) -> BerachainTxEnvelope {
+        let tx = TxEip1559 {
+            chain_id: ChainId::from(1u64),
+            nonce: distinct_nonce,
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            to: TxKind::Call(Address::from([0xcd; 20])),
+            value: U256::ZERO,
+            access_list: Default::default(),
+            input: Bytes::default(),
+        };
+        let signed = Signed::new_unhashed(tx, ber325_test_sig());
+        BerachainTxEnvelope::Ethereum(EthereumTxEnvelope::Eip1559(signed))
+    }
+
+    fn ber325_pol(nonce: u64) -> BerachainTxEnvelope {
+        BerachainTxEnvelope::Berachain(Sealed::new(PoLTx {
+            chain_id: ChainId::from(80084u64),
+            from: Address::ZERO,
+            to: Address::from([0x11; 20]),
+            nonce,
+            gas_limit: 30_000_000,
+            gas_price: 1u128,
+            input: Bytes::copy_from_slice(&nonce.to_le_bytes()),
+        }))
+    }
+
+    fn ber325_receipt(cum: u64) -> Receipt<BerachainTxType> {
+        Receipt {
+            tx_type: BerachainTxType::Ethereum(TxType::Eip1559),
+            success: true,
+            cumulative_gas_used: cum,
+            logs: vec![],
+        }
+    }
+
+    /// TP-1 (BERA-325): one EIP-1559 tx + one PoL → exactly one `sealed_tx_fact` row.
+    #[test]
+    fn seal_flush_skips_pol_system_tx() {
+        let base_fee = 1_000u128;
+        let eth = ber325_eip1559(0, 21_000, 10_000, 2_000);
+        let pol = ber325_pol(7);
+        let h_eth = *eth.tx_hash();
+
+        let txs = vec![eth, pol];
+        let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
+        let receipts = vec![ber325_receipt(21_000), ber325_receipt(21_000 + 500_000)];
+
+        let (hashes, tips, skipped) =
+            collect_seal_flush_tx_hashes_and_tips(base_fee, &tx_refs, &receipts).unwrap();
+        assert_eq!(skipped, 1);
+        assert_eq!(hashes, vec![h_eth]);
+        assert_eq!(tips.len(), 1);
+
+        let drained = vec![(h_eth, None)];
+        let rows = build_sealed_tx_fact_inserts(1, &drained, &tips, 99);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].tx_hash, format!("{h_eth:#x}"));
+    }
+
+    /// TP-2 (BERA-325): receipt alignment for surviving txs when PoL rows sit between them.
+    #[test]
+    fn seal_flush_filter_preserves_receipt_alignment() {
+        let base_fee = 1_000u128;
+        let tx_a = ber325_eip1559(1, 100, 10_000, 2_000);
+        let tx_b = ber325_pol(2);
+        let tx_c = ber325_eip1559(3, 50, 50_000, 10_000);
+        let tx_d = ber325_pol(4);
+
+        let h_a = *tx_a.tx_hash();
+        let h_c = *tx_c.tx_hash();
+
+        let txs = vec![tx_a, tx_b, tx_c, tx_d];
+        let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
+        let receipts = vec![
+            ber325_receipt(100),
+            ber325_receipt(300),
+            ber325_receipt(350),
+            ber325_receipt(650),
+        ];
+
+        let (hashes, tips, skipped) =
+            collect_seal_flush_tx_hashes_and_tips(base_fee, &tx_refs, &receipts).unwrap();
+        assert_eq!(skipped, 2);
+        assert_eq!(hashes, vec![h_a, h_c]);
+
+        let eff_a = 3_000u128;
+        assert_eq!(tips[0], (eff_a - base_fee) * 100u128);
+
+        let eff_c = 11_000u128;
+        assert_eq!(tips[1], (eff_c - base_fee) * 50u128);
+    }
+
+    /// TP-3 (BERA-325): two PoL txs in the fixture → `system_tx` skip count is 2 (drives
+    /// `pog_sealed_flush_tx_skipped_total{reason="system_tx"}` in production).
+    #[test]
+    fn seal_flush_skip_counter_increments_per_filtered_tx() {
+        let base_fee = 1_000u128;
+        let txs = vec![
+            ber325_eip1559(1, 100, 10_000, 2_000),
+            ber325_pol(2),
+            ber325_eip1559(3, 50, 50_000, 10_000),
+            ber325_pol(4),
+        ];
+        let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
+        let receipts = vec![
+            ber325_receipt(100),
+            ber325_receipt(300),
+            ber325_receipt(350),
+            ber325_receipt(650),
+        ];
+        let (_, _, skipped) =
+            collect_seal_flush_tx_hashes_and_tips(base_fee, &tx_refs, &receipts).unwrap();
+        assert_eq!(skipped, 2);
+    }
+
+    /// TP-4 (BERA-325): Ethereum-only blocks match the legacy tip vector.
+    #[test]
+    fn seal_flush_eth_only_matches_unfiltered_tip_vector() {
+        let base_fee = 1_000u128;
+        let t1 = ber325_eip1559(0, 100, 5_000, 2_000);
+        let t2 = ber325_eip1559(1, 50, 8_000, 5_000);
+        let txs = vec![t1, t2];
+        let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
+        let receipts = vec![ber325_receipt(100), ber325_receipt(150)];
+
+        let eff: Vec<u128> =
+            txs.iter().map(|t| t.effective_gas_price(Some(base_fee as u64))).collect();
+        let legacy = compute_effective_tips_from_receipts(base_fee, &eff, &receipts);
+        let (_, tips, skipped) =
+            collect_seal_flush_tx_hashes_and_tips(base_fee, &tx_refs, &receipts).unwrap();
+        assert_eq!(skipped, 0);
+        assert_eq!(tips, legacy);
+    }
+
+    /// TP-5 (BERA-325): PoL-only block → no rows; empty `flush_sealed_tx_facts` still runs retention.
+    #[test]
+    fn seal_flush_all_pol_block_writes_zero_rows_and_runs_retention() {
+        let base_fee = 1u128;
+        let txs = vec![ber325_pol(10), ber325_pol(11), ber325_pol(12)];
+        let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
+        let receipts = vec![ber325_receipt(5), ber325_receipt(8), ber325_receipt(13)];
+
+        let (hashes, tips, skipped) =
+            collect_seal_flush_tx_hashes_and_tips(base_fee, &tx_refs, &receipts).unwrap();
+        assert!(hashes.is_empty() && tips.is_empty());
+        assert_eq!(skipped, 3);
+
+        let tmp = NamedTempFile::new().unwrap();
+        let store = PogSqliteStore::open(tmp.path()).unwrap();
+        let stale = SealedTxFactInsert {
+            sealed_block_number: 1,
+            tx_hash: format!("{:#x}", B256::random()),
+            first_peer_id: None,
+            first_heard_ms: 100,
+            effective_tip_wei_hex: "0x0".into(),
+            tip_formula_version: 1,
+            first_enode: None,
+        };
+        store.flush_sealed_tx_facts(&[stale], u64::MAX).unwrap();
+        assert_eq!(store.sealed_tx_fact_row_count(), 1);
+
+        let (_hw, deleted) = store.flush_sealed_tx_facts(&[], 5_000).unwrap();
+        assert_eq!(deleted, 1, "retention DELETE must run on empty insert batch");
+        assert_eq!(store.sealed_tx_fact_row_count(), 0);
     }
 
     // ---- TP-R1 ----
