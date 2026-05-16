@@ -149,13 +149,13 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download hive assets
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: hive_assets
           path: /tmp
 
       - name: Download bera-reth image
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: artifacts
           path: /tmp
