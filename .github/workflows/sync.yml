@@ -19,16 +19,18 @@ jobs:
     name: build bera-reth
     runs-on: ubuntu-latest-large
     steps:
-      - uses: actions/checkout@v5
-      - uses: rui314/setup-mold@v1
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # staging
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-on-failure: true
       - name: Build bera-reth
         run: cargo build --profile maxperf
       - name: Upload bera-reth binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: bera-reth-binary
           path: target/maxperf/bera-reth
@@ -58,9 +60,9 @@ jobs:
             etherscan_url: https://api.etherscan.io/v2/api?chainid=80069
             max_block: 8600000
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - name: Download bera-reth binary
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: bera-reth-binary
           path: target/maxperf/
@@ -118,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest-large
     steps:
       - name: Slack Webhook Action
-        uses: rtCamp/action-slack-notify@v2
+        uses: rtCamp/action-slack-notify@e31e87e03dd19038e411e38ae27cbad084a90661 # v2.3.3
         env:
           SLACK_COLOR: ${{ job.status }}
           SLACK_MESSAGE: "Sync test failed: https://github.com/berachain/bera-reth/actions/runs/${{ github.run_id }}"
