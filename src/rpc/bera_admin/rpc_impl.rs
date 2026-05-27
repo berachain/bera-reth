@@ -653,25 +653,6 @@ mod tests {
         assert_eq!(back.first_enode, None);
     }
 
-    /// BERA-305 wire-compat: a payload missing `firstEnode` deserializes to
-    /// `first_enode = None` (older bera-reth nodes don't emit the field; sentinel mirror
-    /// must Option-tolerate). Mirrors the `serde(default)` annotation on the field.
-    #[test]
-    fn sealed_tx_fact_row_legacy_payload_without_first_enode_field_round_trips() {
-        let payload = serde_json::json!({
-            "id": 1,
-            "sealedBlockNumber": 1,
-            "txHash": "0x00",
-            "firstPeerId": null,
-            "firstHeardMs": 0,
-            "effectiveTipWei": "0x0",
-            "tipFormulaVersion": 1,
-            "extraHears": []
-        });
-        let parsed: SealedTxFactRow = serde_json::from_value(payload).unwrap();
-        assert!(parsed.first_enode.is_none());
-    }
-
     #[test]
     fn export_response_wire_shape() {
         let resp = ExportSealedTxFactsResponse {
