@@ -111,11 +111,9 @@ pub struct SealedTxFactRow {
     /// Reserved slot for BERA-261 extras-population. Always `[]` in v1.
     pub extra_hears: Vec<ExtraHear>,
     /// Canonical `enode://hex@ip:port` URL captured from the peer's first-hear devp2p Hello
-    /// (see BERA-305 brief). Always-present-`null` for sessions that didn't supply a
-    /// listening port (`Hello.port == 0`) and for pre-migration rows. Older bera-reth
-    /// nodes do not emit the field; the sentinel mirror tolerates absence via
-    /// `serde(default)`.
-    #[serde(default)]
+    /// (BERA-305). The key is always present on export wire (`null` when `Hello.port == 0`
+    /// or no listening address). Single supported JSON shape per BERA-465 — coordinate
+    /// sentinel mirror bumps with producer releases.
     pub first_enode: Option<String>,
 }
 
