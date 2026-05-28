@@ -1,4 +1,4 @@
-//! `BerAdminImpl` and [`BerAdminApiServer`](super::BerAdminApiServer) implementation.
+//! `BerAdminImpl` and [`BerAdminApiServer`] implementation.
 
 use super::{BerAdminApiServer, helpers::*, types::*};
 
