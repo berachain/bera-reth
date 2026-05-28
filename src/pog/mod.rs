@@ -1099,48 +1099,9 @@ impl InflightTransactions {
     }
 }
 
-/// Tracks block numbers whose payload was produced by **this** node's payload builder.
-/// Populated from the `payload_builder.subscribe()` stream; consulted by the seal-flush
-/// path to decide whether to persist `sealed_tx_fact` rows for a canonical-committed
-/// block. Formerly `SealedBlockRegistry`; renamed per brief §5.1 and §5.3.
-pub struct LocallyBuiltBlocks {
-    entries: HashMap<u64, Instant>,
-    ttl: Duration,
-    latest: Option<u64>,
-}
-
-impl LocallyBuiltBlocks {
-    pub fn new(ttl: Duration) -> Self {
-        Self { entries: HashMap::new(), ttl, latest: None }
-    }
-
-    pub fn insert(&mut self, block_number: u64) {
-        self.entries.insert(block_number, Instant::now());
-        self.latest = Some(match self.latest {
-            Some(prev) => prev.max(block_number),
-            None => block_number,
-        });
-    }
-
-    pub fn contains(&self, block_number: u64) -> bool {
-        self.entries.get(&block_number).is_some_and(|t| t.elapsed() < self.ttl)
-    }
-
-    pub fn latest(&self) -> Option<u64> {
-        self.latest
-    }
-
-    pub fn evict_expired(&mut self) {
-        let ttl = self.ttl;
-        self.entries.retain(|_, t| t.elapsed() < ttl);
-        self.latest = self.entries.keys().max().copied();
-    }
-}
-
-/// Shared store for in-RAM first-hear attribution and locally-built block tracking.
+/// Shared store for in-RAM first-hear attribution.
 pub struct PogAttributionStore {
     pub inflight: Mutex<InflightTransactions>,
-    pub locally_built: Mutex<LocallyBuiltBlocks>,
 }
 
 impl PogAttributionStore {
@@ -1148,7 +1109,6 @@ impl PogAttributionStore {
         let ttl = Duration::from_secs(DEFAULT_INFLIGHT_TTL_SECS);
         Self {
             inflight: Mutex::new(InflightTransactions::new(ttl, cfg.max_inflight_entries)),
-            locally_built: Mutex::new(LocallyBuiltBlocks::new(ttl)),
         }
     }
 }
@@ -1239,29 +1199,22 @@ pub async fn run_pog_watcher<Provider>(
                         .map(|tx| *tx.tx_hash())
                         .collect();
 
-                    // Seal-flush: persist sealed_tx_fact rows iff our payload builder
-                    // produced this block. See brief §5.3 / AC-R2 / AC-R2b.
-                    let we_built_it = store
-                        .locally_built
-                        .lock()
-                        .map(|g| g.contains(block_num))
-                        .unwrap_or(false);
-                    if we_built_it {
-                        let flush_start = Instant::now();
-                        if let Err(err) =
-                            run_seal_flush_from_canon(&coord, &store, &provider, block_num, block, cfg)
-                        {
-                            warn!(
-                                target: "bera_reth::pog_store",
-                                block = block_num,
-                                error = %err,
-                                "seal-flush failed (continuing; rows will not land for this block)"
-                            );
-                        } else {
-                            let histogram =
-                                metrics::histogram!("pog_sealed_flush_duration_seconds");
-                            histogram.record(flush_start.elapsed().as_secs_f64());
-                        }
+                    // Seal-flush: persist sealed_tx_fact rows unconditionally.
+                    // See brief §Approach / BERA-268.
+                    let flush_start = Instant::now();
+                    if let Err(err) =
+                        run_seal_flush_from_canon(&coord, &store, &provider, block_num, block, cfg)
+                    {
+                        warn!(
+                            target: "bera_reth::pog_store",
+                            block = block_num,
+                            error = %err,
+                            "seal-flush failed (continuing; rows will not land for this block)"
+                        );
+                    } else {
+                        let histogram =
+                            metrics::histogram!("pog_sealed_flush_duration_seconds");
+                        histogram.record(flush_start.elapsed().as_secs_f64());
                     }
 
                     // Probe-reconciliation path (existing behavior).
@@ -1314,9 +1267,6 @@ pub async fn run_pog_watcher<Provider>(
                 coord.prune_timed_out_window();
                 if let Ok(mut inflight) = store.inflight.lock() {
                     inflight.evict_expired();
-                }
-                if let Ok(mut built) = store.locally_built.lock() {
-                    built.evict_expired();
                 }
 
                 if let Some(inflight) = coord.inflight_snapshot()
@@ -2147,18 +2097,11 @@ mod tests {
         assert_eq!(store.read_conn_lock_count(), r_before, "scrape must not touch read_conn");
     }
 
-    // ---- TP-R10 ----
-    // Pure-store negative path: if the seal-flush task is *not* invoked (because
-    // LocallyBuiltBlocks::contains(block_num) returned false in the caller), then no
-    // rows land and the InflightTransactions entries remain undrained. This mirrors
-    // AC-R2b; the rpc/mod.rs caller is responsible for the `contains` check.
+    // ---- TP-1 / AC-3 ----
+    // Verify that since the LocallyBuiltBlocks gate is removed, any block commit
+    // (regardless of local proposal) invokes the seal-flush path.
     #[test]
-    fn tp_r10_locally_built_blocks_filter_negative_path() {
-        let mut built = LocallyBuiltBlocks::new(Duration::from_secs(60));
-        built.insert(100);
-        assert!(built.contains(100));
-        assert!(!built.contains(200), "other-validator block 200 not in set → skip flush");
-
+    fn tp_r10_unconditional_seal_flush_on_canon_commit() {
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
         let mut inflight = InflightTransactions::new(Duration::from_secs(60), 1024);
@@ -2168,10 +2111,16 @@ mod tests {
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 4)), 30303);
         inflight.record_first_hear(tx_a, peer, Some(addr), 100);
         inflight.record_first_hear(tx_b, peer, Some(addr), 200);
-        // If the seal-flush caller respects `contains`, these entries are never drained.
+        
         assert_eq!(inflight.len(), 2);
         assert!(inflight.contains(&tx_a));
         assert!(inflight.contains(&tx_b));
+
+        // When we drain for seal, both transactions are successfully processed,
+        // regardless of which block proposed them, because we execute seal-flush unconditionally.
+        let drained = inflight.drain_for_seal(&[tx_a, tx_b]);
+        assert_eq!(drained.len(), 2);
+        assert_eq!(inflight.len(), 0);
     }
 
     // ---- InflightTransactions: retained value structure ----
@@ -2207,57 +2156,6 @@ mod tests {
         assert_eq!(e.first_heard_ms, 2);
     }
 
-    // ---- LocallyBuiltBlocks (ported from SealedBlockRegistry tests) ----
-    #[test]
-    fn locally_built_blocks_insert_and_contains() {
-        let mut r = LocallyBuiltBlocks::new(Duration::from_secs(60));
-        r.insert(42);
-        assert!(r.contains(42));
-        assert!(!r.contains(43));
-    }
-
-    #[test]
-    fn locally_built_blocks_latest_tracks_max() {
-        let mut r = LocallyBuiltBlocks::new(Duration::from_secs(60));
-        assert_eq!(r.latest(), None);
-        r.insert(10);
-        r.insert(5);
-        r.insert(20);
-        assert_eq!(r.latest(), Some(20));
-    }
-
-    #[test]
-    fn locally_built_blocks_evicts_after_ttl() {
-        let mut r = LocallyBuiltBlocks::new(Duration::from_millis(1));
-        r.insert(1);
-        std::thread::sleep(Duration::from_millis(5));
-        assert!(!r.contains(1));
-    }
-
-    #[test]
-    fn locally_built_blocks_latest_updates_after_eviction() {
-        let mut r = LocallyBuiltBlocks::new(Duration::from_millis(1));
-        r.insert(10);
-        r.insert(20);
-        std::thread::sleep(Duration::from_millis(5));
-        r.evict_expired();
-        assert_eq!(r.latest(), None);
-        r.insert(5);
-        assert_eq!(r.latest(), Some(5));
-    }
-
-    #[test]
-    fn locally_built_blocks_latest_partial_eviction() {
-        let mut r = LocallyBuiltBlocks::new(Duration::from_millis(50));
-        r.insert(10);
-        std::thread::sleep(Duration::from_millis(30));
-        r.insert(20);
-        std::thread::sleep(Duration::from_millis(25));
-        r.evict_expired();
-        assert!(!r.contains(10));
-        assert!(r.contains(20));
-        assert_eq!(r.latest(), Some(20));
-    }
 
     // ---- PogSqliteStore probe API (inherited from PogDb) ----
     #[test]
