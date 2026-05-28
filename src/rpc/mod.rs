@@ -205,7 +205,6 @@ where
         let bera_admin =
             Arc::new(BerAdminImpl::new(network, provider, chain_spec, client_version, pog.clone()));
 
-
         let canon_events = {
             use reth::providers::CanonStateSubscriptions as _;
             provider_watcher.subscribe_to_canonical_state()

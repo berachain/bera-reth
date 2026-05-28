@@ -97,7 +97,8 @@ fn main() {
                         .await?;
 
                     // Known-peers filtering runs from `reth_node_builder::post_known_peers_write`
-                    // (see `pog::configure_shutdown_peer_curation`), after the graceful peer-file write.
+                    // (see `pog::configure_shutdown_peer_curation`), after the graceful peer-file
+                    // write.
                     node_exit_future.await
                 },
             ) {

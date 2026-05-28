@@ -67,12 +67,20 @@ feature-depth = 1
 [advisories]
 yanked = "warn"
 ignore = [
-  # https://rustsec.org/advisories/RUSTSEC-2023-0089 atomic-polyfill unmaintained (test-fuzz dev-dep)
-  "RUSTSEC-2023-0089",
   # https://rustsec.org/advisories/RUSTSEC-2024-0436 paste! is unmaintained
   "RUSTSEC-2024-0436",
   # https://rustsec.org/advisories/RUSTSEC-2025-0141 bincode is unmaintained, need to transition all deps to wincode first
   "RUSTSEC-2025-0141",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0103 thin-vec UAF (transitive via reth)
+  "RUSTSEC-2026-0103",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0104 rustls-webpki CRL parsing panic (transitive via reth)
+  "RUSTSEC-2026-0104",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0105 core2 unmaintained (transitive via reth → ethereum_ssz)
+  "RUSTSEC-2026-0105",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0118 hickory-proto NSEC3 loop (transitive via reth → trust-dns)
+  "RUSTSEC-2026-0118",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0119 hickory-proto name compression O(n²) (transitive via reth → trust-dns)
+  "RUSTSEC-2026-0119",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
