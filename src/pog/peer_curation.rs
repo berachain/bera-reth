@@ -183,7 +183,12 @@ mod tests {
         conn
     }
 
-    fn insert_status_row(conn: &Connection, peer_id: &PeerId, success_count: i64, failure_count: i64) {
+    fn insert_status_row(
+        conn: &Connection,
+        peer_id: &PeerId,
+        success_count: i64,
+        failure_count: i64,
+    ) {
         conn.execute(
             "INSERT INTO peer_pog_status (peer_id, last_result, last_tx_hash, last_tested_at, failure_count, success_count)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",

@@ -123,8 +123,7 @@ pub fn run_shutdown_peer_curation_if_enabled() {
     let _ = peer_curation::curate_known_peers_file(&config.known_peers_path, &config.pog_db_path);
 }
 
-use crate::primitives::BerachainHeader;
-use crate::transaction::BerachainTxEnvelope;
+use crate::{primitives::BerachainHeader, transaction::BerachainTxEnvelope};
 use alloy_consensus::{SignableTransaction, TxEip1559};
 use alloy_primitives::{Address, Bytes, TxHash, TxKind, U256, hex};
 use rand::Rng;
@@ -451,10 +450,10 @@ impl PogSqliteStore {
         // (Hello.port hit-rate spike) can be graphed at insert time, not just by paging
         // the SQLite table. Buckets:
         //   - present:              first_peer_id IS NOT NULL && first_enode IS NOT NULL
-        //   - null_hello_port_zero: first_peer_id IS NOT NULL && first_enode IS NULL
-        //                            (peer attributed but Hello.port=0 — the VC-1 case)
-        //   - null_no_peer:         first_peer_id IS NULL (locally-built / RPC-only;
-        //                            first_enode is structurally NULL)
+        //   - null_hello_port_zero: first_peer_id IS NOT NULL && first_enode IS NULL (peer
+        //     attributed but Hello.port=0 — the VC-1 case)
+        //   - null_no_peer:         first_peer_id IS NULL (locally-built / RPC-only; first_enode is
+        //     structurally NULL)
         let mut sealed_first_enode_present: u64 = 0;
         let mut sealed_first_enode_null_hello_port_zero: u64 = 0;
         let mut sealed_first_enode_null_no_peer: u64 = 0;
@@ -1107,9 +1106,7 @@ pub struct PogAttributionStore {
 impl PogAttributionStore {
     pub fn new(cfg: PogSealedFactConfig) -> Self {
         let ttl = Duration::from_secs(DEFAULT_INFLIGHT_TTL_SECS);
-        Self {
-            inflight: Mutex::new(InflightTransactions::new(ttl, cfg.max_inflight_entries)),
-        }
+        Self { inflight: Mutex::new(InflightTransactions::new(ttl, cfg.max_inflight_entries)) }
     }
 }
 
@@ -1611,8 +1608,9 @@ mod tests {
     /// and asserts that:
     ///   - a `Some(addr)` listening_addr produces `first_enode == NodeRecord::new(addr,
     ///     peer_id).to_string()` on the persisted row;
-    ///   - a `None` listening_addr (Hello.port=0) produces no inflight row → seal flush is
-    ///     non-p2p (`first_peer_id` and `first_enode` both unset).
+    ///   - a `None` listening_addr (Hello.port=0) produces no inflight row → seal flush is non-p2p
+    ///     (`first_peer_id` and `first_enode` both unset).
+    ///
     /// Routing through `flush_sealed_tx_facts` plus `export_sealed_tx_facts` exercises the
     /// SQLite round-trip end-to-end.
     #[test]
@@ -1724,7 +1722,7 @@ mod tests {
         let pol = ber325_pol(7);
         let h_eth = *eth.tx_hash();
 
-        let txs = vec![eth, pol];
+        let txs = [eth, pol];
         let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
         let receipts = vec![ber325_receipt(21_000), ber325_receipt(21_000 + 500_000)];
 
@@ -1752,7 +1750,7 @@ mod tests {
         let h_a = *tx_a.tx_hash();
         let h_c = *tx_c.tx_hash();
 
-        let txs = vec![tx_a, tx_b, tx_c, tx_d];
+        let txs = [tx_a, tx_b, tx_c, tx_d];
         let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
         let receipts = vec![
             ber325_receipt(100),
@@ -1778,7 +1776,7 @@ mod tests {
     #[test]
     fn seal_flush_skip_counter_increments_per_filtered_tx() {
         let base_fee = 1_000u128;
-        let txs = vec![
+        let txs = [
             ber325_eip1559(1, 100, 10_000, 2_000),
             ber325_pol(2),
             ber325_eip1559(3, 50, 50_000, 10_000),
@@ -1802,7 +1800,7 @@ mod tests {
         let base_fee = 1_000u128;
         let t1 = ber325_eip1559(0, 100, 5_000, 2_000);
         let t2 = ber325_eip1559(1, 50, 8_000, 5_000);
-        let txs = vec![t1, t2];
+        let txs = [t1, t2];
         let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
         let receipts = vec![ber325_receipt(100), ber325_receipt(150)];
 
@@ -1815,11 +1813,12 @@ mod tests {
         assert_eq!(tips, legacy);
     }
 
-    /// TP-5 (BERA-325): PoL-only block → no rows; empty `flush_sealed_tx_facts` still runs retention.
+    /// TP-5 (BERA-325): PoL-only block → no rows; empty `flush_sealed_tx_facts` still runs
+    /// retention.
     #[test]
     fn seal_flush_all_pol_block_writes_zero_rows_and_runs_retention() {
         let base_fee = 1u128;
-        let txs = vec![ber325_pol(10), ber325_pol(11), ber325_pol(12)];
+        let txs = [ber325_pol(10), ber325_pol(11), ber325_pol(12)];
         let tx_refs: Vec<&BerachainTxEnvelope> = txs.iter().collect();
         let receipts = vec![ber325_receipt(5), ber325_receipt(8), ber325_receipt(13)];
 
@@ -2111,7 +2110,7 @@ mod tests {
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 4)), 30303);
         inflight.record_first_hear(tx_a, peer, Some(addr), 100);
         inflight.record_first_hear(tx_b, peer, Some(addr), 200);
-        
+
         assert_eq!(inflight.len(), 2);
         assert!(inflight.contains(&tx_a));
         assert!(inflight.contains(&tx_b));
@@ -2155,7 +2154,6 @@ mod tests {
         assert_eq!(e.first_peer_id, p_win);
         assert_eq!(e.first_heard_ms, 2);
     }
-
 
     // ---- PogSqliteStore probe API (inherited from PogDb) ----
     #[test]

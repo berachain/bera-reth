@@ -88,9 +88,7 @@ impl TransactionProvenanceSink for PogTxProvenanceSink {
             n_hashes = accepted_tx_hashes.len(),
             "record_accepted_from_peer",
         );
-        if listening_addr.is_none()
-            && !OBSERVED_NONE_LISTENING_ADDR.swap(true, Ordering::Relaxed)
-        {
+        if listening_addr.is_none() && !OBSERVED_NONE_LISTENING_ADDR.swap(true, Ordering::Relaxed) {
             warn!(
                 target: "bera_reth::pog",
                 peer_id = %peer_id,
