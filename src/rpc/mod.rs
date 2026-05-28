@@ -19,8 +19,6 @@ use crate::{
         receipt::BerachainEthReceiptConverter,
     },
 };
-use alloy_consensus::BlockHeader as _;
-use futures::StreamExt as _;
 use reth::{
     api::{FullNodeComponents, HeaderTy, PrimitivesTy},
     chainspec::EthereumHardforks,
@@ -39,7 +37,6 @@ use reth_node_builder::rpc::{
     EthApiBuilder, EthApiCtx, PayloadValidatorBuilder, RethRpcAddOns, RethRpcMiddleware, RpcAddOns,
     RpcHandle,
 };
-use reth_payload_primitives::BuiltPayload as _;
 use reth_rpc_convert::{RpcConvert, RpcConverter};
 use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
 use std::sync::Arc;
@@ -208,26 +205,6 @@ where
         let bera_admin =
             Arc::new(BerAdminImpl::new(network, provider, chain_spec, client_version, pog.clone()));
 
-        // Write path 2: locally-built-block detection via payload builder events
-        // (populates `LocallyBuiltBlocks`, the write-side filter for the seal-flush task;
-        // see brief §5.1 / §5.3).
-        let payload_builder = ctx.node.payload_builder_handle().clone();
-        let attribution_for_sealing = attribution.clone();
-        task_executor.spawn_task(async move {
-            let Ok(payload_events) = payload_builder.subscribe().await else {
-                tracing::warn!(
-                    "payload builder subscribe failed — sealed-tx-fact attribution will be unavailable"
-                );
-                return;
-            };
-            let mut stream = payload_events.into_built_payload_stream();
-            while let Some(payload) = stream.next().await {
-                let block_number = payload.block().number();
-                if let Ok(mut built) = attribution_for_sealing.locally_built.lock() {
-                    built.insert(block_number);
-                }
-            }
-        });
 
         let canon_events = {
             use reth::providers::CanonStateSubscriptions as _;
