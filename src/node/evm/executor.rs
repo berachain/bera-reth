@@ -296,7 +296,7 @@ where
     > {
         let requests = if self
             .spec
-            .is_prague_active_at_timestamp(self.evm.block().timestamp().saturating_to())
+            .is_osaka_active_at_timestamp(self.evm.block().timestamp().saturating_to())
         {
             let deposit_contract = self
                 .spec

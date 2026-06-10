@@ -20,6 +20,9 @@ const DEPOSIT_SIZE: usize = 48 + 32 + 8 + 96 + 8;
 // Amount encoded in the mock event: 32 ETH in Gwei = 0x773594000
 const MOCK_AMOUNT_GWEI: u64 = 32_000_000_000;
 
+// A time in the future for testing deposit requests before Osaka activation.
+const OSAKA_TIME_FUTURE: u64 = 2_000_000_000;
+
 // Runtime bytecode for a contract that emits a hardcoded Berachain Deposit event when called.
 //
 // Event: Deposit(bytes pubkey, bytes credentials, uint64 amount, bytes signature, uint64 index)
@@ -85,11 +88,20 @@ const DEPOSIT_EMITTER_BYTECODE: &str = concat!(
 );
 
 async fn setup_deposit_test() -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
+    setup_deposit_test_with_osaka(None).await
+}
+
+async fn setup_deposit_test_with_osaka(
+    osaka_time: Option<u64>,
+) -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
     let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path)?;
     let mut genesis: Genesis = parse_genesis(&genesis_json)?;
     genesis.config.deposit_contract_address = Some(DEPOSIT_CONTRACT);
+    if let Some(osaka_time) = osaka_time {
+        genesis.config.osaka_time = Some(osaka_time);
+    }
     let bytecode = Bytes::from(alloy_primitives::hex::decode(DEPOSIT_EMITTER_BYTECODE).unwrap());
     genesis
         .alloc
@@ -185,6 +197,56 @@ async fn test_eip6110_no_deposits_without_deposit_tx() -> eyre::Result<()> {
     assert!(
         deposit_request.is_none(),
         "block without deposit transactions must not contain deposit requests"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_eip6110_no_deposit_requests_before_osaka() -> eyre::Result<()> {
+    let (runtime, chain_spec) = setup_deposit_test_with_osaka(Some(OSAKA_TIME_FUTURE)).await?;
+    let node_config = NodeConfig::new(chain_spec.clone())
+        .with_unused_ports()
+        .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
+
+    let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
+        .testing_node(runtime.clone())
+        .node(BerachainNode::default())
+        .launch()
+        .await?;
+
+    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
+    let signer = test_signer()?;
+    let chain_id = chain_spec.chain_id();
+
+    let deposit_tx = TransactionRequest {
+        to: Some(TxKind::Call(DEPOSIT_CONTRACT)),
+        value: Some(U256::ZERO),
+        input: TransactionInput::default(),
+        gas: Some(100_000),
+        chain_id: Some(chain_id),
+        nonce: Some(0),
+        max_fee_per_gas: Some(10_000_000_000),
+        max_priority_fee_per_gas: Some(1_000_000_000),
+        ..Default::default()
+    };
+
+    let tx_bytes: Bytes =
+        TransactionTestContext::sign_tx(signer, deposit_tx).await.encoded_2718().into();
+    let deposit_tx_hash = ctx.rpc.inject_tx(tx_bytes).await?;
+
+    let payload = ctx.advance_block().await?;
+
+    let block = payload.block();
+    assert!(
+        block.body().transactions.iter().any(|tx| *tx.hash() == deposit_tx_hash),
+        "deposit transaction must be included so its deposit event is emitted before Osaka"
+    );
+
+    let requests = payload.requests().expect("requests must be present when Prague is active");
+    assert!(
+        requests.is_empty(),
+        "deposit requests must be empty before Osaka even when a deposit event is emitted"
     );
 
     Ok(())
