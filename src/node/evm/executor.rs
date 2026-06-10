@@ -306,11 +306,14 @@ where
                     .spec
                     .deposit_contract_address()
                     .unwrap_or(eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS);
-                let deposit_requests =
-                    crate::deposits::parse_deposits_from_receipts(deposit_contract, &self.receipts)?;
+                let deposit_requests = crate::deposits::parse_deposits_from_receipts(
+                    deposit_contract,
+                    &self.receipts,
+                )?;
 
                 if !deposit_requests.is_empty() {
-                    requests.push_request_with_type(eip6110::DEPOSIT_REQUEST_TYPE, deposit_requests);
+                    requests
+                        .push_request_with_type(eip6110::DEPOSIT_REQUEST_TYPE, deposit_requests);
                 }
             }
 
