@@ -259,7 +259,10 @@ async fn test_eip6110_no_deposit_requests_before_osaka() -> eyre::Result<()> {
 #[tokio::test]
 async fn test_eip6110_deposit_requests_across_osaka_boundary() -> eyre::Result<()> {
     // Activate Osaka a few blocks after genesis.
-    let osaka_time = E2E_BASE_TIMESTAMP + 3;
+    // Last pre-Osaka block is at osaka_time - 1 (= E2E_BASE_TIMESTAMP + 1, first block after
+    // genesis) and the first Osaka block at osaka_time (= E2E_BASE_TIMESTAMP + 2, second block
+    // after genesis).
+    let osaka_time = E2E_BASE_TIMESTAMP + 2;
     let (runtime, chain_spec) = setup_deposit_test_with_osaka(Some(osaka_time)).await?;
     let node_config = NodeConfig::new(chain_spec.clone())
         .with_unused_ports()
@@ -287,7 +290,7 @@ async fn test_eip6110_deposit_requests_across_osaka_boundary() -> eyre::Result<(
         ..Default::default()
     };
 
-    // Before Osaka: the deposit event is emitted but must not yield a request.
+    // Last pre-Osaka block: the deposit event is emitted but must not yield a request.
     let tx_bytes: Bytes = TransactionTestContext::sign_tx(signer.clone(), make_deposit_tx(0))
         .await
         .encoded_2718()
@@ -295,35 +298,21 @@ async fn test_eip6110_deposit_requests_across_osaka_boundary() -> eyre::Result<(
     let pre_tx_hash = ctx.rpc.inject_tx(tx_bytes).await?;
     let payload = ctx.advance_block().await?;
     let block = payload.block();
-    assert!(
-        block.timestamp < osaka_time,
-        "first deposit must land before Osaka (timestamp {}, osaka {osaka_time})",
-        block.timestamp
-    );
+    assert_eq!(block.timestamp, osaka_time - 1, "deposit must land on the last pre-Osaka block");
     assert!(
         block.body().transactions.iter().any(|tx| *tx.hash() == pre_tx_hash),
         "pre-Osaka deposit transaction must be included so its event is emitted"
     );
     let requests = payload.requests().expect("requests must be present when Prague is active");
-    assert!(requests.is_empty(), "deposit requests must be empty before Osaka");
+    assert!(requests.is_empty(), "deposit requests must be empty in the last pre-Osaka block");
 
-    // Advance plain blocks until Osaka activates.
-    let mut payload = payload;
-    while payload.block().timestamp < osaka_time {
-        payload = ctx.advance_block().await?;
-    }
-
-    // After Osaka: the same deposit event must now yield a deposit request.
+    // First Osaka block: the same deposit event must now yield a deposit request.
     let tx_bytes: Bytes =
         TransactionTestContext::sign_tx(signer, make_deposit_tx(1)).await.encoded_2718().into();
     let post_tx_hash = ctx.rpc.inject_tx(tx_bytes).await?;
     let payload = ctx.advance_block().await?;
     let block = payload.block();
-    assert!(
-        block.timestamp >= osaka_time,
-        "second deposit must land at or after Osaka (timestamp {}, osaka {osaka_time})",
-        block.timestamp
-    );
+    assert_eq!(block.timestamp, osaka_time, "deposit must land on the first Osaka block");
     assert!(
         block.body().transactions.iter().any(|tx| *tx.hash() == post_tx_hash),
         "post-Osaka deposit transaction must be included"
