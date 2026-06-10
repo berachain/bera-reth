@@ -294,23 +294,30 @@ where
         (Self::Evm, BlockExecutionResult<<BerachainReceiptBuilder as ReceiptBuilder>::Receipt>),
         BlockExecutionError,
     > {
-        let requests = if self
-            .spec
-            .is_osaka_active_at_timestamp(self.evm.block().timestamp().saturating_to())
-        {
-            let deposit_contract = self
-                .spec
-                .deposit_contract_address()
-                .unwrap_or(eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS);
-            let deposit_requests =
-                crate::deposits::parse_deposits_from_receipts(deposit_contract, &self.receipts)?;
-
+        let timestamp = self.evm.block().timestamp().saturating_to();
+        let requests = if self.spec.is_prague_active_at_timestamp(timestamp) {
             let mut requests = Requests::default();
 
-            if !deposit_requests.is_empty() {
-                requests.push_request_with_type(eip6110::DEPOSIT_REQUEST_TYPE, deposit_requests);
+            // EIP-6110 deposit requests are sourced from the execution layer only once Osaka is
+            // active. Before Osaka the consensus layer still ingests deposits from the deposit
+            // contract logs, so emitting them here would double count them.
+            if self.spec.is_osaka_active_at_timestamp(timestamp) {
+                let deposit_contract = self
+                    .spec
+                    .deposit_contract_address()
+                    .unwrap_or(eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS);
+                let deposit_requests =
+                    crate::deposits::parse_deposits_from_receipts(deposit_contract, &self.receipts)?;
+
+                if !deposit_requests.is_empty() {
+                    requests.push_request_with_type(eip6110::DEPOSIT_REQUEST_TYPE, deposit_requests);
+                }
             }
 
+            // EIP-7002 withdrawal and EIP-7251 consolidation requests are part of Prague and must
+            // run their system-contract calls every block from Prague onward. Gating these behind
+            // Osaka changes the post-state of pre-Osaka blocks (e.g. the excess-requests slot is
+            // never cleared), which breaks re-execution of historical blocks.
             requests.extend(self.system_caller.apply_post_execution_changes(&mut self.evm)?);
             requests
         } else {
