@@ -77,6 +77,8 @@ ignore = [
   "RUSTSEC-2026-0118",
   # https://rustsec.org/advisories/RUSTSEC-2026-0119 hickory-proto O(n^2) name compression; transitive dep via reth-dns-discovery, awaiting upstream bump to >=0.26.1
   "RUSTSEC-2026-0119",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0173 proc-macro-error2 is unmaintained, no safe upgrade available; transitive dep via alloy-sol-macro
+  "RUSTSEC-2026-0173",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
