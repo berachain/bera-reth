@@ -23,6 +23,10 @@ const MOCK_AMOUNT_GWEI: u64 = 32_000_000_000;
 // A time in the future for testing deposit requests before Osaka activation.
 const OSAKA_TIME_FUTURE: u64 = 2_000_000_000;
 
+// Genesis timestamp from reth's e2e `PayloadTestContext`.
+// Used to place an Osaka activation at E2E_BASE_TIMESTAMP + N.
+const E2E_BASE_TIMESTAMP: u64 = 1_710_338_135;
+
 // Runtime bytecode for a contract that emits a hardcoded Berachain Deposit event when called.
 //
 // Event: Deposit(bytes pubkey, bytes credentials, uint64 amount, bytes signature, uint64 index)
@@ -248,6 +252,98 @@ async fn test_eip6110_no_deposit_requests_before_osaka() -> eyre::Result<()> {
         requests.is_empty(),
         "deposit requests must be empty before Osaka even when a deposit event is emitted"
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_eip6110_deposit_requests_across_osaka_boundary() -> eyre::Result<()> {
+    // Activate Osaka a few blocks after genesis.
+    let osaka_time = E2E_BASE_TIMESTAMP + 3;
+    let (runtime, chain_spec) = setup_deposit_test_with_osaka(Some(osaka_time)).await?;
+    let node_config = NodeConfig::new(chain_spec.clone())
+        .with_unused_ports()
+        .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
+
+    let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
+        .testing_node(runtime.clone())
+        .node(BerachainNode::default())
+        .launch()
+        .await?;
+
+    let mut ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
+    let signer = test_signer()?;
+    let chain_id = chain_spec.chain_id();
+
+    let make_deposit_tx = |nonce: u64| TransactionRequest {
+        to: Some(TxKind::Call(DEPOSIT_CONTRACT)),
+        value: Some(U256::ZERO),
+        input: TransactionInput::default(),
+        gas: Some(100_000),
+        chain_id: Some(chain_id),
+        nonce: Some(nonce),
+        max_fee_per_gas: Some(10_000_000_000),
+        max_priority_fee_per_gas: Some(1_000_000_000),
+        ..Default::default()
+    };
+
+    // Before Osaka: the deposit event is emitted but must not yield a request.
+    let tx_bytes: Bytes = TransactionTestContext::sign_tx(signer.clone(), make_deposit_tx(0))
+        .await
+        .encoded_2718()
+        .into();
+    let pre_tx_hash = ctx.rpc.inject_tx(tx_bytes).await?;
+    let payload = ctx.advance_block().await?;
+    let block = payload.block();
+    assert!(
+        block.timestamp < osaka_time,
+        "first deposit must land before Osaka (timestamp {}, osaka {osaka_time})",
+        block.timestamp
+    );
+    assert!(
+        block.body().transactions.iter().any(|tx| *tx.hash() == pre_tx_hash),
+        "pre-Osaka deposit transaction must be included so its event is emitted"
+    );
+    let requests = payload.requests().expect("requests must be present when Prague is active");
+    assert!(requests.is_empty(), "deposit requests must be empty before Osaka");
+
+    // Advance plain blocks until Osaka activates.
+    let mut payload = payload;
+    while payload.block().timestamp < osaka_time {
+        payload = ctx.advance_block().await?;
+    }
+
+    // After Osaka: the same deposit event must now yield a deposit request.
+    let tx_bytes: Bytes =
+        TransactionTestContext::sign_tx(signer, make_deposit_tx(1)).await.encoded_2718().into();
+    let post_tx_hash = ctx.rpc.inject_tx(tx_bytes).await?;
+    let payload = ctx.advance_block().await?;
+    let block = payload.block();
+    assert!(
+        block.timestamp >= osaka_time,
+        "second deposit must land at or after Osaka (timestamp {}, osaka {osaka_time})",
+        block.timestamp
+    );
+    assert!(
+        block.body().transactions.iter().any(|tx| *tx.hash() == post_tx_hash),
+        "post-Osaka deposit transaction must be included"
+    );
+
+    let requests = payload.requests().expect("requests must be present when Prague is active");
+    let deposit_request = requests
+        .iter()
+        .find(|r: &&Bytes| r.first() == Some(&DEPOSIT_REQUEST_TYPE))
+        .expect("block must contain deposit requests after Osaka activation");
+
+    let deposit_data = &deposit_request[1..];
+    assert_eq!(
+        deposit_data.len(),
+        DEPOSIT_SIZE,
+        "deposit request must contain exactly one 192-byte deposit"
+    );
+    let amount_bytes: [u8; 8] = deposit_data[48 + 32..48 + 32 + 8].try_into().unwrap();
+    let amount_gwei = u64::from_le_bytes(amount_bytes);
+    assert_eq!(amount_gwei, MOCK_AMOUNT_GWEI, "amount must be 32 ETH in Gwei");
 
     Ok(())
 }
