@@ -160,6 +160,20 @@ jobs:
           echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
           echo "$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 ${{ env.VERSION }}^)..${{ env.VERSION }})" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+      - name: Import GPG key and read fingerprint
+        id: gpg
+        env:
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+        run: |
+          echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --batch --import
+          raw=$(gpg --with-colons --fingerprint core@berachain.com | awk -F: '/^fpr:/ {print $10; exit}')
+          if [[ -z "$raw" ]]; then
+            echo "ERROR: could not read GPG fingerprint from imported key" >&2
+            exit 1
+          fi
+          formatted=$(echo "$raw" | sed -E 's/(.{4})/\1 /g; s/ $//')
+          echo "fingerprint=$formatted" >> "$GITHUB_OUTPUT"
+          echo "Release signing key fingerprint: $formatted"
       - name: Create release draft
         env:
           GITHUB_USER: ${{ github.repository_owner }}
@@ -210,7 +224,7 @@ jobs:
 
           ## Binaries
 
-          The binaries are signed with the PGP key: `9242 626B 8926 378A EA33 82A7 11BD B71D C9ED AE7B`
+          The binaries are signed with the PGP key: `${{ steps.gpg.outputs.fingerprint }}`
 
           ### Bera-Reth
 
