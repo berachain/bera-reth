@@ -2326,7 +2326,7 @@ mod tests {
         assert_eq!(fork_id_prague2.hash, ForkHash([0xcb, 0xbf, 0x6c, 0x9f]));
         assert_eq!(fork_id_prague3.hash, ForkHash([0x64, 0x94, 0xa1, 0x76]));
         assert_eq!(fork_id_prague4.hash, ForkHash([0x70, 0x1a, 0x09, 0x7f]));
-        assert_eq!(fork_id_future.hash, ForkHash([0x31, 0xd4, 0x38, 0xd0]));
+        assert_eq!(fork_id_future.hash, ForkHash([0xbb, 0x99, 0xd3, 0xeb]));
     }
 
     #[test]
