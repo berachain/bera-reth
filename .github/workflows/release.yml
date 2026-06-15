@@ -113,6 +113,12 @@ jobs:
         run: |
           export GPG_TTY=$(tty)
           echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --batch --import
+          nkeys=$(gpg --with-colons --list-secret-keys | grep -c '^sec:' || true)
+          if [[ "$nkeys" -ne 1 ]]; then
+            echo "ERROR: expected exactly 1 secret key in GPG_SIGNING_KEY, found $nkeys" >&2
+            echo "Re-export the secret pinned by fingerprint: gpg --armor --export-secret-keys <FPR>" >&2
+            exit 1
+          fi
           cd artifacts
           tar -czf bera-reth-${{ needs.extract-version.outputs.VERSION }}-${{ matrix.configs.target }}.tar.gz bera-reth*
           echo "$GPG_PASSPHRASE" | gpg --passphrase-fd 0 --pinentry-mode loopback --batch -ab bera-reth-${{ needs.extract-version.outputs.VERSION }}-${{ matrix.configs.target }}.tar.gz
@@ -166,7 +172,13 @@ jobs:
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
         run: |
           echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --batch --import
-          raw=$(gpg --with-colons --fingerprint core@berachain.com | awk -F: '/^fpr:/ {print $10; exit}')
+          nkeys=$(gpg --with-colons --list-secret-keys | grep -c '^sec:' || true)
+          if [[ "$nkeys" -ne 1 ]]; then
+            echo "ERROR: expected exactly 1 secret key in GPG_SIGNING_KEY, found $nkeys" >&2
+            echo "Re-export the secret pinned by fingerprint: gpg --armor --export-secret-keys <FPR>" >&2
+            exit 1
+          fi
+          raw=$(gpg --with-colons --list-secret-keys | awk -F: '/^fpr:/ {print $10; exit}')
           if [[ -z "$raw" ]]; then
             echo "ERROR: could not read GPG fingerprint from imported key" >&2
             exit 1
