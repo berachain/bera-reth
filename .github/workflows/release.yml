@@ -116,7 +116,7 @@ jobs:
           nkeys=$(gpg --with-colons --list-secret-keys | grep -c '^sec:' || true)
           if [[ "$nkeys" -ne 1 ]]; then
             echo "ERROR: expected exactly 1 secret key in GPG_SIGNING_KEY, found $nkeys" >&2
-            echo "Re-export the secret pinned by fingerprint: gpg --armor --export-secret-keys <FPR>" >&2
+            echo "Re-export pinned by fingerprint, base64-encoded (the import runs base64 --decode): gpg --armor --export-secret-keys <FPR> | base64" >&2
             exit 1
           fi
           cd artifacts
@@ -175,10 +175,10 @@ jobs:
           nkeys=$(gpg --with-colons --list-secret-keys | grep -c '^sec:' || true)
           if [[ "$nkeys" -ne 1 ]]; then
             echo "ERROR: expected exactly 1 secret key in GPG_SIGNING_KEY, found $nkeys" >&2
-            echo "Re-export the secret pinned by fingerprint: gpg --armor --export-secret-keys <FPR>" >&2
+            echo "Re-export pinned by fingerprint, base64-encoded (the import runs base64 --decode): gpg --armor --export-secret-keys <FPR> | base64" >&2
             exit 1
           fi
-          raw=$(gpg --with-colons --list-secret-keys | awk -F: '/^fpr:/ {print $10; exit}')
+          raw=$(gpg --with-colons --with-fingerprint --list-secret-keys | awk -F: '/^fpr:/ {print $10; exit}')
           if [[ -z "$raw" ]]; then
             echo "ERROR: could not read GPG fingerprint from imported key" >&2
             exit 1
