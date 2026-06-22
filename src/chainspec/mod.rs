@@ -65,6 +65,15 @@ impl BerachainChainSpec {
         self.pol_contract_address
     }
 
+    /// PoL distributor address when Prague1 is active at the given timestamp.
+    pub fn active_pol_distributor_at_timestamp(&self, timestamp: u64) -> Option<Address> {
+        if !self.is_prague1_active_at_timestamp(timestamp) {
+            return None;
+        }
+        let address = self.pol_contract();
+        (!address.is_zero()).then_some(address)
+    }
+
     /// Get blocked addresses for Prague3 if the hardfork is active
     pub fn prague3_blocked_addresses_at_timestamp(&self, timestamp: u64) -> Option<&[Address]> {
         if self.is_prague3_active_at_timestamp(timestamp) {
@@ -815,6 +824,18 @@ mod tests {
         let bepolia = BerachainChainSpecParser::parse(BERACHAIN_BEPOLIA).unwrap();
         assert_eq!(mainnet.deposit_contract().map(|c| c.address), Some(expected));
         assert_eq!(bepolia.deposit_contract().map(|c| c.address), Some(expected));
+    }
+
+    #[test]
+    fn test_builtin_genesis_pol_distributor() {
+        let expected = address!("D2f19a79b026Fb636A7c300bF5947df113940761");
+        let mainnet = BerachainChainSpecParser::parse(BERACHAIN_MAINNET).unwrap();
+        let bepolia = BerachainChainSpecParser::parse(BERACHAIN_BEPOLIA).unwrap();
+
+        assert_eq!(mainnet.active_pol_distributor_at_timestamp(1_756_915_199), None);
+        assert_eq!(bepolia.active_pol_distributor_at_timestamp(1_754_495_999), None);
+        assert_eq!(mainnet.active_pol_distributor_at_timestamp(1_756_915_200), Some(expected));
+        assert_eq!(bepolia.active_pol_distributor_at_timestamp(1_754_496_000), Some(expected));
     }
 
     #[test]
