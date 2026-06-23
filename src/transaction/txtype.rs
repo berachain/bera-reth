@@ -186,4 +186,18 @@ mod tests {
             assert_eq!(decoded, expected_berachain_type);
         }
     }
+
+    #[test]
+    fn test_berachain_tx_type_compact_regression() {
+        let tx_type = BerachainTxType::Berachain;
+        let mut buf = Vec::new();
+        let identifier = tx_type.to_compact(&mut buf);
+
+        assert_eq!(identifier, 3usize);
+        assert_eq!(buf.as_slice(), &[0x7eu8]);
+
+        let (decoded, remaining) = BerachainTxType::from_compact(&buf, identifier);
+        assert_eq!(decoded, BerachainTxType::Berachain);
+        assert!(remaining.is_empty());
+    }
 }

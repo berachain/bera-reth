@@ -1226,4 +1226,56 @@ mod pol_tx_rlp_tests {
         let result = PoLTx::rlp_decode(&mut malformed_rlp.as_slice());
         assert!(matches!(result, Err(alloy_rlp::Error::InputTooShort)));
     }
+
+    mod regression {
+        use super::*;
+        use crate::test_utils::regression_fixtures::minimal_pol_tx;
+        use alloy_primitives::{b256, hex};
+        use reth_codecs::Compact;
+        use reth_db_api::table::Compress;
+
+        // Self-generated snapshot: hash_slow() output of regression_fixtures::minimal_pol_tx().
+        // Regenerate via: cargo test print_regression_values -- --ignored --nocapture
+        const MINIMAL_POL_HASH: alloy_primitives::B256 =
+            b256!("0x0a7a43d18a263b300d6fea2dfaa45e05798bbd0b11ce2b20f3a7e269f873e59f");
+
+        // Self-generated snapshot: to_compact() output of regression_fixtures::minimal_pol_tx().
+        // Regenerate via: cargo test print_regression_values -- --ignored --nocapture
+        const MINIMAL_POL_COMPACT: &[u8] = &hex!(
+            "1342000138d4000000000000000000000000000000000000000001010101010101010101010101010101010101012a52083b9aca00746573742064617461"
+        );
+
+        // Self-generated snapshot: compress_to_buf() output of
+        // BerachainTxEnvelope::Berachain(Sealed::new(regression_fixtures::minimal_pol_tx())).
+        // Regenerate via: cargo test print_regression_values -- --ignored --nocapture
+        const MINIMAL_POL_ENVELOPE_COMPACT: &[u8] = &hex!(
+            "06000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007e1342000138d4000000000000000000000000000000000000000001010101010101010101010101010101010101012a52083b9aca00746573742064617461"
+        );
+
+        #[test]
+        fn minimal_pol_tx_hash_regression() {
+            let pol_tx = minimal_pol_tx();
+            assert_eq!(pol_tx.hash_slow(), MINIMAL_POL_HASH);
+        }
+
+        #[test]
+        fn minimal_pol_tx_compact_regression() {
+            let pol_tx = minimal_pol_tx();
+            let mut buf = Vec::new();
+            pol_tx.to_compact(&mut buf);
+            assert_eq!(buf.as_slice(), MINIMAL_POL_COMPACT);
+        }
+
+        #[test]
+        fn minimal_pol_envelope_compact_regression() {
+            let envelope = BerachainTxEnvelope::Berachain(Sealed::new(minimal_pol_tx()));
+            let mut buf = Vec::new();
+            envelope.compress_to_buf(&mut buf);
+            assert_eq!(buf.as_slice(), MINIMAL_POL_ENVELOPE_COMPACT);
+            assert_eq!(
+                BerachainTxEnvelope::decompress(MINIMAL_POL_ENVELOPE_COMPACT).unwrap(),
+                envelope
+            );
+        }
+    }
 }

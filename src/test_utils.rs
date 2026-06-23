@@ -1,3 +1,6 @@
+#[cfg(test)]
+pub mod regression_fixtures;
+
 use crate::chainspec::BerachainChainSpec;
 use reth_cli::chainspec::parse_genesis;
 use std::sync::Arc;

@@ -804,9 +804,9 @@ impl From<Genesis> for BerachainChainSpec {
 mod tests {
     use super::*;
     use alloy_genesis::Genesis;
-    use alloy_primitives::address;
+    use alloy_primitives::{address, b256};
     use jsonrpsee_core::__reexports::serde_json::json;
-    use reth_chainspec::ForkHash;
+    use reth_chainspec::{EthChainSpec, ForkHash};
 
     #[test]
     fn test_builtin_genesis_deposit_contract() {
@@ -1924,6 +1924,34 @@ mod tests {
         // Prague1 should be active after timestamp 1754496000
         assert!(!chain_spec.is_prague1_active_at_timestamp(1754495999));
         assert!(chain_spec.is_prague1_active_at_timestamp(1754496000));
+    }
+
+    #[test]
+    fn test_bepolia_genesis_hash_regression() {
+        let bepolia_path =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bepolia-genesis.json");
+        let bepolia_json = std::fs::read_to_string(bepolia_path).unwrap();
+        let genesis: Genesis = serde_json::from_str(&bepolia_json).unwrap();
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert_eq!(
+            chain_spec.genesis_hash(),
+            b256!("0x0207661de38f0e54ba91c8286096e72486784c79dc6a9681fc486b38335c042f")
+        );
+    }
+
+    #[test]
+    fn test_mainnet_genesis_hash_regression() {
+        let mainnet_path =
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mainnet-genesis.json");
+        let mainnet_json = std::fs::read_to_string(mainnet_path).unwrap();
+        let genesis: Genesis = serde_json::from_str(&mainnet_json).unwrap();
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert_eq!(
+            chain_spec.genesis_hash(),
+            b256!("0xd57819422128da1c44339fc7956662378c17e2213e669b427ac91cd11dfcfb38")
+        );
     }
 
     #[test]
