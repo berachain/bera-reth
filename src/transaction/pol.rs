@@ -88,6 +88,9 @@ mod tests {
 
     use crate::test_utils::bepolia_chainspec;
 
+    const REGRESSION_BLOCK_NUMBER: u64 = 10;
+    const REGRESSION_BASE_FEE: u64 = 1000;
+
     fn mock_bls_pubkey() -> BlsPublicKey {
         BlsPublicKey::from([1u8; 48])
     }
@@ -239,7 +242,13 @@ mod tests {
     fn test_pol_transaction_hash_regression() {
         let chain_spec = bepolia_chainspec();
         let pubkey = mock_bls_pubkey();
-        let pol_tx = match create_pol_transaction(chain_spec, pubkey, U256::from(10), 1000).unwrap()
+        let pol_tx = match create_pol_transaction(
+            chain_spec,
+            pubkey,
+            U256::from(REGRESSION_BLOCK_NUMBER),
+            REGRESSION_BASE_FEE,
+        )
+        .unwrap()
         {
             BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
             _ => panic!("Expected PoL transaction"),
@@ -267,11 +276,17 @@ mod tests {
 
         let chain_spec = bepolia_chainspec();
         let pubkey = mock_bls_pubkey();
-        let sealed_pol =
-            match create_pol_transaction(chain_spec, pubkey, U256::from(10), 1000).unwrap() {
-                BerachainTxEnvelope::Berachain(sealed) => sealed,
-                _ => panic!("Expected PoL transaction"),
-            };
+        let sealed_pol = match create_pol_transaction(
+            chain_spec,
+            pubkey,
+            U256::from(REGRESSION_BLOCK_NUMBER),
+            REGRESSION_BASE_FEE,
+        )
+        .unwrap()
+        {
+            BerachainTxEnvelope::Berachain(sealed) => sealed,
+            _ => panic!("Expected PoL transaction"),
+        };
         let envelope = BerachainTxEnvelope::Berachain(sealed_pol);
         let mut buf = Vec::new();
         envelope.compress_to_buf(&mut buf);

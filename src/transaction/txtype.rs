@@ -193,8 +193,8 @@ mod tests {
         let mut buf = Vec::new();
         let identifier = tx_type.to_compact(&mut buf);
 
-        assert_eq!(identifier, 3usize);
-        assert_eq!(buf.as_slice(), &[0x7eu8]);
+        assert_eq!(identifier, COMPACT_EXTENDED_IDENTIFIER_FLAG);
+        assert_eq!(buf.as_slice(), &[POL_TX_TYPE]);
 
         let (decoded, remaining) = BerachainTxType::from_compact(&buf, identifier);
         assert_eq!(decoded, BerachainTxType::Berachain);
