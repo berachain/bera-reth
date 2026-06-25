@@ -14,14 +14,15 @@ pub const SUBPOOL_MAX_SIZE_MB: usize = 20;
 pub const MAX_ACCOUNT_SLOTS: usize = 16;
 pub const PRICE_BUMP: u128 = 10;
 pub const BLOB_REPLACE_PRICE_BUMP: u128 = 100;
-/// Inherited from reth v1.11.4 (`MIN_PROTOCOL_BASE_FEE`). Berachain chain min is 1 gwei.
+/// Inherited from reth v1.11.4 (`MIN_PROTOCOL_BASE_FEE`) as the txpool protocol floor (in wei),
+/// independent of Berachain's chain-spec minimum base fee (1 gwei).
 pub const MINIMAL_PROTOCOL_BASEFEE: u64 = 7;
 pub const ENFORCED_GAS_LIMIT: u64 = 30_000_000;
 pub const MAX_TX_INPUT_BYTES: usize = 128 * 1024;
 pub const MAX_QUEUED_LIFETIME: Duration = Duration::from_secs(3 * 60 * 60);
 
 /// Inherited from reth v1.11.4 (`DefaultTxPoolValues::default().max_batch_size`).
-/// No upstream named constant; validated live in `tests/txpool_defaults.rs`.
+/// No upstream named constant; validated live in `tests/reth_txpool_upstream.rs`.
 #[doc(hidden)]
 pub const INHERITED_TXPOOL_MAX_BATCH_SIZE: usize = 1;
 
