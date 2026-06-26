@@ -142,7 +142,7 @@ impl IpcClientLite {
         }
 
         let resp: Value = serde_json::from_str(&line)?;
-        if let Some(err) = resp.get("error") {
+        if let Some(err) = resp.get("error").filter(|e| !e.is_null()) {
             return Err(eyre!("rpc error: {}", err));
         }
         resp.get("result").cloned().ok_or_else(|| eyre!("missing result field in IPC response"))
@@ -224,6 +224,17 @@ mod tests {
                 .await
                 .expect("write error");
             s2.write_all(b"\n").await.expect("write newline");
+
+            // Third request: JSON-RPC error field is null (success).
+            let (stream3, _) = listener.accept().await.expect("accept third");
+            let mut r3 = BufReader::new(stream3);
+            let mut req3 = String::new();
+            let _ = r3.read_line(&mut req3).await.expect("read third");
+            let mut s3 = r3.into_inner();
+            s3.write_all(br#"{"jsonrpc":"2.0","id":3,"error":null,"result":"0x1"}"#)
+                .await
+                .expect("write null error");
+            s3.write_all(b"\n").await.expect("write newline");
         });
 
         let client = IpcClientLite::new(socket_path.to_string_lossy().to_string());
@@ -232,6 +243,9 @@ mod tests {
 
         let rpc_err = client.request("eth_blockNumber", json!([])).await.unwrap_err();
         assert!(rpc_err.to_string().contains("rpc error"));
+
+        let null_err_response = client.request("eth_chainId", json!([])).await;
+        assert!(null_err_response.is_ok());
 
         server_task.await.expect("server task");
     }
