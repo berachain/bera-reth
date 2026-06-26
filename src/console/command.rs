@@ -39,6 +39,10 @@ pub fn parse_input(line: &str) -> Result<InputCommand> {
         let params = parse_params(params_raw)?;
         return Ok(InputCommand::RpcWithQuery { method, params, query });
     }
+    if let Some((method, params_raw, query)) = split_whitespace_rpc_with_query(line) {
+        let params = parse_params(params_raw)?;
+        return Ok(InputCommand::RpcWithQuery { method, params, query });
+    }
     if looks_like_implicit_rpc(line) {
         return parse_rpc(line);
     }
@@ -80,6 +84,71 @@ fn split_rpc_query_tail(line: &str) -> Option<(&str, String)> {
     let query =
         if raw_tail.starts_with('[') { format!(".{raw_tail}") } else { raw_tail.to_owned() };
     Some((rpc_part, query))
+}
+
+/// `eth_getBlockByNumber ["latest", false].transactions.count` → method, params, query.
+fn split_whitespace_rpc_with_query(line: &str) -> Option<(String, Option<&str>, String)> {
+    let line = line.trim();
+    if !line.contains(char::is_whitespace) {
+        return None;
+    }
+
+    let mut split = line.splitn(2, char::is_whitespace);
+    let method = split.next()?.trim();
+    if method.is_empty() {
+        return None;
+    }
+    let rest = split.next()?.trim();
+    if rest.is_empty() {
+        return None;
+    }
+
+    let (params_end, query) = if rest.starts_with('[') {
+        let end = find_balanced_end(rest, '[', ']')?;
+        let tail = rest[end..].trim_start();
+        if !(tail.starts_with('.') || tail.starts_with('[')) {
+            return None;
+        }
+        (end, tail.to_owned())
+    } else if rest.starts_with('{') {
+        let end = find_balanced_end(rest, '{', '}')?;
+        let tail = rest[end..].trim_start();
+        if !(tail.starts_with('.') || tail.starts_with('[')) {
+            return None;
+        }
+        (end, tail.to_owned())
+    } else if rest.starts_with('(') {
+        let end = find_balanced_end(rest, '(', ')')?;
+        let tail = rest[end..].trim_start();
+        if !(tail.starts_with('.') || tail.starts_with('[')) {
+            return None;
+        }
+        (end, tail.to_owned())
+    } else {
+        return None;
+    };
+
+    let params_raw = rest[..params_end].trim();
+    let params = if params_raw.is_empty() { None } else { Some(params_raw) };
+    Some((method.to_owned(), params, query))
+}
+
+fn find_balanced_end(input: &str, open: char, close: char) -> Option<usize> {
+    if !input.starts_with(open) {
+        return None;
+    }
+    let mut depth = 0usize;
+    for (idx, ch) in input.char_indices() {
+        if ch == open {
+            depth += 1;
+        } else if ch == close {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                return Some(idx + ch.len_utf8());
+            }
+        }
+    }
+    None
 }
 
 fn parse_rpc(rest: &str) -> Result<InputCommand> {
@@ -302,6 +371,32 @@ mod tests {
         assert_eq!(
             parse_input("admin.peers").unwrap(),
             InputCommand::MethodToken("admin.peers".to_owned())
+        );
+    }
+
+    #[test]
+    fn parses_rpc_with_params_and_query_tail() {
+        let cmd = parse_input(r#"eth_getBlockByNumber ["latest", false].transactions.count"#).unwrap();
+        assert_eq!(
+            cmd,
+            InputCommand::RpcWithQuery {
+                method: "eth_getBlockByNumber".to_owned(),
+                params: Some(json!(["latest", false])),
+                query: ".transactions.count".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_parenthesized_rpc_with_query_tail() {
+        let cmd = parse_input(r#"eth.getBalance("0xabc", "latest").value"#).unwrap();
+        assert_eq!(
+            cmd,
+            InputCommand::RpcWithQuery {
+                method: "eth.getBalance".to_owned(),
+                params: Some(json!(["0xabc", "latest"])),
+                query: ".value".to_owned(),
+            }
         );
     }
 }

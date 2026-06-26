@@ -12,15 +12,15 @@ pub async fn run_console(cmd: ConsoleCommand) -> Result<()> {
     let endpoint = resolve_endpoint(cmd.endpoint.as_deref())?;
     let rpc = RpcClient::connect(&endpoint).await?;
 
-    let chain_id =
-        rpc.request_value("eth_chainId", None).await.ok().and_then(|v| parse_chain_id(&v));
-
-    let bera_admin_status = rpc.request_value("beradmin_nodeStatus", None).await.ok();
-    let has_bera_admin = bera_admin_status.is_some();
-
     if let Some(script) = cmd.exec.as_deref() {
         run_exec(&rpc, script).await?;
     } else {
+        let chain_id =
+            rpc.request_value("eth_chainId", None).await.ok().and_then(|v| parse_chain_id(&v));
+
+        let bera_admin_status = rpc.request_value("beradmin_nodeStatus", None).await.ok();
+        let has_bera_admin = bera_admin_status.is_some();
+
         run_repl(
             &rpc,
             history_file_path(),
