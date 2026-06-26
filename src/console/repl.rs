@@ -150,13 +150,11 @@ async fn print_startup_snapshot(
             .or_else(|| status.get("peer_count_outbound"))
             .and_then(hex_or_decimal_to_u64);
 
-        let peers_str = if let (Some(in_count), Some(out_count)) =
-            (peer_count_inbound, peer_count_outbound)
-        {
-            format!("peers={} (in={} out={})", peer_count_total.unwrap_or(0), in_count, out_count)
-        } else {
-            format!("peers={}", peer_count_total.unwrap_or(0))
-        };
+        let peers_str = format_startup_peers(
+            peer_count_total,
+            peer_count_inbound,
+            peer_count_outbound,
+        );
 
         println!(
             "node :: {} | net={}{} | block={} | {}",
@@ -167,19 +165,21 @@ async fn print_startup_snapshot(
             peers_str
         );
     } else {
-        let version =
-            rpc.request_value("web3_clientVersion", None).await.ok().and_then(|v| as_string(&v));
-        let block = rpc
-            .request_value("eth_blockNumber", None)
-            .await
+        let (version, block, peers, network) = tokio::join!(
+            rpc.request_value("web3_clientVersion", None),
+            rpc.request_value("eth_blockNumber", None),
+            rpc.request_value("net_peerCount", None),
+            rpc.request_value("net_version", None),
+        );
+
+        let version = version.ok().and_then(|v| as_string(&v));
+        let block = block
             .ok()
             .and_then(|v| hex_or_decimal_to_u64(&v).map(|n| n.to_string()));
-        let peers = rpc
-            .request_value("net_peerCount", None)
-            .await
+        let peers = peers
             .ok()
             .and_then(|v| hex_or_decimal_to_u64(&v).map(|n| n.to_string()));
-        let network = rpc.request_value("net_version", None).await.ok().and_then(|v| as_string(&v));
+        let network = network.ok().and_then(|v| as_string(&v));
 
         println!(
             "node :: version={} | net={}{} | block={} | peers={}",
@@ -196,6 +196,30 @@ fn chain_emoji(chain_id: Option<u64>) -> &'static str {
     match chain_id {
         Some(id) if BERACHAIN_CHAIN_IDS.contains(&id) => " 🐻",
         _ => "",
+    }
+}
+
+fn effective_peer_total(total: Option<u64>, inbound: Option<u64>, outbound: Option<u64>) -> u64 {
+    let in_count = inbound.unwrap_or(0);
+    let out_count = outbound.unwrap_or(0);
+    match total {
+        Some(0) if in_count + out_count > 0 => in_count + out_count,
+        Some(t) => t,
+        None if in_count + out_count > 0 => in_count + out_count,
+        None => 0,
+    }
+}
+
+fn format_startup_peers(
+    total: Option<u64>,
+    inbound: Option<u64>,
+    outbound: Option<u64>,
+) -> String {
+    if let (Some(in_count), Some(out_count)) = (inbound, outbound) {
+        let peer_total = effective_peer_total(total, inbound, outbound);
+        format!("peers={peer_total} (in={in_count} out={out_count})")
+    } else {
+        format!("peers={}", total.unwrap_or(0))
     }
 }
 
@@ -318,5 +342,17 @@ mod tests {
     fn parses_hex_or_decimal_numbers() {
         use serde_json::json;
         assert_eq!(hex_or_decimal_to_u64(&json!("0x10")), Some(16));
+    }
+
+    #[test]
+    fn startup_peer_total_falls_back_to_inbound_plus_outbound() {
+        assert_eq!(
+            format_startup_peers(Some(0), Some(3), Some(2)),
+            "peers=5 (in=3 out=2)"
+        );
+        assert_eq!(
+            format_startup_peers(None, Some(1), Some(4)),
+            "peers=5 (in=1 out=4)"
+        );
     }
 }

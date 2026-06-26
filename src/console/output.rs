@@ -302,9 +302,12 @@ fn try_format_node_status(value: &Value) -> Option<String> {
     let chain = obj
         .get("chainId")
         .or_else(|| obj.get("chain_id"))
-        .or_else(|| obj.get("networkId"))
-        .or_else(|| obj.get("network_id"))
         .and_then(hex_or_decimal_to_u64)
+        .unwrap_or(0);
+    let network = obj
+        .get("networkId")
+        .or_else(|| obj.get("network_id"))
+        .and_then(|v| hex_or_decimal_to_u64(v).or_else(|| v.as_str().and_then(|s| s.parse().ok())))
         .unwrap_or(0);
     let genesis = obj
         .get("genesisHash")
@@ -333,11 +336,6 @@ fn try_format_node_status(value: &Value) -> Option<String> {
         head_hash.to_string()
     };
     let syncing = obj.get("syncing").and_then(|v| v.as_bool()).unwrap_or(false);
-    let peers_total = obj
-        .get("peerCountTotal")
-        .or_else(|| obj.get("peer_count_total"))
-        .and_then(hex_or_decimal_to_u64)
-        .unwrap_or(0);
     let peers_in = obj
         .get("peerCountInbound")
         .or_else(|| obj.get("peer_count_inbound"))
@@ -348,6 +346,18 @@ fn try_format_node_status(value: &Value) -> Option<String> {
         .or_else(|| obj.get("peer_count_outbound"))
         .and_then(hex_or_decimal_to_u64)
         .unwrap_or(0);
+    let peers_total = {
+        let total = obj
+            .get("peerCountTotal")
+            .or_else(|| obj.get("peer_count_total"))
+            .and_then(hex_or_decimal_to_u64)
+            .unwrap_or(0);
+        if total == 0 && peers_in + peers_out > 0 {
+            peers_in + peers_out
+        } else {
+            total
+        }
+    };
     let client = obj
         .get("clientVersion")
         .or_else(|| obj.get("client_version"))
@@ -365,7 +375,7 @@ fn try_format_node_status(value: &Value) -> Option<String> {
         peers_in,
         peers_out,
         client,
-        chain
+        network
     );
 
     Some(output)
@@ -612,5 +622,44 @@ mod tests {
     fn ellipsis_char_ends_counts_chars_not_bytes() {
         let out = ellipsis_char_ends("abcdefghijklmnopqrs", 6, 4);
         assert_eq!(out, "abcdef..pqrs");
+    }
+
+    #[test]
+    fn node_status_keeps_chain_and_network_distinct() {
+        let status = serde_json::json!({
+            "chainId": 80094,
+            "networkId": 80094,
+            "genesisHash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            "headNumber": 100,
+            "headHash": "0x1234",
+            "syncing": false,
+            "peerCountTotal": 0,
+            "peerCountInbound": 2,
+            "peerCountOutbound": 3,
+            "clientVersion": "bera-reth/test"
+        });
+        let formatted = try_format_node_status(&status).expect("formatted");
+        assert!(formatted.contains("chain=80094"));
+        assert!(formatted.contains("net=80094"));
+        assert!(formatted.contains("peers=5 (in=2 out=3)"));
+    }
+
+    #[test]
+    fn node_status_uses_network_id_not_chain_for_net_field() {
+        let status = serde_json::json!({
+            "chainId": 80094,
+            "networkId": 1,
+            "genesisHash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            "headNumber": 1,
+            "headHash": "0x1234",
+            "syncing": false,
+            "peerCountTotal": 4,
+            "peerCountInbound": 2,
+            "peerCountOutbound": 2,
+            "clientVersion": "bera-reth/test"
+        });
+        let formatted = try_format_node_status(&status).expect("formatted");
+        assert!(formatted.contains("chain=80094"));
+        assert!(formatted.contains("net=1"));
     }
 }
