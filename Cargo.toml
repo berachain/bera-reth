@@ -39,47 +39,47 @@ metrics = "0.24.3"
 modular-bitfield = "0.13.1"
 # RUSTSEC-2026-0097: use >=0.8.6 on the 0.8 release line.
 rand = "0.8.6"
-reth = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-basic-payload-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-chainspec = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-cli = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-cli-commands = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-cli-runner = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-cli-util = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-codecs = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-consensus-common = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-db = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-db-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-engine-local = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-engine-primitives = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-errors = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-eth-wire-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-ethereum-cli = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-ethereum-engine-primitives = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-ethereum-payload-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-ethereum-primitives = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-evm = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-evm-ethereum = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-metrics = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-network = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-network-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-network-peers = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-network-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-node-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-node-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-node-core = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-node-ethereum = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-payload-primitives = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-payload-validator = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-primitives-traits = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-rpc = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-rpc-convert = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-rpc-engine-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-rpc-eth-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-rpc-eth-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-rpc-server-types = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-storage-api = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-transaction-pool = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-basic-payload-builder = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-chainspec = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-cli = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-cli-commands = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-cli-runner = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-cli-util = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-codecs = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-consensus-common = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-db = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-db-api = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-engine-local = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-engine-primitives = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-errors = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-eth-wire-types = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-ethereum-cli = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-ethereum-engine-primitives = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-ethereum-payload-builder = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-ethereum-primitives = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-evm = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-evm-ethereum = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-metrics = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-network = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-network-api = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-network-peers = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-network-types = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-node-api = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-node-builder = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-node-core = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-node-ethereum = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-payload-primitives = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-payload-validator = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-primitives-traits = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-rpc = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-rpc-convert = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-rpc-engine-api = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-rpc-eth-api = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-rpc-eth-types = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-rpc-server-types = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-storage-api = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-transaction-pool = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde_json = "1.0"
@@ -94,9 +94,9 @@ alloy-rpc-client = "1.6.3"
 alloy-rpc-types-trace = "1.6.3"
 eyre = "0.6.12"
 jsonrpsee = { version = "0.26.0", features = ["server"] }
-reth-e2e-test-utils = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-rpc-builder = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
-reth-trie-common = { git = "https://github.com/camembera/reth", branch = "pog/provenance-callback" }
+reth-e2e-test-utils = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-rpc-builder = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
+reth-trie-common = { git = "https://github.com/camembera/reth", rev = "c34120ac22b67ff791285b774d49265e8e0dcb57" }
 revm-inspectors = "0.34.2"
 serde_json = "1.0"
 tempfile = "3"
