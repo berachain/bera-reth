@@ -120,50 +120,51 @@ pub async fn run_repl(
     Ok(())
 }
 
+fn format_beradmin_startup_line(status: &Value, chain_id: Option<u64>) -> String {
+    let client_version = status
+        .get("clientVersion")
+        .or_else(|| status.get("client_version"))
+        .and_then(as_string);
+    let network_id =
+        status.get("networkId").or_else(|| status.get("network_id")).and_then(as_string);
+    let head_number = status
+        .get("headNumber")
+        .or_else(|| status.get("head_number"))
+        .and_then(|v| hex_or_decimal_to_u64(v).map(|n| n.to_string()))
+        .or_else(|| status.get("head").and_then(as_string));
+    let peer_count_total = status
+        .get("peerCountTotal")
+        .or_else(|| status.get("peer_count_total"))
+        .and_then(hex_or_decimal_to_u64);
+    let peer_count_inbound = status
+        .get("peerCountInbound")
+        .or_else(|| status.get("peer_count_inbound"))
+        .and_then(hex_or_decimal_to_u64);
+    let peer_count_outbound = status
+        .get("peerCountOutbound")
+        .or_else(|| status.get("peer_count_outbound"))
+        .and_then(hex_or_decimal_to_u64);
+
+    let peers_str =
+        format_startup_peers(peer_count_total, peer_count_inbound, peer_count_outbound);
+
+    format!(
+        "node :: {} | net={}{} | block={} | {}",
+        client_version.unwrap_or_else(|| "unavailable".to_owned()),
+        network_id.unwrap_or_else(|| "unavailable".to_owned()),
+        chain_emoji(chain_id),
+        head_number.unwrap_or_else(|| "unavailable".to_owned()),
+        peers_str
+    )
+}
+
 async fn print_startup_snapshot(
     rpc: &RpcClient,
     chain_id: Option<u64>,
     bera_admin_status: Option<&Value>,
 ) {
     if let Some(status) = bera_admin_status {
-        let client_version = status
-            .get("clientVersion")
-            .or_else(|| status.get("client_version"))
-            .and_then(as_string);
-        let network_id =
-            status.get("networkId").or_else(|| status.get("network_id")).and_then(as_string);
-        let head_number = status
-            .get("headNumber")
-            .or_else(|| status.get("head_number"))
-            .and_then(|v| hex_or_decimal_to_u64(v).map(|n| n.to_string()))
-            .or_else(|| status.get("head").and_then(as_string));
-        let peer_count_total = status
-            .get("peerCountTotal")
-            .or_else(|| status.get("peer_count_total"))
-            .and_then(hex_or_decimal_to_u64);
-        let peer_count_inbound = status
-            .get("peerCountInbound")
-            .or_else(|| status.get("peer_count_inbound"))
-            .and_then(hex_or_decimal_to_u64);
-        let peer_count_outbound = status
-            .get("peerCountOutbound")
-            .or_else(|| status.get("peer_count_outbound"))
-            .and_then(hex_or_decimal_to_u64);
-
-        let peers_str = format_startup_peers(
-            peer_count_total,
-            peer_count_inbound,
-            peer_count_outbound,
-        );
-
-        println!(
-            "node :: {} | net={}{} | block={} | {}",
-            client_version.unwrap_or_else(|| "unavailable".to_owned()),
-            network_id.unwrap_or_else(|| "unavailable".to_owned()),
-            chain_emoji(chain_id),
-            head_number.unwrap_or_else(|| "unavailable".to_owned()),
-            peers_str
-        );
+        println!("{}", format_beradmin_startup_line(status, chain_id));
     } else {
         let (version, block, peers, network) = tokio::join!(
             rpc.request_value("web3_clientVersion", None),
@@ -353,6 +354,42 @@ mod tests {
         assert_eq!(
             format_startup_peers(None, Some(1), Some(4)),
             "peers=5 (in=1 out=4)"
+        );
+    }
+
+    #[test]
+    fn beradmin_startup_line_from_camel_case_status() {
+        use serde_json::json;
+        let status = json!({
+            "clientVersion": "bera-reth/test",
+            "networkId": "80094",
+            "headNumber": 100,
+            "peerCountTotal": 0,
+            "peerCountInbound": 3,
+            "peerCountOutbound": 2,
+        });
+        let line = format_beradmin_startup_line(&status, Some(80_094));
+        assert_eq!(
+            line,
+            "node :: bera-reth/test | net=80094 🐻 | block=100 | peers=5 (in=3 out=2)"
+        );
+    }
+
+    #[test]
+    fn beradmin_startup_line_accepts_snake_case_fields() {
+        use serde_json::json;
+        let status = json!({
+            "client_version": "bera-reth/snake",
+            "network_id": "1",
+            "head_number": "0x64",
+            "peer_count_total": 4,
+            "peer_count_inbound": 2,
+            "peer_count_outbound": 2,
+        });
+        let line = format_beradmin_startup_line(&status, None);
+        assert_eq!(
+            line,
+            "node :: bera-reth/snake | net=1 | block=100 | peers=4 (in=2 out=2)"
         );
     }
 }
