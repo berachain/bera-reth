@@ -39,6 +39,11 @@ pub fn parse_input(line: &str) -> Result<InputCommand> {
         let params = parse_params(params_raw)?;
         return Ok(InputCommand::RpcWithQuery { method, params, query });
     }
+    if let Some((rpc_part, query)) = split_paren_rpc_query_tail(line) {
+        let (method, params_raw) = split_method_and_params(rpc_part)?;
+        let params = parse_params(params_raw)?;
+        return Ok(InputCommand::RpcWithQuery { method, params, query });
+    }
     if let Some((method, params_raw, query)) = split_whitespace_rpc_with_query(line) {
         let params = parse_params(params_raw)?;
         return Ok(InputCommand::RpcWithQuery { method, params, query });
@@ -83,6 +88,24 @@ fn split_rpc_query_tail(line: &str) -> Option<(&str, String)> {
     }
     let query =
         if raw_tail.starts_with('[') { format!(".{raw_tail}") } else { raw_tail.to_owned() };
+    Some((rpc_part, query))
+}
+
+/// `eth.getBalance("0xabc", "latest").value` → RPC + params + query (no whitespace).
+fn split_paren_rpc_query_tail(line: &str) -> Option<(&str, String)> {
+    let paren_start = line.find('(')?;
+    if paren_start == 0 {
+        return None;
+    }
+    let paren_end = find_balanced_end(&line[paren_start..], '(', ')')?;
+    let rpc_end = paren_start + paren_end;
+    let tail = line[rpc_end..].trim_start();
+    if !(tail.starts_with('.') || tail.starts_with('[')) {
+        return None;
+    }
+    let rpc_part = &line[..rpc_end];
+    let query =
+        if tail.starts_with('[') { format!(".{tail}") } else { tail.to_owned() };
     Some((rpc_part, query))
 }
 
@@ -388,6 +411,14 @@ mod tests {
     }
 
     #[test]
+    fn split_paren_rpc_query_tail_extracts_rpc_and_query() {
+        let line = r#"eth.getBalance("0xabc", "latest").value"#;
+        let (rpc, query) = split_paren_rpc_query_tail(line).expect("split");
+        assert_eq!(rpc, r#"eth.getBalance("0xabc", "latest")"#);
+        assert_eq!(query, ".value");
+    }
+
+    #[test]
     fn parses_parenthesized_rpc_with_query_tail() {
         let cmd = parse_input(r#"eth.getBalance("0xabc", "latest").value"#).unwrap();
         assert_eq!(
@@ -396,6 +427,19 @@ mod tests {
                 method: "eth.getBalance".to_owned(),
                 params: Some(json!(["0xabc", "latest"])),
                 query: ".value".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_parenthesized_array_rpc_with_query_tail() {
+        let cmd = parse_input(r#"eth.getBalance(["0xabc", "latest"]).count"#).unwrap();
+        assert_eq!(
+            cmd,
+            InputCommand::RpcWithQuery {
+                method: "eth.getBalance".to_owned(),
+                params: Some(json!(["0xabc", "latest"])),
+                query: ".count".to_owned(),
             }
         );
     }
