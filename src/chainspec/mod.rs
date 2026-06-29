@@ -13,7 +13,7 @@ use alloy_eips::{
 };
 use alloy_genesis::Genesis;
 use alloy_primitives::Sealable;
-use derive_more::{Constructor, Into};
+use derive_more::Into;
 use reth::{
     chainspec::{
         BaseFeeParams, BaseFeeParamsKind, Chain, ChainHardforks, EthereumHardfork,
@@ -43,7 +43,7 @@ const BEPOLIA_ETH_GENESIS_JSON: &str =
     include_str!(concat!(env!("OUT_DIR"), "/bepolia-eth-genesis.json"));
 
 /// Berachain chain specification wrapping Reth's ChainSpec with Berachain hardforks
-#[derive(Debug, Clone, Into, Constructor, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Into, PartialEq, Eq, Default)]
 pub struct BerachainChainSpec {
     /// The underlying Reth chain specification
     pub inner: ChainSpec,
@@ -58,6 +58,10 @@ pub struct BerachainChainSpec {
     pub prague3_config: Option<Prague3Config>,
     /// Prague4 configuration (if configured)
     pub prague4_config: Option<Prague4Config>,
+    /// The minimum base fee in wei for Osaka1 (0 if not configured)
+    pub osaka1_minimum_base_fee: u64,
+    /// The minimum blob base fee in wei for Osaka1 (0 = keep the EIP-4844 default of 1 wei)
+    pub osaka1_min_blob_base_fee: u64,
 }
 
 impl BerachainChainSpec {
@@ -283,7 +287,13 @@ impl EthChainSpec for BerachainChainSpec {
     }
 
     fn blob_params_at_timestamp(&self, timestamp: u64) -> Option<alloy_eips::eip7840::BlobParams> {
-        self.inner.blob_params_at_timestamp(timestamp)
+        let mut params = self.inner.blob_params_at_timestamp(timestamp)?;
+        // Osaka1 raises the minimum blob base fee (anti-spam). Setting min_blob_fee lifts the
+        // EIP-4844 blob fee curve so the at-target blob base fee equals this floor.
+        if self.is_osaka1_active_at_timestamp(timestamp) && self.osaka1_min_blob_base_fee > 0 {
+            params.min_blob_fee = self.osaka1_min_blob_base_fee as u128;
+        }
+        Some(params)
     }
 
     fn deposit_contract(&self) -> Option<&DepositContract> {
@@ -349,8 +359,21 @@ impl EthChainSpec for BerachainChainSpec {
             String::new()
         };
 
+        let osaka1_details = match self.fork(BerachainHardfork::Osaka1) {
+            ForkCondition::Timestamp(time) => {
+                let min_blob_gwei = self.osaka1_min_blob_base_fee / 1_000_000_000;
+                format!(
+                    "\nBerachain Osaka1 configuration: {{time={}, min_base_fee={} gwei, min_blob_base_fee={} gwei}}",
+                    time,
+                    self.osaka1_minimum_base_fee / 1_000_000_000,
+                    min_blob_gwei
+                )
+            }
+            _ => String::new(),
+        };
+
         Box::new(format!(
-            "{inner_display}{prague1_details}{prague2_details}{prague3_details}{prague4_details}"
+            "{inner_display}{prague1_details}{prague2_details}{prague3_details}{prague4_details}{osaka1_details}"
         ))
     }
 
@@ -387,8 +410,11 @@ impl EthChainSpec for BerachainChainSpec {
             self.base_fee_params_at_timestamp(parent.timestamp()),
         );
 
-        // Prague2 supersedes Prague1 - check Prague2 first
-        let min_base_fee = if self.is_prague2_active_at_timestamp(parent.timestamp()) {
+        // Later forks supersede earlier ones - check in reverse chronological order.
+        // Prague3/Prague4 do not change the floor, so they inherit Prague2's value.
+        let min_base_fee = if self.is_osaka1_active_at_timestamp(parent.timestamp()) {
+            self.osaka1_minimum_base_fee
+        } else if self.is_prague2_active_at_timestamp(parent.timestamp()) {
             self.prague2_minimum_base_fee
         } else if self.is_prague1_active_at_timestamp(parent.timestamp()) {
             self.prague1_minimum_base_fee
@@ -481,6 +507,8 @@ impl BerachainChainSpec {
             prague2_minimum_base_fee: 0,
             prague3_config: None,
             prague4_config: None,
+            osaka1_minimum_base_fee: 0,
+            osaka1_min_blob_base_fee: 0,
         }
     }
 }
@@ -503,6 +531,7 @@ impl From<Genesis> for BerachainChainSpec {
         let prague2_config_opt = berachain_genesis_config.prague2;
         let prague3_config_opt = berachain_genesis_config.prague3;
         let prague4_config_opt = berachain_genesis_config.prague4;
+        let osaka1_config_opt = berachain_genesis_config.osaka1;
 
         // Both Prague1 and Prague2 are required for Berachain genesis
         let (prague1_config, prague2_config) = match (prague1_config_opt, prague2_config_opt) {
@@ -623,6 +652,27 @@ impl From<Genesis> for BerachainChainSpec {
             }
         }
 
+        // Validate Osaka1 ordering if configured. Osaka1 activates after Osaka, so its
+        // predecessor is Osaka if set, else the latest Berachain fork (Prague4/3/2).
+        if let Some(osaka1_config) = osaka1_config_opt.as_ref() {
+            let (predecessor_name, predecessor_time) =
+                if let Some(osaka_time) = genesis.config.osaka_time {
+                    ("Osaka", osaka_time)
+                } else if let Some(p4) = prague4_config_opt.as_ref() {
+                    ("Prague4", p4.time)
+                } else if let Some(p3) = prague3_config_opt.as_ref() {
+                    ("Prague3", p3.time)
+                } else {
+                    ("Prague2", prague2_config.time)
+                };
+            if osaka1_config.time < predecessor_time {
+                panic!(
+                    "Osaka1 hardfork must activate at or after {predecessor_name} hardfork. {predecessor_name} time: {predecessor_time}, Osaka1 time: {}.",
+                    osaka1_config.time
+                );
+            }
+        }
+
         // Berachain networks don't support proof-of-work or non-genesis merge
         if let Some(ttd) = genesis.config.terminal_total_difficulty {
             if !ttd.is_zero() {
@@ -716,6 +766,14 @@ impl From<Genesis> for BerachainChainSpec {
             hardforks.push((EthereumHardfork::Osaka.boxed(), ForkCondition::Timestamp(osaka_time)));
         }
 
+        // Add Osaka1 if configured (activates after Osaka; enforced by validation above)
+        if let Some(osaka1_config) = osaka1_config_opt.as_ref() {
+            hardforks.push((
+                BerachainHardfork::Osaka1.boxed(),
+                ForkCondition::Timestamp(osaka1_config.time),
+            ));
+        }
+
         let paris_block_and_final_difficulty =
             Some((0, genesis.config.terminal_total_difficulty.unwrap()));
 
@@ -783,10 +841,14 @@ impl From<Genesis> for BerachainChainSpec {
             genesis_header.prev_proposer_pubkey = Some(BlsPublicKey::ZERO);
         }
 
-        // Extract configuration values from Prague1 and Prague2 configs
+        // Extract configuration values from Prague1, Prague2 and Osaka1 configs
         let pol_contract_address = prague1_config.pol_distributor_address;
         let prague1_minimum_base_fee = prague1_config.minimum_base_fee_wei;
         let prague2_minimum_base_fee = prague2_config.minimum_base_fee_wei;
+        let osaka1_minimum_base_fee =
+            osaka1_config_opt.as_ref().map(|cfg| cfg.minimum_base_fee_wei).unwrap_or(0);
+        let osaka1_min_blob_base_fee =
+            osaka1_config_opt.as_ref().map(|cfg| cfg.minimum_blob_base_fee_wei).unwrap_or(0);
 
         Self {
             inner,
@@ -796,6 +858,8 @@ impl From<Genesis> for BerachainChainSpec {
             prague2_minimum_base_fee,
             prague3_config: prague3_config_opt,
             prague4_config: prague4_config_opt,
+            osaka1_minimum_base_fee,
+            osaka1_min_blob_base_fee,
         }
     }
 }
@@ -1162,6 +1226,209 @@ mod tests {
 
         let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0).unwrap();
         assert_eq!(next_base_fee, prague2_base_fee);
+    }
+
+    #[test]
+    fn test_next_block_base_fee_osaka1_floor() {
+        let prague1_base_fee = 1_000_000_000u64; // 1 gwei
+        let osaka1_base_fee = 10_000_000_000u64; // 10 gwei
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0);
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(1000);
+        // Osaka1 activates after Osaka on mainnet.
+        genesis.config.osaka_time = Some(2500);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 2000,
+                    "minimumBaseFeeWei": 0
+                },
+                "osaka1": {
+                    "time": 3000,
+                    "minimumBaseFeeWei": 10000000000i64
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        // Stored floor and activation boundaries
+        assert_eq!(chain_spec.osaka1_minimum_base_fee, osaka1_base_fee);
+        assert!(!chain_spec.is_osaka1_active_at_timestamp(2999));
+        assert!(chain_spec.is_osaka1_active_at_timestamp(3000));
+
+        // Between Prague2 and Osaka1 the floor is Prague2's 0, so a low base fee is allowed.
+        let parent_header = BerachainHeader {
+            timestamp: 2999,
+            base_fee_per_gas: Some(100_000_000),
+            ..Default::default()
+        };
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0).unwrap();
+        assert!(next_base_fee < prague1_base_fee);
+
+        // At Osaka1 activation the base fee is floored at 10 gwei.
+        let parent_header = BerachainHeader {
+            timestamp: 3000,
+            base_fee_per_gas: Some(100_000_000),
+            ..Default::default()
+        };
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0).unwrap();
+        assert_eq!(next_base_fee, osaka1_base_fee);
+
+        // The floor persists after activation.
+        let parent_header =
+            BerachainHeader { timestamp: 5000, base_fee_per_gas: Some(0), ..Default::default() };
+        let next_base_fee = chain_spec.next_block_base_fee(&parent_header, 0).unwrap();
+        assert_eq!(next_base_fee, osaka1_base_fee);
+    }
+
+    #[test]
+    fn test_blob_params_osaka1_min_blob_fee() {
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0);
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(1000);
+        genesis.config.osaka_time = Some(2500);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": { "time": 2000, "minimumBaseFeeWei": 0 },
+                "osaka1": {
+                    "time": 3000,
+                    "minimumBaseFeeWei": 10000000000i64,
+                    "minimumBlobBaseFeeWei": 10000000000i64
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert_eq!(chain_spec.osaka1_min_blob_base_fee, 10_000_000_000);
+
+        // Before Osaka1: EIP-4844 default minimum blob fee (1 wei).
+        let before = chain_spec.blob_params_at_timestamp(2999).unwrap();
+        assert_eq!(before.min_blob_fee, 1);
+
+        // At/after Osaka1: floor raised to 10 gwei, so the at-target blob base fee is 10 gwei.
+        let after = chain_spec.blob_params_at_timestamp(3000).unwrap();
+        assert_eq!(after.min_blob_fee, 10_000_000_000);
+        assert_eq!(after.calc_blob_fee(0), 10_000_000_000);
+    }
+
+    #[test]
+    fn test_blob_params_osaka1_no_blob_floor() {
+        // Osaka1 configured with a gas floor but no blob floor -> blob fee stays at the default,
+        // even after activation (the 0 value must skip the override, never set min_blob_fee=0).
+        let mut genesis = Genesis::default();
+        genesis.config.london_block = Some(0);
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(1000);
+        genesis.config.osaka_time = Some(2500);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": { "time": 2000, "minimumBaseFeeWei": 0 },
+                "osaka1": { "time": 3000, "minimumBaseFeeWei": 10000000000i64 }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+
+        let chain_spec = BerachainChainSpec::from(genesis);
+
+        assert_eq!(chain_spec.osaka1_min_blob_base_fee, 0);
+        // Osaka1 active at 5000, but with no blob floor the EIP-4844 default (1 wei) is untouched.
+        assert_eq!(chain_spec.blob_params_at_timestamp(5000).unwrap().min_blob_fee, 1);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Osaka1 hardfork must activate at or after Osaka hardfork. Osaka time: 3000, Osaka1 time: 2500."
+    )]
+    fn test_panic_on_osaka1_before_osaka() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.osaka_time = Some(3000);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 1000,
+                    "minimumBaseFeeWei": 0
+                },
+                "osaka1": {
+                    "time": 2500,
+                    "minimumBaseFeeWei": 10000000000i64
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
+    }
+
+    #[test]
+    #[should_panic(expected = "Osaka1 hardfork must activate at or after Prague2 hardfork")]
+    fn test_panic_on_osaka1_before_prague2() {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        let extra_fields_json = json!({
+            "berachain": {
+                "prague1": {
+                    "time": 0,
+                    "baseFeeChangeDenominator": 48,
+                    "minimumBaseFeeWei": 1000000000,
+                    "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+                },
+                "prague2": {
+                    "time": 2000,
+                    "minimumBaseFeeWei": 0
+                },
+                "osaka1": {
+                    "time": 1000,
+                    "minimumBaseFeeWei": 10000000000i64
+                }
+            }
+        });
+        genesis.config.extra_fields =
+            reth::rpc::types::serde_helpers::OtherFields::try_from(extra_fields_json).unwrap();
+        let _chain_spec = BerachainChainSpec::from(genesis);
     }
 
     #[test]
@@ -2269,7 +2536,7 @@ mod tests {
             timestamp: 1762963200,
         };
 
-        // After all configured forks, including Osaka
+        // After all configured forks, including Osaka and Osaka1
         let head_far_future = Head {
             number: 1000,
             hash: B256::ZERO,
@@ -2326,7 +2593,7 @@ mod tests {
         assert_eq!(fork_id_prague2.hash, ForkHash([0xcb, 0xbf, 0x6c, 0x9f]));
         assert_eq!(fork_id_prague3.hash, ForkHash([0x64, 0x94, 0xa1, 0x76]));
         assert_eq!(fork_id_prague4.hash, ForkHash([0x70, 0x1a, 0x09, 0x7f]));
-        assert_eq!(fork_id_future.hash, ForkHash([0xbb, 0x99, 0xd3, 0xeb]));
+        assert_eq!(fork_id_future.hash, ForkHash([0x16, 0x66, 0xea, 0xde]));
     }
 
     #[test]
@@ -2340,7 +2607,7 @@ mod tests {
 
         let latest_fork_id = spec.latest_fork_id();
 
-        // Create a head after all configured Bepolia forks, including Osaka.
+        // Create a head after all configured Bepolia forks, including Osaka and Osaka1.
         let head_final = Head {
             number: 100,
             hash: B256::ZERO,
@@ -2356,8 +2623,8 @@ mod tests {
         );
         assert_eq!(latest_fork_id.next, 0, "latest fork should have no next fork");
 
-        // Verify this matches the final Osaka state.
-        assert_eq!(latest_fork_id.hash, ForkHash([0x79, 0x16, 0x74, 0x96]));
+        // Verify this matches the final Osaka1 state.
+        assert_eq!(latest_fork_id.hash, ForkHash([0xdf, 0x0c, 0x9e, 0xc9]));
     }
 
     #[test]

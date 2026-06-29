@@ -13,6 +13,8 @@ hardfork!(
         Prague3,
         /// Prague4 hardfork: Ends Prague3 restrictions
         Prague4,
+        /// Osaka1 hardfork: Raises the minimum base fee floor (anti-spam)
+        Osaka1,
     }
 );
 
@@ -42,6 +44,11 @@ pub trait BerachainHardforks: EthereumHardforks {
     fn is_prague4_active_at_timestamp(&self, timestamp: u64) -> bool {
         self.berachain_fork_activation(BerachainHardfork::Prague4).active_at_timestamp(timestamp)
     }
+
+    /// Checks if Osaka1 hardfork is active at given timestamp
+    fn is_osaka1_active_at_timestamp(&self, timestamp: u64) -> bool {
+        self.berachain_fork_activation(BerachainHardfork::Osaka1).active_at_timestamp(timestamp)
+    }
 }
 
 #[cfg(test)]
@@ -64,6 +71,7 @@ mod tests {
                 BerachainHardfork::Prague2 => ForkCondition::Timestamp(1000),
                 BerachainHardfork::Prague3 => ForkCondition::Timestamp(2000),
                 BerachainHardfork::Prague4 => ForkCondition::Timestamp(3000),
+                BerachainHardfork::Osaka1 => ForkCondition::Timestamp(4000),
             }
         }
     }
@@ -105,5 +113,12 @@ mod tests {
         assert!(!hardforks.is_prague4_active_at_timestamp(2999));
         assert!(hardforks.is_prague4_active_at_timestamp(3000));
         assert!(hardforks.is_prague4_active_at_timestamp(4000));
+
+        // Test Osaka1 activation and ordering
+        let activation = hardforks.berachain_fork_activation(BerachainHardfork::Osaka1);
+        assert_eq!(activation, ForkCondition::Timestamp(4000));
+        assert!(!hardforks.is_osaka1_active_at_timestamp(3999));
+        assert!(hardforks.is_osaka1_active_at_timestamp(4000));
+        assert!(hardforks.is_osaka1_active_at_timestamp(5000));
     }
 }
