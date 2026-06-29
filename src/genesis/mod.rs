@@ -7,7 +7,7 @@ use reth::{revm::primitives::address, rpc::types::serde_helpers::OtherFields};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use config::{Prague1Config, Prague2Config, Prague3Config, Prague4Config};
+pub use config::{Osaka1Config, Prague1Config, Prague2Config, Prague3Config, Prague4Config};
 
 /// Errors for Berachain genesis configuration parsing
 #[derive(Debug, Error)]
@@ -37,6 +37,8 @@ pub struct BerachainGenesisConfig {
     pub prague3: Option<Prague3Config>,
     /// Configuration for the Prague4 hardfork, which ends Prague3 restrictions
     pub prague4: Option<Prague4Config>,
+    /// Configuration for the Osaka1 hardfork, which raises the minimum base fee floor
+    pub osaka1: Option<Osaka1Config>,
 }
 
 impl Default for BerachainGenesisConfig {
@@ -55,6 +57,7 @@ impl Default for BerachainGenesisConfig {
             }),
             prague3: None, // Not activated by default
             prague4: None, // Not activated by default
+            osaka1: None,  // Not activated by default
         }
     }
 }
@@ -119,7 +122,13 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                 Ok(cfg)
             }
             Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
-            None => Ok(Self { prague1: None, prague2: None, prague3: None, prague4: None }),
+            None => Ok(Self {
+                prague1: None,
+                prague2: None,
+                prague3: None,
+                prague4: None,
+                osaka1: None,
+            }),
         }
     }
 }
@@ -208,6 +217,40 @@ mod tests {
         assert_eq!(prague2_config.minimum_base_fee_wei, 0);
 
         assert!(cfg.is_berachain());
+    }
+
+    #[test]
+    fn test_genesis_config_valid_osaka1() {
+        let json = r#"
+        {
+          "berachain": {
+            "prague1": {
+                "time": 1620000000,
+                "baseFeeChangeDenominator": 48,
+                "minimumBaseFeeWei": 1000000000,
+                "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+            },
+            "prague2": {
+                "time": 1720000000,
+                "minimumBaseFeeWei": 0
+            },
+            "osaka1": {
+                "time": 1820000000,
+                "minimumBaseFeeWei": 10000000000
+            }
+          }
+        }
+        "#;
+
+        let v: Value = serde_json::from_str(json).unwrap();
+        let other_fields = OtherFields::try_from(v).expect("must be a valid genesis config");
+
+        let cfg = BerachainGenesisConfig::try_from(&other_fields)
+            .expect("berachain field must deserialize");
+
+        let osaka1_config = cfg.osaka1.expect("Osaka1 should be configured");
+        assert_eq!(osaka1_config.time, 1820000000);
+        assert_eq!(osaka1_config.minimum_base_fee_wei, 10000000000);
     }
 
     #[test]
