@@ -10,10 +10,7 @@ use crate::{
     primitives::BerachainPrimitives,
 };
 use alloy_eips::{eip7840::BlobParams, merge::EPOCH_SLOTS};
-use reth::{
-    api::NodeTypes,
-    transaction_pool::{EthTransactionPool, blobstore::DiskFileBlobStore},
-};
+use reth::{api::NodeTypes, transaction_pool::blobstore::DiskFileBlobStore};
 use reth_chainspec::EthChainSpec;
 use reth_evm::ConfigureEvm;
 use reth_node_api::FullNodeTypes;
@@ -21,8 +18,10 @@ use reth_node_builder::{
     BuilderContext,
     components::{PoolBuilder, TxPoolBuilder},
 };
-use reth_transaction_pool::TransactionValidationTaskExecutor;
-use std::{fmt::Debug, time::SystemTime};
+use reth_transaction_pool::{
+    CoinbaseTipOrdering, EthTransactionValidator, Pool, TransactionValidationTaskExecutor,
+};
+use std::{time::SystemTime};
 use tracing::{debug, info};
 
 #[derive(Debug, Default)]
@@ -34,8 +33,16 @@ where
     Node: FullNodeTypes<Types = Types>,
     Evm: ConfigureEvm<Primitives = BerachainPrimitives> + Clone + 'static,
 {
-    type Pool =
-        EthTransactionPool<Node::Provider, DiskFileBlobStore, Evm, BerachainPooledTransaction>;
+    type Pool = Pool<
+        TransactionValidationTaskExecutor<
+            LegacyMinimumPriorityFeeValidator<
+                EthTransactionValidator<Node::Provider, BerachainPooledTransaction, Evm>,
+                Node::Provider,
+            >,
+        >,
+        CoinbaseTipOrdering<BerachainPooledTransaction>,
+        DiskFileBlobStore,
+    >;
 
     async fn build_pool(
         self,
@@ -67,7 +74,7 @@ where
         let local_transactions_config = pool_config.local_transactions_config.clone();
         let provider = ctx.provider().clone();
 
-        let validator = TransactionValidationTaskExecutor::eth_builder(provider.clone(), evm_config)
+        let eth_validator = TransactionValidationTaskExecutor::eth_builder(provider.clone(), evm_config)
             .set_eip4844(!blobs_disabled)
             // BRIP-0010 Osaka does not adopt EIP-7594 (PeerDAS); keep EIP-4844 sidecars
             // accepted across forks and reject EIP-7594 v1 sidecars.
@@ -79,23 +86,24 @@ where
             .with_max_tx_gas_limit(ctx.config().txpool.max_tx_gas_limit)
             .with_minimum_priority_fee(minimum_priority_fee)
             .with_additional_tasks(ctx.config().txpool.additional_validation_tasks)
-            .build_with_tasks(ctx.task_executor().clone(), blob_store.clone())
-            .map(move |inner| {
-                LegacyMinimumPriorityFeeValidator::new(
-                    inner,
-                    provider,
-                    minimum_priority_fee,
-                    local_transactions_config,
-                )
-            });
+            .build_with_tasks(ctx.task_executor().clone(), blob_store.clone());
 
-        if validator.validator().eip4844() {
-            let kzg_settings = validator.validator().kzg_settings().clone();
+        if eth_validator.validator().eip4844() {
+            let kzg_settings = eth_validator.validator().kzg_settings().clone();
             ctx.task_executor().spawn_blocking_task(async move {
                 let _ = kzg_settings.get();
                 debug!(target: "reth::cli", "Initialized KZG settings");
             });
         }
+
+        let validator = eth_validator.map(move |inner| {
+            LegacyMinimumPriorityFeeValidator::new(
+                inner,
+                provider.clone(),
+                minimum_priority_fee,
+                local_transactions_config.clone(),
+            )
+        });
 
         let transaction_pool = TxPoolBuilder::new(ctx)
             .with_validator(validator)

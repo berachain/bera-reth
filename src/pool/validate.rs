@@ -4,7 +4,10 @@
 //! transactions. Legacy and access-list transactions bypass that check, which lets
 //! low-tip spam evade validator-side filters.
 
-use reth_primitives_traits::{BlockHeader, SealedBlock};
+use std::fmt;
+
+use alloy_consensus::BlockHeader;
+use reth_primitives_traits::SealedBlock;
 use reth_storage_api::BlockReaderIdExt;
 use reth_transaction_pool::{
     LocalTransactionConfig, PoolTransaction, TransactionOrigin, TransactionValidationOutcome,
@@ -28,12 +31,20 @@ pub(crate) fn legacy_priority_fee_violation(
 
 /// Wraps an inner [`TransactionValidator`] and rejects non-EIP-1559 transactions whose
 /// effective priority fee is below the configured minimum.
-#[derive(Debug)]
 pub struct LegacyMinimumPriorityFeeValidator<V, Client> {
     inner: V,
     client: Client,
     minimum_priority_fee: Option<u128>,
     local_transactions_config: LocalTransactionConfig,
+}
+
+impl<V: fmt::Debug, Client> fmt::Debug for LegacyMinimumPriorityFeeValidator<V, Client> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LegacyMinimumPriorityFeeValidator")
+            .field("inner", &self.inner)
+            .field("minimum_priority_fee", &self.minimum_priority_fee)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<V, Client> LegacyMinimumPriorityFeeValidator<V, Client> {
@@ -49,7 +60,7 @@ impl<V, Client> LegacyMinimumPriorityFeeValidator<V, Client> {
 
 impl<V, Client, Tx> TransactionValidator for LegacyMinimumPriorityFeeValidator<V, Client>
 where
-    V: TransactionValidator<Transaction = Tx>,
+    V: TransactionValidator<Transaction = Tx> + fmt::Debug,
     Client: BlockReaderIdExt,
     Tx: PoolTransaction,
 {
