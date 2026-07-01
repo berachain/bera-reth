@@ -11,8 +11,7 @@ use reth_primitives_traits::SealedBlock;
 use reth_storage_api::BlockReaderIdExt;
 use reth_transaction_pool::{
     LocalTransactionConfig, PoolTransaction, TransactionOrigin, TransactionValidationOutcome,
-    TransactionValidator,
-    error::InvalidPoolTransactionError,
+    TransactionValidator, error::InvalidPoolTransactionError,
 };
 
 /// Returns the configured minimum when a non-EIP-1559 transaction's effective tip is too low.
@@ -72,15 +71,13 @@ where
         origin: TransactionOrigin,
         transaction: Self::Transaction,
     ) -> TransactionValidationOutcome<Tx> {
-        let outcome =
-            self.inner.validate_transaction(origin, transaction.clone()).await;
+        let outcome = self.inner.validate_transaction(origin, transaction.clone()).await;
 
         let TransactionValidationOutcome::Valid { .. } = outcome else {
             return outcome;
         };
 
-        let is_local =
-            self.local_transactions_config.is_local(origin, transaction.sender_ref());
+        let is_local = self.local_transactions_config.is_local(origin, transaction.sender_ref());
 
         let base_fee = match self.client.latest_header() {
             Ok(Some(header)) => header.base_fee_per_gas().unwrap_or_default(),
@@ -122,26 +119,17 @@ mod tests {
 
     #[test]
     fn accepts_legacy_tip_at_floor() {
-        assert_eq!(
-            legacy_priority_fee_violation(false, false, Some(10_000_000), 10_000_000),
-            None
-        );
+        assert_eq!(legacy_priority_fee_violation(false, false, Some(10_000_000), 10_000_000), None);
     }
 
     #[test]
     fn skips_dynamic_fee_transactions() {
-        assert_eq!(
-            legacy_priority_fee_violation(true, false, Some(10_000_000), 1),
-            None
-        );
+        assert_eq!(legacy_priority_fee_violation(true, false, Some(10_000_000), 1), None);
     }
 
     #[test]
     fn skips_local_transactions() {
-        assert_eq!(
-            legacy_priority_fee_violation(false, true, Some(10_000_000), 1),
-            None
-        );
+        assert_eq!(legacy_priority_fee_violation(false, true, Some(10_000_000), 1), None);
     }
 
     #[test]
