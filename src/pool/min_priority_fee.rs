@@ -168,15 +168,136 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::merge_outcomes;
+    use super::MinPriorityFeeValidator;
+    use crate::{
+        chainspec::BerachainChainSpec,
+        primitives::{BerachainBlock, BerachainHeader},
+    };
+    use alloy_genesis::Genesis;
+    use alloy_primitives::U256;
+    use reth::rpc::types::serde_helpers::OtherFields;
+    use reth_chainspec::EthChainSpec;
+    use reth_primitives_traits::SealedBlock;
+    use reth_transaction_pool::{
+        LocalTransactionConfig, PoolTransaction,
+        TransactionOrigin::{self, External, Local},
+        TransactionValidationOutcome::{self, Invalid},
+        TransactionValidator,
+        error::InvalidPoolTransactionError::{PriorityFeeBelowMinimum, Underpriced},
+        test_utils::MockTransaction,
+    };
+    use serde_json::json;
+    use std::sync::Arc;
 
-    #[test]
-    fn merge_outcomes_preserves_input_order() {
-        // Rejected slots (Some) interleave with inner-validated outcomes in input order.
-        let merged = merge_outcomes(vec![None, Some(10), None, Some(11), None], vec![0, 1, 2]);
-        assert_eq!(merged, vec![0, 10, 1, 11, 2]);
+    const FLOOR: u128 = 1_000_000_000;
+    const BASE_FEE: u128 = 50_000_000_000;
 
-        let all_rejected = merge_outcomes(vec![Some(10), Some(11)], vec![]);
-        assert_eq!(all_rejected, vec![10, 11]);
+    type Wrapper = MinPriorityFeeValidator<SentinelInner, BerachainChainSpec>;
+
+    /// Inner stub marking every transaction it receives with a sentinel error, so tests can
+    /// tell whether the wrapper forwarded a transaction or floor-rejected it first.
+    #[derive(Debug)]
+    struct SentinelInner;
+
+    impl TransactionValidator for SentinelInner {
+        type Transaction = MockTransaction;
+        type Block = BerachainBlock;
+
+        async fn validate_transaction(
+            &self,
+            _origin: TransactionOrigin,
+            transaction: Self::Transaction,
+        ) -> TransactionValidationOutcome<Self::Transaction> {
+            Invalid(transaction, Underpriced)
+        }
+    }
+
+    fn chain_spec() -> Arc<BerachainChainSpec> {
+        let mut genesis = Genesis::default();
+        genesis.config.cancun_time = Some(0);
+        genesis.config.prague_time = Some(0);
+        genesis.config.terminal_total_difficulty = Some(U256::ZERO);
+        genesis.config.extra_fields = OtherFields::try_from(json!({
+            "berachain": {
+                "prague1": { "time": 0, "baseFeeChangeDenominator": 48, "minimumBaseFeeWei": 10,
+                             "polDistributorAddress": "0x4200000000000000000000000000000000000042" },
+                "prague2": { "time": 0, "minimumBaseFeeWei": 0 }
+            }
+        }))
+        .unwrap();
+        Arc::new(BerachainChainSpec::from(genesis))
+    }
+
+    fn validator(floor: u128) -> Wrapper {
+        let locals = LocalTransactionConfig::default();
+        MinPriorityFeeValidator::new(SentinelInner, floor, locals, chain_spec(), BASE_FEE as u64)
+    }
+
+    async fn rejects(v: &Wrapper, origin: TransactionOrigin, tx: MockTransaction) -> bool {
+        let outcome = v.validate_transaction(origin, tx).await;
+        matches!(outcome, Invalid(_, PriorityFeeBelowMinimum { .. }))
+    }
+
+    fn legacy(gas_price: u128) -> MockTransaction {
+        MockTransaction::legacy().with_gas_price(gas_price)
+    }
+
+    fn eip1559(max_fee: u128, tip_cap: u128) -> MockTransaction {
+        MockTransaction::eip1559().with_max_fee(max_fee).with_priority_fee(tip_cap)
+    }
+
+    #[tokio::test]
+    async fn enforces_effective_tip_floor_on_external_transactions() {
+        let v = validator(FLOOR);
+        // The two gaps in reth's built-in check: legacy is exempt entirely, and a declared
+        // cap clearing the floor passes even when maxFee == baseFee makes the paid tip zero.
+        assert!(rejects(&v, External, legacy(BASE_FEE)).await);
+        assert!(rejects(&v, External, eip1559(BASE_FEE, 10 * FLOOR)).await);
+        assert!(rejects(&v, External, eip1559(BASE_FEE + FLOOR, FLOOR - 1)).await);
+        assert!(!rejects(&v, External, eip1559(BASE_FEE + FLOOR, FLOOR)).await);
+        // Local transactions are exempt, and floor 0 disables the check entirely.
+        assert!(!rejects(&v, Local, legacy(BASE_FEE)).await);
+        assert!(!rejects(&validator(0), External, legacy(BASE_FEE)).await);
+    }
+
+    #[tokio::test]
+    async fn batch_preserves_input_order_with_interleaved_rejections() {
+        let v = validator(FLOOR);
+        let txs = vec![
+            eip1559(BASE_FEE + FLOOR, FLOOR),
+            legacy(BASE_FEE),
+            eip1559(BASE_FEE + 2 * FLOOR, 2 * FLOOR),
+            eip1559(BASE_FEE, 10 * FLOOR),
+        ];
+        let hashes: Vec<_> = txs.iter().map(|tx| *tx.hash()).collect();
+        let outcomes = v.validate_transactions(txs.into_iter().map(|tx| (External, tx))).await;
+
+        for (i, expect_rejected) in [false, true, false, true].into_iter().enumerate() {
+            let Invalid(tx, err) = &outcomes[i] else { panic!("bad outcome: {:?}", outcomes[i]) };
+            assert_eq!(*tx.hash(), hashes[i], "outcome {i} does not match input order");
+            assert_eq!(matches!(err, PriorityFeeBelowMinimum { .. }), expect_rejected);
+        }
+    }
+
+    #[tokio::test]
+    async fn new_head_updates_floor_to_next_block_base_fee() {
+        let v = validator(FLOOR);
+        // A full block, so the next-block base fee rises above the head's own base fee.
+        let header = BerachainHeader {
+            timestamp: 1000,
+            gas_limit: 30_000_000,
+            gas_used: 30_000_000,
+            base_fee_per_gas: Some(BASE_FEE as u64),
+            ..Default::default()
+        };
+        let pending = u128::from(chain_spec().next_block_base_fee(&header, 1000).unwrap());
+        assert!(pending > BASE_FEE);
+        let head = SealedBlock::seal_slow(BerachainBlock { header, body: Default::default() });
+        v.on_new_head_block(&head);
+
+        // The floor boundary now sits exactly at the derived next-block base fee. Evaluating
+        // against the head's own (lower) base fee would let the second transaction through.
+        assert!(!rejects(&v, External, eip1559(pending + FLOOR, FLOOR)).await);
+        assert!(rejects(&v, External, eip1559(pending + FLOOR - 1, FLOOR)).await);
     }
 }
