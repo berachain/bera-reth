@@ -212,7 +212,8 @@ where
                 }
                 TxKind::Call(to) => {
                     let mut result = self.transact_system_call(tx.caller, to, tx.data)?;
-                    // Set gas_used to 0 for POL transactions
+                    // POL transactions are system calls that always consume zero gas, regardless
+                    // of whether they succeed, revert, or halt.
                     result.result = match result.result {
                         ExecutionResult::Success { reason, gas_refunded, logs, output, .. } => {
                             ExecutionResult::Success {
@@ -223,7 +224,12 @@ where
                                 output,
                             }
                         }
-                        other => other,
+                        ExecutionResult::Revert { output, .. } => {
+                            ExecutionResult::Revert { gas_used: 0, output }
+                        }
+                        ExecutionResult::Halt { reason, .. } => {
+                            ExecutionResult::Halt { reason, gas_used: 0 }
+                        }
                     };
                     Ok(result)
                 }
