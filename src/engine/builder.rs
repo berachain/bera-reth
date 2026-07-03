@@ -6,9 +6,10 @@ use crate::{
     hardforks::BerachainHardforks,
     node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
     primitives::{BerachainHeader, BerachainPrimitives},
-    transaction::BerachainTxEnvelope,
+    transaction::{BerachainTxEnvelope, pol::create_pol_transaction},
 };
 use alloy_consensus::Transaction;
+use alloy_eips::eip7002::SYSTEM_ADDRESS;
 use alloy_primitives::U256;
 use alloy_rlp::Encodable;
 use reth::{
@@ -233,6 +234,25 @@ where
         warn!(target: "payload_builder", %err, "failed to apply pre-execution changes");
         PayloadBuilderError::Internal(err.into())
     })?;
+
+    // Execute PoL as tx #0 post-Prague1. prev_proposer_pubkey was validated in
+    // apply_pre_execution_changes.
+    if chain_spec.is_prague1_active_at_timestamp(attributes.timestamp()) {
+        let prev_proposer_pubkey = attributes
+            .prev_proposer_pubkey
+            .expect("prev_proposer_pubkey validated by validate_proposer_pubkey_prague1");
+        let pol_envelope = create_pol_transaction(
+            chain_spec.clone(),
+            prev_proposer_pubkey,
+            builder.evm_mut().block().number(),
+            builder.evm_mut().block().basefee(),
+        )
+        .map_err(|err| PayloadBuilderError::Internal(err.into()))?;
+        builder.execute_transaction(pol_envelope.with_signer(SYSTEM_ADDRESS)).map_err(|err| {
+            warn!(target: "payload_builder", %err, "failed to execute PoL transaction");
+            PayloadBuilderError::evm(err)
+        })?;
+    }
 
     // initialize empty blob sidecars at first. If cancun is active then this will be populated by
     // blob sidecars if any.
