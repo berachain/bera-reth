@@ -64,7 +64,8 @@ where
         // Validate proposer pubkey presence for Prague1
         validate_proposer_pubkey_prague1(&*self.chain_spec, timestamp, ctx.prev_proposer_pubkey)?;
 
-        // Post-Prague1, PoL must already be tx #0 with a matching receipt.
+        // Post-Prague1, PoL is executed as tx #0, so the block must have a PoL
+        // transaction at index 0 and at least one receipt.
         if self.chain_spec.is_prague1_active_at_timestamp(timestamp) {
             if receipts.is_empty() {
                 return Err(BerachainExecutionError::MissingPolReceipts.into());

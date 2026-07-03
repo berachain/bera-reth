@@ -4,7 +4,10 @@ use crate::{
         BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
     },
     hardforks::BerachainHardforks,
-    node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
+    node::evm::{
+        config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
+        error::BerachainExecutionError,
+    },
     primitives::{BerachainHeader, BerachainPrimitives},
     transaction::{BerachainTxEnvelope, pol::create_pol_transaction},
 };
@@ -235,12 +238,13 @@ where
         PayloadBuilderError::Internal(err.into())
     })?;
 
-    // Execute PoL as tx #0 post-Prague1. prev_proposer_pubkey was validated in
-    // apply_pre_execution_changes.
+    // Execute PoL as tx #0 post-Prague1.
     if chain_spec.is_prague1_active_at_timestamp(attributes.timestamp()) {
-        let prev_proposer_pubkey = attributes
-            .prev_proposer_pubkey
-            .expect("prev_proposer_pubkey validated by validate_proposer_pubkey_prague1");
+        let prev_proposer_pubkey = attributes.prev_proposer_pubkey.ok_or_else(|| {
+            PayloadBuilderError::Internal(
+                BlockExecutionError::from(BerachainExecutionError::MissingProposerPubkey).into(),
+            )
+        })?;
         let pol_envelope = create_pol_transaction(
             chain_spec.clone(),
             prev_proposer_pubkey,
