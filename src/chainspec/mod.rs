@@ -60,7 +60,7 @@ pub struct BerachainChainSpec {
     pub prague4_config: Option<Prague4Config>,
     /// The minimum base fee in wei for Osaka1 (0 if not configured)
     pub osaka1_minimum_base_fee: u64,
-    /// The minimum blob base fee in wei for Osaka1 (0 = keep the EIP-4844 default of 1 wei)
+    /// The minimum blob base fee in wei for Osaka1 (0 if not configured)
     pub osaka1_min_blob_base_fee: u64,
 }
 
@@ -290,7 +290,7 @@ impl EthChainSpec for BerachainChainSpec {
         let mut params = self.inner.blob_params_at_timestamp(timestamp)?;
         // Osaka1 raises the minimum blob base fee (anti-spam). Setting min_blob_fee lifts the
         // EIP-4844 blob fee curve so the at-target blob base fee equals this floor.
-        if self.is_osaka1_active_at_timestamp(timestamp) && self.osaka1_min_blob_base_fee > 0 {
+        if self.is_osaka1_active_at_timestamp(timestamp) {
             params.min_blob_fee = self.osaka1_min_blob_base_fee as u128;
         }
         Some(params)
@@ -363,7 +363,7 @@ impl EthChainSpec for BerachainChainSpec {
             ForkCondition::Timestamp(time) => format!(
                 "\nBerachain Osaka1 configuration: {{time={time}, min_base_fee={} gwei, min_blob_base_fee={} gwei}}",
                 self.osaka1_minimum_base_fee / 1_000_000_000,
-                self.osaka1_min_blob_base_fee.max(1) as f64 / 1_000_000_000.0,
+                self.osaka1_min_blob_base_fee as f64 / 1_000_000_000.0,
             ),
             _ => String::new(),
         };
@@ -648,24 +648,17 @@ impl From<Genesis> for BerachainChainSpec {
             }
         }
 
-        // Validate Osaka1 ordering if configured. Osaka1 activates after Osaka, so its
-        // predecessor is Osaka if set, else the latest Berachain fork (Prague4/3/2).
+        // Validate Osaka1 ordering if configured (Osaka1 must come at or after Osaka)
         if let Some(osaka1_config) = osaka1_config_opt.as_ref() {
-            let (predecessor_name, predecessor_time) =
-                if let Some(osaka_time) = genesis.config.osaka_time {
-                    ("Osaka", osaka_time)
-                } else if let Some(p4) = prague4_config_opt.as_ref() {
-                    ("Prague4", p4.time)
-                } else if let Some(p3) = prague3_config_opt.as_ref() {
-                    ("Prague3", p3.time)
-                } else {
-                    ("Prague2", prague2_config.time)
-                };
-            if osaka1_config.time < predecessor_time {
-                panic!(
-                    "Osaka1 hardfork must activate at or after {predecessor_name} hardfork. {predecessor_name} time: {predecessor_time}, Osaka1 time: {}.",
-                    osaka1_config.time
-                );
+            match genesis.config.osaka_time {
+                Some(osaka_time) if osaka1_config.time < osaka_time => {
+                    panic!(
+                        "Osaka1 hardfork must activate at or after Osaka hardfork. Osaka time: {osaka_time}, Osaka1 time: {}.",
+                        osaka1_config.time
+                    );
+                }
+                None => panic!("Osaka1 hardfork requires Osaka hardfork to be configured"),
+                _ => {}
             }
         }
 
@@ -1269,7 +1262,7 @@ mod tests {
             1000,
             2000,
             Some(2500),
-            json!({ "time": 3000, "minimumBaseFeeWei": osaka1_base_fee }),
+            json!({ "time": 3000, "minimumBaseFeeWei": osaka1_base_fee, "minimumBlobBaseFeeWei": osaka1_base_fee }),
         );
 
         // Stored floor and activation boundary.
@@ -1287,7 +1280,7 @@ mod tests {
 
     #[test]
     fn test_blob_params_osaka1_min_blob_fee() {
-        // With a blob floor: EIP-4844 default (1 wei) before Osaka1, raised to 10 gwei at/after.
+        // EIP-4844 default (1 wei) before Osaka1, raised to the configured floor at/after.
         let spec = osaka1_test_spec(
             1000,
             2000,
@@ -1303,17 +1296,6 @@ mod tests {
         let after = spec.blob_params_at_timestamp(3000).unwrap();
         assert_eq!(after.min_blob_fee, 10_000_000_000);
         assert_eq!(after.calc_blob_fee(0), 10_000_000_000);
-
-        // Without a blob floor: the 0 value must skip the override, never set min_blob_fee=0, so
-        // the EIP-4844 default (1 wei) is left untouched even after activation.
-        let spec = osaka1_test_spec(
-            1000,
-            2000,
-            Some(2500),
-            json!({ "time": 3000, "minimumBaseFeeWei": 10000000000i64 }),
-        );
-        assert_eq!(spec.osaka1_min_blob_base_fee, 0);
-        assert_eq!(spec.blob_params_at_timestamp(5000).unwrap().min_blob_fee, 1);
     }
 
     #[test]
@@ -1325,18 +1307,18 @@ mod tests {
             0,
             1000,
             Some(3000),
-            json!({ "time": 2500, "minimumBaseFeeWei": 10000000000i64 }),
+            json!({ "time": 2500, "minimumBaseFeeWei": 10000000000i64, "minimumBlobBaseFeeWei": 10000000000i64 }),
         );
     }
 
     #[test]
-    #[should_panic(expected = "Osaka1 hardfork must activate at or after Prague2 hardfork")]
-    fn test_panic_on_osaka1_before_prague2() {
+    #[should_panic(expected = "Osaka1 hardfork requires Osaka hardfork to be configured")]
+    fn test_panic_on_osaka1_without_osaka() {
         osaka1_test_spec(
             0,
             2000,
             None,
-            json!({ "time": 1000, "minimumBaseFeeWei": 10000000000i64 }),
+            json!({ "time": 3000, "minimumBaseFeeWei": 10000000000i64, "minimumBlobBaseFeeWei": 10000000000i64 }),
         );
     }
 
@@ -2445,6 +2427,15 @@ mod tests {
             timestamp: 1762963200,
         };
 
+        // Osaka active, before Osaka1
+        let head_osaka_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1783526400,
+        };
+
         // After all configured forks, including Osaka and Osaka1
         let head_far_future = Head {
             number: 1000,
@@ -2462,6 +2453,7 @@ mod tests {
         let fork_id_prague2 = spec.fork_id(&head_prague2_active);
         let fork_id_prague3 = spec.fork_id(&head_prague3_active);
         let fork_id_prague4 = spec.fork_id(&head_prague4_active);
+        let fork_id_osaka = spec.fork_id(&head_osaka_active);
         let fork_id_future = spec.fork_id(&head_far_future);
 
         // Test fork_filter at each stage
@@ -2472,6 +2464,7 @@ mod tests {
         let fork_filter_prague2 = spec.fork_filter(head_prague2_active);
         let fork_filter_prague3 = spec.fork_filter(head_prague3_active);
         let fork_filter_prague4 = spec.fork_filter(head_prague4_active);
+        let fork_filter_osaka = spec.fork_filter(head_osaka_active);
         let fork_filter_future = spec.fork_filter(head_far_future);
 
         // Verify fork_filter.current() matches fork_id() at each stage
@@ -2482,6 +2475,7 @@ mod tests {
         assert_eq!(fork_filter_prague2.current(), fork_id_prague2);
         assert_eq!(fork_filter_prague3.current(), fork_id_prague3);
         assert_eq!(fork_filter_prague4.current(), fork_id_prague4);
+        assert_eq!(fork_filter_osaka.current(), fork_id_osaka);
         assert_eq!(fork_filter_future.current(), fork_id_future);
 
         // Verify next fork schedule matches mainnet configuration
@@ -2492,6 +2486,7 @@ mod tests {
         assert_eq!(fork_id_prague2.next, 1762164459, "next fork should be Prague3");
         assert_eq!(fork_id_prague3.next, 1762963200, "next fork should be Prague4");
         assert_eq!(fork_id_prague4.next, 1783526400, "next fork should be Osaka");
+        assert_eq!(fork_id_osaka.next, 9999999999, "next fork should be Osaka1");
         assert_eq!(fork_id_future.next, 0, "no next fork in far future");
 
         // Expected fork hash values for mainnet
@@ -2502,6 +2497,7 @@ mod tests {
         assert_eq!(fork_id_prague2.hash, ForkHash([0xcb, 0xbf, 0x6c, 0x9f]));
         assert_eq!(fork_id_prague3.hash, ForkHash([0x64, 0x94, 0xa1, 0x76]));
         assert_eq!(fork_id_prague4.hash, ForkHash([0x70, 0x1a, 0x09, 0x7f]));
+        assert_eq!(fork_id_osaka.hash, ForkHash([0xbb, 0x99, 0xd3, 0xeb]));
         assert_eq!(fork_id_future.hash, ForkHash([0x16, 0x66, 0xea, 0xde]));
     }
 
