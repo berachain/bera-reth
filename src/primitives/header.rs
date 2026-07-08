@@ -947,4 +947,81 @@ mod tests {
             "Header with prev_proposer_pubkey should be larger when compressed"
         );
     }
+
+    mod regression {
+        use super::*;
+        use crate::test_utils::regression_fixtures::{
+            holesky_berachain_header, holesky_berachain_header_with_proposer_pubkey,
+        };
+        use alloy_primitives::{b256, hex};
+
+        // Sourced from Reth v1.11.4:
+        // crates/primitives/src/header.rs test_compact_header_holesky()
+        // Block #1947953 on Holesky testnet.
+        const HOLESKY_COMPACT: &[u8] = &hex!(
+            "81a121788605e0c46689f66b3deed82598e43d5002b71a929023b665228728f0c6e62a951dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347c6e2459991bfe27cca6d86722f35da23a1e4cb97edad188ca5647d62f4cca417c11a1afbadebce30d23260767f6f587e9b3b99934daf25dc08a841aa22aa0d3cb3e1f159d4dcaf6a6063d4d36bfac11d3fdb63ee1a1500328e8ade2592bbea1e04f9a9fd8c0142d3175d6e8420984ee159abd0edd0f7f22d6d915be5a3b9c0fee353f14de5ac5c8ac1850b76ce9be70b69dfe37d36410880400480e1090a001c408880800019808000125124002100400048442220020000408040423088300004d0000050803000862485a02020011600a5010404143021800881e8e08c402940404002105004820c440051640000809c000011080002300208510808150101000038002500400040000230000000110442800000800204420100008110080200088c1610c0b80000c6008900000340400200200210010111020000200041a2010804801100030a0284a8463820120a0601480244521002a10201100400801101006002001000008000000ce011011041086418609002000128800008180141002003004c00800040940c00c1180ca0028900401db93101c9c38044094966982980574db0ff0a2243b434ba2a35da8f2f72df08bca44f8733f4908d10dcaebc89f101080306000000aa1d9606b7932f2280a19b3498b9ae9eebc6a83f1afde8e45944f79d353db4c1726574682f76312e302e302f6c696e7578"
+        );
+
+        // Self-generated snapshot: hash_slow() output for holesky_berachain_header().
+        // Uses canonical RLP+keccak semantics for this fixed fixture.
+        // Regenerate via: cargo test print_regression_values -- --ignored --nocapture
+        const HOLESKY_HASH: B256 =
+            b256!("0x2537b92b5139455368c19ec33a92e1ff0cf6b96e6fd8488bed4ed409d401ac9a");
+
+        // Self-generated snapshot: compress_to_buf() output of the same Holesky header
+        // with synthetic Berachain-specific fields (prev_proposer_pubkey, requests_hash).
+        // No external reference exists for these fields; this pins bera-reth's own format.
+        // Regenerate via: cargo test print_regression_values -- --ignored --nocapture
+        const WITH_PROPOSER_COMPACT: &[u8] = &hex!(
+            "81a121f88605e0c46689f66b3deed82598e43d5002b71a929023b665228728f0c6e62a951dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347c6e2459991bfe27cca6d86722f35da23a1e4cb97edad188ca5647d62f4cca417c11a1afbadebce30d23260767f6f587e9b3b99934daf25dc08a841aa22aa0d3cb3e1f159d4dcaf6a6063d4d36bfac11d3fdb63ee1a1500328e8ade2592bbea1e04f9a9fd8c0142d3175d6e8420984ee159abd0edd0f7f22d6d915be5a3b9c0fee353f14de5ac5c8ac1850b76ce9be70b69dfe37d36410880400480e1090a001c408880800019808000125124002100400048442220020000408040423088300004d0000050803000862485a02020011600a5010404143021800881e8e08c402940404002105004820c440051640000809c000011080002300208510808150101000038002500400040000230000000110442800000800204420100008110080200088c1610c0b80000c6008900000340400200200210010111020000200041a2010804801100030a0284a8463820120a0601480244521002a10201100400801101006002001000008000000ce011011041086418609002000128800008180141002003004c00800040940c00c1180ca0028900401db93101c9c38044094966982980574db0ff0a2243b434ba2a35da8f2f72df08bca44f8733f4908d10dcaebc89f101080306000000aa1d9606b7932f2280a19b3498b9ae9eebc6a83f1afde8e45944f79d353db4c15203111111111111111111111111111111111111111111111111111111111111111130424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242726574682f76312e302e302f6c696e7578"
+        );
+
+        // Self-generated snapshot: hash_slow() output of the header with Berachain ext fields.
+        // Regenerate via: cargo test print_regression_values -- --ignored --nocapture
+        const WITH_PROPOSER_HASH: B256 =
+            b256!("0xf822917a3ec331a4acc12c48325b1ecfd1f7771bb55dec41d648c365ee6855cb");
+
+        #[test]
+        fn compact_bitflag_layout() {
+            assert_eq!(CompactBerachainHeader::bitflag_encoded_bytes(), 4);
+            assert_eq!(BerachainHeaderExt::bitflag_encoded_bytes(), 1);
+        }
+
+        #[test]
+        fn holesky_compact_matches_reth_v1_11_4() {
+            let header = holesky_berachain_header();
+            let mut buf = Vec::new();
+            header.compress_to_buf(&mut buf);
+            assert_eq!(buf.as_slice(), HOLESKY_COMPACT);
+
+            let decompressed = BerachainHeader::decompress(HOLESKY_COMPACT).unwrap();
+            assert_eq!(decompressed, header);
+
+            let mut reencoded = Vec::new();
+            decompressed.compress_to_buf(&mut reencoded);
+            assert_eq!(reencoded.as_slice(), HOLESKY_COMPACT);
+        }
+
+        #[test]
+        fn holesky_hash_regression() {
+            assert_eq!(holesky_berachain_header().hash_slow(), HOLESKY_HASH);
+        }
+
+        #[test]
+        fn prev_proposer_pubkey_compact_regression() {
+            let header = holesky_berachain_header_with_proposer_pubkey();
+            let mut buf = Vec::new();
+            header.compress_to_buf(&mut buf);
+            assert_eq!(buf.as_slice(), WITH_PROPOSER_COMPACT);
+            assert_eq!(BerachainHeader::decompress(WITH_PROPOSER_COMPACT).unwrap(), header);
+        }
+
+        #[test]
+        fn prev_proposer_pubkey_hash_regression() {
+            assert_eq!(
+                holesky_berachain_header_with_proposer_pubkey().hash_slow(),
+                WITH_PROPOSER_HASH
+            );
+        }
+    }
 }

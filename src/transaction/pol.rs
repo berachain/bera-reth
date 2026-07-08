@@ -84,9 +84,12 @@ pub fn validate_pol_transaction(
 mod tests {
     use super::*;
     use alloy_eips::eip7002::SYSTEM_ADDRESS;
-    use alloy_primitives::{U256, address};
+    use alloy_primitives::{U256, address, b256};
 
     use crate::test_utils::bepolia_chainspec;
+
+    const REGRESSION_BLOCK_NUMBER: u64 = 10;
+    const REGRESSION_BASE_FEE: u64 = 1000;
 
     fn mock_bls_pubkey() -> BlsPublicKey {
         BlsPublicKey::from([1u8; 48])
@@ -233,5 +236,62 @@ mod tests {
             pol_tx2.hash(),
             "Identical PoL transactions should have identical hashes"
         );
+    }
+
+    #[test]
+    fn test_pol_transaction_hash_regression() {
+        let chain_spec = bepolia_chainspec();
+        let pubkey = mock_bls_pubkey();
+        let pol_tx = match create_pol_transaction(
+            chain_spec,
+            pubkey,
+            U256::from(REGRESSION_BLOCK_NUMBER),
+            REGRESSION_BASE_FEE,
+        )
+        .unwrap()
+        {
+            BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
+            _ => panic!("Expected PoL transaction"),
+        };
+
+        assert_eq!(
+            *pol_tx.hash(),
+            b256!("0x35b5cc4612e0e4ec54e339c189158098ef764de6229c7db0707d95c0850b5eb7")
+        );
+    }
+
+    #[test]
+    fn test_pol_transaction_compact_regression() {
+        use alloy_primitives::hex;
+        use reth_db::table::Decompress;
+        use reth_db_api::table::Compress;
+
+        // Self-generated snapshot: compress_to_buf output for a production-like PoL tx
+        // using bepolia chain spec, block 10, base_fee 1000, pubkey [1u8; 48].
+        // Same inputs as test_pol_transaction_hash_regression.
+        // Regenerate via: cargo test print_regression_values -- --ignored --nocapture
+        const PRODUCTION_POL_COMPACT: &[u8] = &hex!(
+            "0e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000028b52ffd23e4c3b413baed010094027e1324000138c5fffed2f19a79b026fb636a7c300bf5947df1139407610901c9c38003e860644a300106fc00023884e6f1eb031ef566f3de5587f9"
+        );
+
+        let chain_spec = bepolia_chainspec();
+        let pubkey = mock_bls_pubkey();
+        let sealed_pol = match create_pol_transaction(
+            chain_spec,
+            pubkey,
+            U256::from(REGRESSION_BLOCK_NUMBER),
+            REGRESSION_BASE_FEE,
+        )
+        .unwrap()
+        {
+            BerachainTxEnvelope::Berachain(sealed) => sealed,
+            _ => panic!("Expected PoL transaction"),
+        };
+        let envelope = BerachainTxEnvelope::Berachain(sealed_pol);
+        let mut buf = Vec::new();
+        envelope.compress_to_buf(&mut buf);
+        assert_eq!(buf.as_slice(), PRODUCTION_POL_COMPACT);
+
+        assert_eq!(BerachainTxEnvelope::decompress(PRODUCTION_POL_COMPACT).unwrap(), envelope);
     }
 }
