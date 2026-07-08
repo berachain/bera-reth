@@ -79,6 +79,10 @@ ignore = [
   "RUSTSEC-2026-0119",
   # https://rustsec.org/advisories/RUSTSEC-2026-0173 proc-macro-error2 is unmaintained, no safe upgrade available; transitive dep via alloy-sol-macro
   "RUSTSEC-2026-0173",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0183 git2 UB in Remote::list(), awaiting reth bump to vergen-git2 10
+  "RUSTSEC-2026-0183",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0184 git2 UB in BlameHunk signatures, awaiting reth bump to vergen-git2 10
+  "RUSTSEC-2026-0184",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
