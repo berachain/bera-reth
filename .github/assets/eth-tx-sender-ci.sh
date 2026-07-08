@@ -39,12 +39,17 @@ RECEIPT_TIMEOUTS=()
 SLACK_WEBHOOK="${SLACK_WEBHOOK_URL:-}"
 MAX_WAIT_SEC="${MAX_WAIT_SEC:-30}"
 
+# Set a minimum priority fee that should guarantee txs inclusion
+MAX_FEE_PER_GAS="${MAX_FEE_PER_GAS:-5gwei}"
+MAX_PRIORITY_FEE_PER_GAS="${MAX_PRIORITY_FEE_PER_GAS:-2gwei}"
+
 echo "🚀 Transaction Sender - sending every ${INTERVAL}s"
 echo "📋 Target: $TO_ADDRESS"
 echo "💰 Value: 0 wei"
 echo "🔗 RPC: $RPC_URL"
 echo "💳 Address: $ADDRESS"
 echo "⏱️  Receipt timeout: ${MAX_WAIT_SEC}s"
+echo "⛽ Max fee: $MAX_FEE_PER_GAS, priority fee: $MAX_PRIORITY_FEE_PER_GAS"
 echo
 
 
@@ -124,6 +129,8 @@ send_transaction() {
         --value 0 \
         --private-key "$PRIVATE_KEY" \
         --rpc-url "$RPC_URL" \
+        --gas-price "$MAX_FEE_PER_GAS" \
+        --priority-gas-price "$MAX_PRIORITY_FEE_PER_GAS" \
         2>/dev/null)
 
     if [[ -z "$raw_tx" ]]; then
