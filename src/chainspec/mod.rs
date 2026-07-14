@@ -1256,7 +1256,7 @@ mod tests {
 
     #[test]
     fn test_next_block_base_fee_osaka1_floor() {
-        let osaka1_base_fee = 10_000_000_000u64; // 10 gwei
+        let osaka1_base_fee = 1_000_000_000u64; // 1 gwei
         // Osaka1 activates after Osaka on mainnet.
         let spec = osaka1_test_spec(
             1000,
@@ -1273,7 +1273,7 @@ mod tests {
         // Between Prague2 and Osaka1 the floor is Prague2's 0, so a sub-gwei base fee is allowed.
         assert!(spec.next_block_base_fee(&header_at(2999), 0).unwrap() < 1_000_000_000);
 
-        // At and after Osaka1 the base fee is floored at 10 gwei.
+        // At and after Osaka1 the base fee is floored at 1 gwei.
         assert_eq!(spec.next_block_base_fee(&header_at(3000), 0).unwrap(), osaka1_base_fee);
         assert_eq!(spec.next_block_base_fee(&header_at(5000), 0).unwrap(), osaka1_base_fee);
     }
@@ -1287,15 +1287,15 @@ mod tests {
             Some(2500),
             json!({
                 "time": 3000,
-                "minimumBaseFeeWei": 10000000000i64,
-                "minimumBlobBaseFeeWei": 10000000000i64
+                "minimumBaseFeeWei": 1000000000i64,
+                "minimumBlobBaseFeeWei": 1000000000i64
             }),
         );
-        assert_eq!(spec.osaka1_min_blob_base_fee, 10_000_000_000);
+        assert_eq!(spec.osaka1_min_blob_base_fee, 1_000_000_000);
         assert_eq!(spec.blob_params_at_timestamp(2999).unwrap().min_blob_fee, 1);
         let after = spec.blob_params_at_timestamp(3000).unwrap();
-        assert_eq!(after.min_blob_fee, 10_000_000_000);
-        assert_eq!(after.calc_blob_fee(0), 10_000_000_000);
+        assert_eq!(after.min_blob_fee, 1_000_000_000);
+        assert_eq!(after.calc_blob_fee(0), 1_000_000_000);
     }
 
     #[test]
@@ -1307,7 +1307,7 @@ mod tests {
             0,
             1000,
             Some(3000),
-            json!({ "time": 2500, "minimumBaseFeeWei": 10000000000i64, "minimumBlobBaseFeeWei": 10000000000i64 }),
+            json!({ "time": 2500, "minimumBaseFeeWei": 1000000000i64, "minimumBlobBaseFeeWei": 1000000000i64 }),
         );
     }
 
@@ -1318,7 +1318,7 @@ mod tests {
             0,
             2000,
             None,
-            json!({ "time": 3000, "minimumBaseFeeWei": 10000000000i64, "minimumBlobBaseFeeWei": 10000000000i64 }),
+            json!({ "time": 3000, "minimumBaseFeeWei": 1000000000i64, "minimumBlobBaseFeeWei": 1000000000i64 }),
         );
     }
 

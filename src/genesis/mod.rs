@@ -260,15 +260,15 @@ mod tests {
     fn test_genesis_config_valid_osaka1() {
         let cfg = parse_config_with_osaka1(json!({
             "time": 1820000000,
-            "minimumBaseFeeWei": 10000000000u64,
-            "minimumBlobBaseFeeWei": 10000000000u64
+            "minimumBaseFeeWei": 1000000000u64,
+            "minimumBlobBaseFeeWei": 1000000000u64
         }))
         .expect("berachain field must deserialize");
 
         let osaka1_config = cfg.osaka1.expect("Osaka1 should be configured");
         assert_eq!(osaka1_config.time, 1820000000);
-        assert_eq!(osaka1_config.minimum_base_fee_wei, 10000000000);
-        assert_eq!(osaka1_config.minimum_blob_base_fee_wei, 10000000000);
+        assert_eq!(osaka1_config.minimum_base_fee_wei, 1000000000);
+        assert_eq!(osaka1_config.minimum_blob_base_fee_wei, 1000000000);
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod tests {
         // fail loudly instead of silently defaulting to 0.
         let res = parse_config_with_osaka1(json!({
             "time": 1820000000,
-            "minimumBaseFeeWei": 10000000000u64
+            "minimumBaseFeeWei": 1000000000u64
         }));
         assert!(res.is_err());
     }
@@ -288,7 +288,7 @@ mod tests {
         // below the EIP-4844 minimum, so both floors must be non-zero when Osaka1 is configured.
         let res = parse_config_with_osaka1(json!({
             "time": 1820000000,
-            "minimumBaseFeeWei": 10000000000u64,
+            "minimumBaseFeeWei": 1000000000u64,
             "minimumBlobBaseFeeWei": 0
         }));
         assert!(res.is_err());
