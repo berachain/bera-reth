@@ -100,12 +100,15 @@ async fn setup_deposit_test_with_osaka(
 ) -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
     let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
-    let genesis_json = std::fs::read_to_string(genesis_path)?;
-    let mut genesis: Genesis = parse_genesis(&genesis_json)?;
-    genesis.config.deposit_contract_address = Some(DEPOSIT_CONTRACT);
+    let mut genesis_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(genesis_path)?)?;
     if let Some(osaka_time) = osaka_time {
-        genesis.config.osaka_time = Some(osaka_time);
+        // Osaka1 must activate at or after Osaka, so it moves with it.
+        genesis_json["config"]["osakaTime"] = osaka_time.into();
+        genesis_json["config"]["berachain"]["osaka1"]["time"] = osaka_time.into();
     }
+    let mut genesis: Genesis = parse_genesis(&genesis_json.to_string())?;
+    genesis.config.deposit_contract_address = Some(DEPOSIT_CONTRACT);
     let bytecode = Bytes::from(alloy_primitives::hex::decode(DEPOSIT_EMITTER_BYTECODE).unwrap());
     genesis
         .alloc

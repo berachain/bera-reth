@@ -7,7 +7,7 @@ use reth::{revm::primitives::address, rpc::types::serde_helpers::OtherFields};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use config::{Prague1Config, Prague2Config, Prague3Config, Prague4Config};
+pub use config::{Osaka1Config, Prague1Config, Prague2Config, Prague3Config, Prague4Config};
 
 /// Errors for Berachain genesis configuration parsing
 #[derive(Debug, Error)]
@@ -37,6 +37,8 @@ pub struct BerachainGenesisConfig {
     pub prague3: Option<Prague3Config>,
     /// Configuration for the Prague4 hardfork, which ends Prague3 restrictions
     pub prague4: Option<Prague4Config>,
+    /// Configuration for the Osaka1 hardfork, which raises the minimum base fee floor
+    pub osaka1: Option<Osaka1Config>,
 }
 
 impl Default for BerachainGenesisConfig {
@@ -55,6 +57,7 @@ impl Default for BerachainGenesisConfig {
             }),
             prague3: None, // Not activated by default
             prague4: None, // Not activated by default
+            osaka1: None,  // Not activated by default
         }
     }
 }
@@ -116,10 +119,30 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
                     }
                 }
 
+                // Both Osaka1 floors are consensus-critical; a zero value is a misconfiguration,
+                // not "no floor" (0 would drop the blob base fee below the EIP-4844 minimum).
+                if let Some(osaka1_config) = cfg.osaka1.as_ref() &&
+                    (osaka1_config.minimum_base_fee_wei == 0 ||
+                        osaka1_config.minimum_blob_base_fee_wei == 0)
+                {
+                    return Err(BerachainConfigError::InvalidConfig(serde_json::Error::io(
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "Osaka1 hardfork requires a non-zero minimum base fee and minimum blob base fee",
+                        ),
+                    )));
+                }
+
                 Ok(cfg)
             }
             Some(Err(e)) => Err(BerachainConfigError::InvalidConfig(e)),
-            None => Ok(Self { prague1: None, prague2: None, prague3: None, prague4: None }),
+            None => Ok(Self {
+                prague1: None,
+                prague2: None,
+                prague3: None,
+                prague4: None,
+                osaka1: None,
+            }),
         }
     }
 }
@@ -127,8 +150,31 @@ impl TryFrom<&OtherFields> for BerachainGenesisConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonrpsee_core::__reexports::serde_json::Value;
+    use jsonrpsee_core::__reexports::serde_json::{Value, json};
     use reth::rpc::types::serde_helpers::OtherFields;
+
+    /// Parses a genesis config with valid Prague1/Prague2 sections and the given `osaka1` value.
+    fn parse_config_with_osaka1(
+        osaka1: Value,
+    ) -> Result<BerachainGenesisConfig, BerachainConfigError> {
+        let json = json!({
+          "berachain": {
+            "prague1": {
+                "time": 1620000000,
+                "baseFeeChangeDenominator": 48,
+                "minimumBaseFeeWei": 1000000000,
+                "polDistributorAddress": "0x4200000000000000000000000000000000000042"
+            },
+            "prague2": {
+                "time": 1720000000,
+                "minimumBaseFeeWei": 0
+            },
+            "osaka1": osaka1
+          }
+        });
+        let other_fields = OtherFields::try_from(json).expect("must be a valid genesis config");
+        BerachainGenesisConfig::try_from(&other_fields)
+    }
 
     #[test]
     fn test_genesis_config_missing_berachain_field() {
@@ -208,6 +254,44 @@ mod tests {
         assert_eq!(prague2_config.minimum_base_fee_wei, 0);
 
         assert!(cfg.is_berachain());
+    }
+
+    #[test]
+    fn test_genesis_config_valid_osaka1() {
+        let cfg = parse_config_with_osaka1(json!({
+            "time": 1820000000,
+            "minimumBaseFeeWei": 1000000000u64,
+            "minimumBlobBaseFeeWei": 1000000000u64
+        }))
+        .expect("berachain field must deserialize");
+
+        let osaka1_config = cfg.osaka1.expect("Osaka1 should be configured");
+        assert_eq!(osaka1_config.time, 1820000000);
+        assert_eq!(osaka1_config.minimum_base_fee_wei, 1000000000);
+        assert_eq!(osaka1_config.minimum_blob_base_fee_wei, 1000000000);
+    }
+
+    #[test]
+    fn test_genesis_config_osaka1_missing_blob_floor_fails() {
+        // Both floors are consensus-critical, so omitting (or misspelling) either key must
+        // fail loudly instead of silently defaulting to 0.
+        let res = parse_config_with_osaka1(json!({
+            "time": 1820000000,
+            "minimumBaseFeeWei": 1000000000u64
+        }));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_genesis_config_osaka1_zero_floor_fails() {
+        // A zero floor is a misconfiguration, not "no floor": for the blob fee it would drop
+        // below the EIP-4844 minimum, so both floors must be non-zero when Osaka1 is configured.
+        let res = parse_config_with_osaka1(json!({
+            "time": 1820000000,
+            "minimumBaseFeeWei": 1000000000u64,
+            "minimumBlobBaseFeeWei": 0
+        }));
+        assert!(res.is_err());
     }
 
     #[test]
