@@ -2321,34 +2321,48 @@ mod tests {
             timestamp: 1758124800,
         };
 
+        // Osaka active, before Osaka1
+        let head_osaka_active = Head {
+            number: 100,
+            hash: B256::ZERO,
+            difficulty: Default::default(),
+            total_difficulty: Default::default(),
+            timestamp: 1779897600,
+        };
+
         let fork_id_before_prague = spec.fork_id(&head_before_prague);
         let fork_id_prague = spec.fork_id(&head_prague_active);
         let fork_id_prague1 = spec.fork_id(&head_prague1_active);
         let fork_id_prague2 = spec.fork_id(&head_prague2_active);
+        let fork_id_osaka = spec.fork_id(&head_osaka_active);
 
         // Test fork_filter at each stage
         let fork_filter_before_prague = spec.fork_filter(head_before_prague);
         let fork_filter_prague = spec.fork_filter(head_prague_active);
         let fork_filter_prague1 = spec.fork_filter(head_prague1_active);
         let fork_filter_prague2 = spec.fork_filter(head_prague2_active);
+        let fork_filter_osaka = spec.fork_filter(head_osaka_active);
 
         // Verify fork_filter.current() matches fork_id() at each stage
         assert_eq!(fork_filter_before_prague.current(), fork_id_before_prague);
         assert_eq!(fork_filter_prague.current(), fork_id_prague);
         assert_eq!(fork_filter_prague1.current(), fork_id_prague1);
         assert_eq!(fork_filter_prague2.current(), fork_id_prague2);
+        assert_eq!(fork_filter_osaka.current(), fork_id_osaka);
 
         // Verify next fork schedule matches Bepolia configuration
         assert_eq!(fork_id_before_prague.next, 1746633600, "next fork should be Prague");
         assert_eq!(fork_id_prague.next, 1754496000, "next fork should be Prague1");
         assert_eq!(fork_id_prague1.next, 1758124800, "next fork should be Prague2");
         assert_eq!(fork_id_prague2.next, 1779897600, "next fork should be Osaka");
+        assert_eq!(fork_id_osaka.next, 1784736000, "next fork should be Osaka1");
 
         // Expected fork hash values for Bepolia (matching bera-geth test values)
         assert_eq!(fork_id_before_prague.hash, ForkHash([0xae, 0x79, 0x53, 0x0c]));
         assert_eq!(fork_id_prague.hash, ForkHash([0xd0, 0x7d, 0x9f, 0x27]));
         assert_eq!(fork_id_prague1.hash, ForkHash([0x33, 0x15, 0x3c, 0x0a]));
         assert_eq!(fork_id_prague2.hash, ForkHash([0x2e, 0xdd, 0x8d, 0x57]));
+        assert_eq!(fork_id_osaka.hash, ForkHash([0x79, 0x16, 0x74, 0x96]));
     }
 
     #[test]
@@ -2529,7 +2543,7 @@ mod tests {
         assert_eq!(latest_fork_id.next, 0, "latest fork should have no next fork");
 
         // Verify this matches the final Osaka1 state.
-        assert_eq!(latest_fork_id.hash, ForkHash([0xdf, 0x0c, 0x9e, 0xc9]));
+        assert_eq!(latest_fork_id.hash, ForkHash([0x26, 0x57, 0x61, 0xfd]));
     }
 
     #[test]
