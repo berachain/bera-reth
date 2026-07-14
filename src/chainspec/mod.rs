@@ -61,7 +61,7 @@ pub struct BerachainChainSpec {
     /// The minimum base fee in wei for Osaka1 (0 if not configured)
     pub osaka1_minimum_base_fee: u64,
     /// The minimum blob base fee in wei for Osaka1 (0 if not configured)
-    pub osaka1_min_blob_base_fee: u64,
+    pub osaka1_minimum_blob_base_fee: u64,
 }
 
 impl BerachainChainSpec {
@@ -291,7 +291,7 @@ impl EthChainSpec for BerachainChainSpec {
         // Osaka1 raises the minimum blob base fee (anti-spam). Setting min_blob_fee lifts the
         // EIP-4844 blob fee curve so the at-target blob base fee equals this floor.
         if self.is_osaka1_active_at_timestamp(timestamp) {
-            params.min_blob_fee = self.osaka1_min_blob_base_fee as u128;
+            params.min_blob_fee = self.osaka1_minimum_blob_base_fee as u128;
         }
         Some(params)
     }
@@ -362,7 +362,7 @@ impl EthChainSpec for BerachainChainSpec {
         let osaka1_details = match self.fork(BerachainHardfork::Osaka1) {
             ForkCondition::Timestamp(time) => format!(
                 "\nBerachain Osaka1 configuration: {{time={time}, min_base_fee_wei={}, min_blob_base_fee_wei={}}}",
-                self.osaka1_minimum_base_fee, self.osaka1_min_blob_base_fee,
+                self.osaka1_minimum_base_fee, self.osaka1_minimum_blob_base_fee,
             ),
             _ => String::new(),
         };
@@ -503,7 +503,7 @@ impl BerachainChainSpec {
             prague3_config: None,
             prague4_config: None,
             osaka1_minimum_base_fee: 0,
-            osaka1_min_blob_base_fee: 0,
+            osaka1_minimum_blob_base_fee: 0,
         }
     }
 }
@@ -835,7 +835,7 @@ impl From<Genesis> for BerachainChainSpec {
         let prague2_minimum_base_fee = prague2_config.minimum_base_fee_wei;
         let osaka1_minimum_base_fee =
             osaka1_config_opt.as_ref().map(|cfg| cfg.minimum_base_fee_wei).unwrap_or(0);
-        let osaka1_min_blob_base_fee =
+        let osaka1_minimum_blob_base_fee =
             osaka1_config_opt.as_ref().map(|cfg| cfg.minimum_blob_base_fee_wei).unwrap_or(0);
 
         Self {
@@ -847,7 +847,7 @@ impl From<Genesis> for BerachainChainSpec {
             prague3_config: prague3_config_opt,
             prague4_config: prague4_config_opt,
             osaka1_minimum_base_fee,
-            osaka1_min_blob_base_fee,
+            osaka1_minimum_blob_base_fee,
         }
     }
 }
@@ -1290,7 +1290,7 @@ mod tests {
                 "minimumBlobBaseFeeWei": 1000000000i64
             }),
         );
-        assert_eq!(spec.osaka1_min_blob_base_fee, 1_000_000_000);
+        assert_eq!(spec.osaka1_minimum_blob_base_fee, 1_000_000_000);
         assert_eq!(spec.blob_params_at_timestamp(2999).unwrap().min_blob_fee, 1);
         let after = spec.blob_params_at_timestamp(3000).unwrap();
         assert_eq!(after.min_blob_fee, 1_000_000_000);
