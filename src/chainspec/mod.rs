@@ -361,9 +361,8 @@ impl EthChainSpec for BerachainChainSpec {
 
         let osaka1_details = match self.fork(BerachainHardfork::Osaka1) {
             ForkCondition::Timestamp(time) => format!(
-                "\nBerachain Osaka1 configuration: {{time={time}, min_base_fee={} gwei, min_blob_base_fee={} gwei}}",
-                self.osaka1_minimum_base_fee / 1_000_000_000,
-                self.osaka1_min_blob_base_fee as f64 / 1_000_000_000.0,
+                "\nBerachain Osaka1 configuration: {{time={time}, min_base_fee_wei={}, min_blob_base_fee_wei={}}}",
+                self.osaka1_minimum_base_fee, self.osaka1_min_blob_base_fee,
             ),
             _ => String::new(),
         };
