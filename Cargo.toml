@@ -79,7 +79,6 @@ alloy-rpc-types-trace = "1.6.3"
 eyre = "0.6.12"
 reth-e2e-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
-reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4", features = ["test-utils"] }
 reth-trie-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 revm-inspectors = "0.34.2"
 test-fuzz = "7"

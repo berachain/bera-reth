@@ -1,14 +1,14 @@
-pub mod min_priority_fee;
 pub mod transaction;
 
 use crate::{
-    chainspec::BerachainChainSpec,
-    pool::{min_priority_fee::MinPriorityFeeValidator, transaction::BerachainPooledTransaction},
+    chainspec::BerachainChainSpec, pool::transaction::BerachainPooledTransaction,
     primitives::BerachainPrimitives,
 };
-use alloy_consensus::BlockHeader;
 use alloy_eips::{eip7840::BlobParams, merge::EPOCH_SLOTS};
-use reth::{api::NodeTypes, transaction_pool::blobstore::DiskFileBlobStore};
+use reth::{
+    api::NodeTypes,
+    transaction_pool::{EthTransactionPool, blobstore::DiskFileBlobStore},
+};
 use reth_chainspec::EthChainSpec;
 use reth_evm::ConfigureEvm;
 use reth_node_api::FullNodeTypes;
@@ -16,10 +16,7 @@ use reth_node_builder::{
     BuilderContext,
     components::{PoolBuilder, TxPoolBuilder},
 };
-use reth_storage_api::BlockReaderIdExt;
-use reth_transaction_pool::{
-    CoinbaseTipOrdering, EthTransactionValidator, Pool, TransactionValidationTaskExecutor,
-};
+use reth_transaction_pool::TransactionValidationTaskExecutor;
 use std::{fmt::Debug, time::SystemTime};
 use tracing::{debug, info};
 
@@ -32,16 +29,8 @@ where
     Node: FullNodeTypes<Types = Types>,
     Evm: ConfigureEvm<Primitives = BerachainPrimitives> + Clone + 'static,
 {
-    type Pool = Pool<
-        TransactionValidationTaskExecutor<
-            MinPriorityFeeValidator<
-                EthTransactionValidator<Node::Provider, BerachainPooledTransaction, Evm>,
-                BerachainChainSpec,
-            >,
-        >,
-        CoinbaseTipOrdering<BerachainPooledTransaction>,
-        DiskFileBlobStore,
-    >;
+    type Pool =
+        EthTransactionPool<Node::Provider, DiskFileBlobStore, Evm, BerachainPooledTransaction>;
 
     async fn build_pool(
         self,
@@ -80,6 +69,7 @@ where
                 .with_local_transactions_config(pool_config.local_transactions_config.clone())
                 .set_tx_fee_cap(ctx.config().rpc.rpc_tx_fee_cap)
                 .with_max_tx_gas_limit(ctx.config().txpool.max_tx_gas_limit)
+                .with_minimum_priority_fee(ctx.config().txpool.minimum_priority_fee)
                 .with_additional_tasks(ctx.config().txpool.additional_validation_tasks)
                 .build_with_tasks(ctx.task_executor().clone(), blob_store.clone());
 
@@ -90,27 +80,6 @@ where
                 debug!(target: "reth::cli", "Initialized KZG settings");
             });
         }
-
-        // Enforce the configured minimum priority fee across ALL transaction types. reth's
-        // built-in filter exempts legacy/EIP-2930 and checks the declared fee cap instead of
-        // the effective tip, both of which a spammer can exploit.
-        let minimum_priority_fee = ctx.config().txpool.minimum_priority_fee.unwrap_or(0);
-        let chain_spec = ctx.chain_spec();
-        let initial_base_fee = ctx
-            .provider()
-            .latest_header()?
-            .and_then(|header| chain_spec.next_block_base_fee(header.header(), header.timestamp()))
-            .unwrap_or_default();
-        let local_transactions_config = pool_config.local_transactions_config.clone();
-        let validator = validator.map(move |inner| {
-            MinPriorityFeeValidator::new(
-                inner,
-                minimum_priority_fee,
-                local_transactions_config.clone(),
-                chain_spec.clone(),
-                initial_base_fee,
-            )
-        });
 
         let transaction_pool = TxPoolBuilder::new(ctx)
             .with_validator(validator)
