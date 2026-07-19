@@ -75,6 +75,7 @@ where
                 prev_proposer_pubkey,
                 evm_env.block_env.number(),
                 base_fee,
+                evm_env.block_env.gas_limit(),
             )?;
 
             transactions.insert(0, pol_transaction);

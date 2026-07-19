@@ -3,17 +3,15 @@ use crate::{
     transaction::BerachainTxEnvelope,
 };
 use alloy_consensus::BlockHeader;
-use reth::revm::context::result::ExecutionResult;
+use alloy_primitives::B256;
 use reth_evm::{
-    Evm,
-    block::{BlockExecutionError, BlockExecutor, CommitChanges},
+    block::{BlockExecutionError, BlockExecutor, CommitChanges, GasOutput},
     execute::{BlockBuilder, BlockBuilderOutcome, ExecutorTx},
 };
 use reth_primitives_traits::RecoveredBlock;
 use reth_storage_api::StateProvider;
+use reth_trie_common::updates::TrieUpdates;
 use std::sync::Arc;
-
-type EResult<E> = ExecutionResult<<<E as BlockExecutor>::Evm as Evm>::HaltReason>;
 
 /// Berachain block builder wrapper that fixes sender/transaction mismatch from PoL injection.
 ///
@@ -131,8 +129,8 @@ where
     fn execute_transaction_with_commit_condition(
         &mut self,
         tx: impl ExecutorTx<Self::Executor>,
-        f: impl FnOnce(&EResult<Self::Executor>) -> CommitChanges,
-    ) -> Result<Option<u64>, BlockExecutionError> {
+        f: impl FnOnce(&<Self::Executor as BlockExecutor>::Result) -> CommitChanges,
+    ) -> Result<Option<GasOutput>, BlockExecutionError> {
         self.inner.execute_transaction_with_commit_condition(tx, f)
     }
 
@@ -146,8 +144,9 @@ where
     fn finish(
         self,
         state_provider: impl StateProvider,
+        state_root_precomputed: Option<(B256, TrieUpdates)>,
     ) -> Result<BlockBuilderOutcome<Self::Primitives>, BlockExecutionError> {
-        let mut outcome = self.inner.finish(state_provider)?;
+        let mut outcome = self.inner.finish(state_provider, state_root_precomputed)?;
         fix_pol_senders(&mut outcome, &self.chain_spec)?;
         Ok(outcome)
     }
@@ -214,6 +213,7 @@ mod tests {
             hashed_state: HashedPostState::default(),
             trie_updates: TrieUpdates::default(),
             block: recovered,
+            block_access_list: None,
         }
     }
 

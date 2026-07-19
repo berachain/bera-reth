@@ -1,15 +1,18 @@
 use crate::transaction::POL_TX_TYPE;
 use alloy_primitives::{Address, Bytes, TxKind};
 use reth::revm::{
-    Context, ExecuteEvm, InspectEvm, InspectSystemCallEvm, Inspector, MainBuilder, MainContext,
-    SystemCallEvm,
+    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext,
     context::{
-        BlockEnv, CfgEnv, Evm as RevmEvm, Transaction as TxEnvTransaction, TxEnv,
+        BlockEnv, CfgEnv, ContextSetters, DBErrorMarker, Evm as RevmEvm,
+        Transaction as TxEnvTransaction, TxEnv,
         result::{EVMError, HaltReason, ResultAndState},
     },
     context_interface::result::ExecutionResult,
-    handler::{EthFrame, EthPrecompiles, PrecompileProvider, instructions::EthInstructions},
-    inspector::NoOpInspector,
+    handler::{
+        EthFrame, EthPrecompiles, Handler, MainnetHandler, PrecompileProvider, SystemCallTx,
+        instructions::EthInstructions,
+    },
+    inspector::{InspectorHandler, NoOpInspector},
     interpreter::{InterpreterResult, interpreter::EthInterpreter},
     precompile::{PrecompileSpecId, Precompiles},
     primitives::hardfork::SpecId,
@@ -197,6 +200,10 @@ where
         &self.block
     }
 
+    fn cfg_env(&self) -> &CfgEnv<Self::Spec> {
+        &self.cfg
+    }
+
     fn chain_id(&self) -> u64 {
         self.cfg.chain_id
     }
@@ -212,13 +219,12 @@ where
                 }
                 TxKind::Call(to) => {
                     let mut result = self.transact_system_call(tx.caller, to, tx.data)?;
-                    // Set gas_used to 0 for POL transactions
+                    // Zero out gas accounting for POL transactions
                     result.result = match result.result {
-                        ExecutionResult::Success { reason, gas_refunded, logs, output, .. } => {
+                        ExecutionResult::Success { reason, logs, output, .. } => {
                             ExecutionResult::Success {
                                 reason,
-                                gas_used: 0,
-                                gas_refunded,
+                                gas: reth::revm::context::result::ResultGas::default(),
                                 logs,
                                 output,
                             }
@@ -238,11 +244,22 @@ where
         contract: Address,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        if self.inspect {
-            self.inner.inspect_system_call_with_caller(caller, contract, data)
+        // System calls run with the block gas limit (36M per the Berachain genesis
+        // configurations) instead of revm's default budget, which adds an EIP-8037
+        // state-gas reservoir that would be observable on-chain via `gasleft()`
+        // (e.g. by the PoL distributor).
+        let mut tx = TxEnv::new_system_tx_with_caller(caller, contract, data);
+        tx.gas_limit = self.block.gas_limit;
+        self.inner.set_tx(tx);
+        let result = if self.inspect {
+            MainnetHandler::<_, Self::Error, EthFrame>::default()
+                .inspect_run_system_call(&mut self.inner)?
         } else {
-            self.inner.system_call_with_caller(caller, contract, data)
-        }
+            MainnetHandler::<_, Self::Error, EthFrame>::default()
+                .run_system_call(&mut self.inner)?
+        };
+        let state = self.inner.finalize();
+        Ok(ResultAndState::new(result, state))
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
@@ -277,7 +294,7 @@ impl EvmFactory for BerachainEvmFactory {
         BerachainEvm<DB, I, Self::Precompiles>;
     type Context<DB: Database> = Context<BlockEnv, TxEnv, CfgEnv, DB>;
     type Tx = TxEnv;
-    type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError>;
+    type Error<DBError: DBErrorMarker> = EVMError<DBError>;
     type HaltReason = HaltReason;
     type Spec = SpecId;
     type Precompiles = PrecompilesMap;
@@ -411,15 +428,15 @@ mod tests {
 
         // Both should have gas_used = 0
         if let Ok(result) = &result_with_tracer &&
-            let ExecutionResult::Success { gas_used, .. } = &result.result
+            let ExecutionResult::Success { gas, .. } = &result.result
         {
-            assert_eq!(*gas_used, 0);
+            assert_eq!(gas.tx_gas_used(), 0);
         }
 
         if let Ok(result) = &result_without_tracer &&
-            let ExecutionResult::Success { gas_used, .. } = &result.result
+            let ExecutionResult::Success { gas, .. } = &result.result
         {
-            assert_eq!(*gas_used, 0);
+            assert_eq!(gas.tx_gas_used(), 0);
         }
 
         // Verify tracer captured system call details
@@ -583,7 +600,7 @@ mod osaka_eip_tests {
         );
         let result = run_tx(osaka_cfg(), db, tx);
 
-        let gas_used = result.result.gas_used();
+        let gas_used = result.result.tx_gas_used();
         // Base tx (21000) + calldata (160 bytes non-zero, roughly 160*16=2560) +
         // precompile cost (6900) => ~30460 expected.
         assert!(
@@ -681,9 +698,10 @@ mod osaka_eip_tests {
         );
         let result = run_tx(osaka_cfg(), db, tx);
 
-        let ExecutionResult::Success { output, gas_used, .. } = result.result else {
+        let ExecutionResult::Success { output, gas, .. } = result.result else {
             panic!("MODEXP with small inputs should succeed");
         };
+        let gas_used = gas.tx_gas_used();
         assert_eq!(output.data().last().copied(), Some(3u8), "2^3 mod 5 == 3");
         // gas_used covers tx base + calldata + MODEXP. MODEXP alone must cost >= 500.
         assert!(

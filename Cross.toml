@@ -16,6 +16,7 @@ pre-build = [
 ]
 
 # Use Ubuntu 24.04 for both targets to get newer GLIBC that matches current Rust toolchain
+# (MSRV is 1.95, inherited from reth v2.4.0)
 [target.x86_64-unknown-linux-gnu]
 image = "ubuntu:24.04"
 pre-build = [

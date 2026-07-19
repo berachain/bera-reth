@@ -1,4 +1,4 @@
-# Copied from reth v1.8.1
+# Synced with reth v2.4.0
 import json
 import yaml
 import sys

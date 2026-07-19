@@ -4,7 +4,6 @@ use crate::transaction::{BerachainTxType, POL_TX_TYPE};
 use alloy_consensus::TxType;
 use alloy_eips::eip2718::{EIP4844_TX_TYPE_ID, EIP7702_TX_TYPE_ID};
 use bytes::{Buf, BufMut};
-use reth::providers::errors::db::DatabaseError;
 use reth_codecs::{Compact, txtype::COMPACT_EXTENDED_IDENTIFIER_FLAG};
 use reth_db_api::table::{Compress, Decompress};
 use reth_primitives_traits::InMemorySize;
@@ -62,7 +61,7 @@ impl Compress for BerachainTxType {
 }
 
 impl Decompress for BerachainTxType {
-    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
+    fn decompress(value: &[u8]) -> Result<Self, reth_codecs::DecompressError> {
         let (tx, _) = reth_codecs::Compact::from_compact(value, value.len());
         Ok(tx)
     }

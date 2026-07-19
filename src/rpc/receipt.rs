@@ -38,9 +38,23 @@ impl BerachainReceiptEnvelope {
         next_log_index: usize,
         meta: alloy_consensus::transaction::TransactionMeta,
     ) -> Self {
-        let rpc_receipt = receipt.into_rpc(next_log_index, meta);
+        let mut log_index = next_log_index;
+        let rpc_receipt = receipt.map_logs(|log| {
+            let idx = log_index;
+            log_index += 1;
+            Log {
+                inner: log,
+                block_hash: Some(meta.block_hash),
+                block_number: Some(meta.block_number),
+                block_timestamp: Some(meta.timestamp),
+                transaction_hash: Some(meta.tx_hash),
+                transaction_index: Some(meta.index),
+                log_index: Some(idx as u64),
+                removed: false,
+            }
+        });
         let alloy_receipt = Receipt {
-            status: Eip658Value::Eip658(rpc_receipt.status()),
+            status: Eip658Value::Eip658(rpc_receipt.success),
             cumulative_gas_used: rpc_receipt.cumulative_gas_used,
             logs: rpc_receipt.logs,
         };
