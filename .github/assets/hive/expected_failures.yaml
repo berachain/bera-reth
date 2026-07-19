@@ -1,4 +1,4 @@
-# Synced with reth v1.11.4
+# Last tuned against reth v1.11.4; re-validate via a hive run on the reth v2.4.0 nightly image
 # tracked by https://github.com/paradigmxyz/reth/issues/13879
 rpc-compat:
   - debug_getRawBlock/get-invalid-number (bera-reth)

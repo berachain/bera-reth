@@ -4,11 +4,7 @@ use crate::{
     transaction::{BerachainTxEnvelope, BerachainTxType, POL_TX_TYPE},
 };
 use alloy_consensus::Transaction;
-use alloy_eips::eip2930::AccessList;
-use alloy_network::{
-    BuildResult, Network, NetworkWallet, TransactionBuilder, TransactionBuilderError,
-};
-use alloy_primitives::{Address, B256, Bytes, ChainId, TxKind, U256};
+use alloy_primitives::{B256, U256};
 use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
@@ -16,17 +12,18 @@ use reth::{
     providers::ProviderHeader,
     rpc::compat::RpcConvert,
     tasks::{
-        TaskSpawner,
+        Runtime,
         pool::{BlockingTaskGuard, BlockingTaskPool},
     },
-    transaction_pool::{PoolTransaction, TransactionPool},
+    transaction_pool::TransactionPool,
 };
 use reth_rpc_eth_api::{
     EthApiTypes, RpcNodeCore, RpcNodeCoreExt,
     helpers::{
-        Call, EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, LoadBlock,
-        LoadFee, LoadPendingBlock, LoadReceipt, LoadState, LoadTransaction, SpawnBlocking, Trace,
-        estimate::EstimateCall, pending_block::PendingEnvBuilder, spec::SignersForRpc,
+        Call, EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthSubscriptions, EthTransactions,
+        LoadBlock, LoadFee, LoadPendingBlock, LoadReceipt, LoadState, LoadTransaction,
+        SpawnBlocking, Trace, bal::GetBlockAccessList, estimate::EstimateCall,
+        pending_block::PendingEnvBuilder, spec::SignersForRpc,
     },
 };
 use reth_rpc_eth_types::{
@@ -96,230 +93,16 @@ impl From<BerachainTxType> for TransactionRequest {
     }
 }
 
-impl TransactionBuilder<BerachainNetwork> for TransactionRequest {
-    fn chain_id(&self) -> Option<ChainId> {
-        self.chain_id
-    }
-
-    fn set_chain_id(&mut self, chain_id: ChainId) {
-        self.chain_id = Some(chain_id);
-    }
-
-    fn nonce(&self) -> Option<u64> {
-        self.nonce
-    }
-
-    fn set_nonce(&mut self, nonce: u64) {
-        self.nonce = Some(nonce);
-    }
-
-    fn take_nonce(&mut self) -> Option<u64> {
-        self.nonce.take()
-    }
-
-    fn input(&self) -> Option<&Bytes> {
-        self.input.input.as_ref()
-    }
-
-    fn set_input<T: Into<Bytes>>(&mut self, input: T) {
-        self.input.input = Some(input.into());
-    }
-
-    fn from(&self) -> Option<Address> {
-        self.from
-    }
-
-    fn set_from(&mut self, from: Address) {
-        self.from = Some(from);
-    }
-
-    fn kind(&self) -> Option<TxKind> {
-        self.to
-    }
-
-    fn clear_kind(&mut self) {
-        self.to = None;
-    }
-
-    fn set_kind(&mut self, kind: TxKind) {
-        self.to = Some(kind);
-    }
-
-    fn value(&self) -> Option<U256> {
-        self.value
-    }
-
-    fn set_value(&mut self, value: U256) {
-        self.value = Some(value);
-    }
-
-    fn gas_price(&self) -> Option<u128> {
-        self.gas_price
-    }
-
-    fn set_gas_price(&mut self, gas_price: u128) {
-        self.gas_price = Some(gas_price);
-    }
-
-    fn max_fee_per_gas(&self) -> Option<u128> {
-        self.max_fee_per_gas
-    }
-
-    fn set_max_fee_per_gas(&mut self, max_fee_per_gas: u128) {
-        self.max_fee_per_gas = Some(max_fee_per_gas);
-    }
-
-    fn max_priority_fee_per_gas(&self) -> Option<u128> {
-        self.max_priority_fee_per_gas
-    }
-
-    fn set_max_priority_fee_per_gas(&mut self, max_priority_fee_per_gas: u128) {
-        self.max_priority_fee_per_gas = Some(max_priority_fee_per_gas);
-    }
-
-    fn gas_limit(&self) -> Option<u64> {
-        self.gas
-    }
-
-    fn set_gas_limit(&mut self, gas_limit: u64) {
-        self.gas = Some(gas_limit);
-    }
-
-    fn access_list(&self) -> Option<&AccessList> {
-        self.access_list.as_ref()
-    }
-
-    fn set_access_list(&mut self, access_list: AccessList) {
-        self.access_list = Some(access_list);
-    }
-
-    fn complete_type(
-        &self,
-        ty: <BerachainNetwork as Network>::TxType,
-    ) -> Result<(), Vec<&'static str>> {
-        let mut missing = Vec::new();
-
-        if self.from.is_none() {
-            missing.push("from");
-        }
-        if self.to.is_none() {
-            missing.push("to");
-        }
-        if self.gas.is_none() {
-            missing.push("gas");
-        }
-
-        match ty {
-            BerachainTxType::Ethereum(_) => {
-                if self.gas_price.is_none() && self.max_fee_per_gas.is_none() {
-                    missing.push("gas_price or max_fee_per_gas");
-                }
-            }
-            BerachainTxType::Berachain => {
-                if self.gas_price.is_none() {
-                    missing.push("gas_price");
-                }
-            }
-        }
-
-        if missing.is_empty() { Ok(()) } else { Err(missing) }
-    }
-
-    fn can_submit(&self) -> bool {
-        self.from.is_some() &&
-            self.to.is_some() &&
-            self.gas.is_some() &&
-            (self.gas_price.is_some() || self.max_fee_per_gas.is_some())
-    }
-
-    fn can_build(&self) -> bool {
-        self.to.is_some() &&
-            self.gas.is_some() &&
-            (self.gas_price.is_some() || self.max_fee_per_gas.is_some())
-    }
-
-    fn output_tx_type(&self) -> <BerachainNetwork as Network>::TxType {
-        match self.transaction_type {
-            Some(POL_TX_TYPE) => BerachainTxType::Berachain,
-            Some(ty) => BerachainTxType::Ethereum(
-                alloy_consensus::TxType::try_from(ty).unwrap_or(alloy_consensus::TxType::Legacy),
-            ),
-            None => {
-                if self.max_fee_per_gas.is_some() || self.max_priority_fee_per_gas.is_some() {
-                    BerachainTxType::Ethereum(alloy_consensus::TxType::Eip1559)
-                } else if self.access_list.is_some() {
-                    BerachainTxType::Ethereum(alloy_consensus::TxType::Eip2930)
-                } else {
-                    BerachainTxType::Ethereum(alloy_consensus::TxType::Legacy)
-                }
-            }
-        }
-    }
-
-    fn output_tx_type_checked(&self) -> Option<<BerachainNetwork as Network>::TxType> {
-        if <Self as TransactionBuilder<BerachainNetwork>>::can_build(self) {
-            Some(<Self as TransactionBuilder<BerachainNetwork>>::output_tx_type(self))
-        } else {
-            None
-        }
-    }
-
-    fn prep_for_submission(&mut self) {
-        if self.nonce.is_none() {
-            self.nonce = Some(0);
-        }
-        if self.value.is_none() {
-            self.value = Some(U256::ZERO);
-        }
-        if self.input.input.is_none() {
-            self.input.input = Some(Bytes::new());
-        }
-    }
-
-    fn build_unsigned(
-        self,
-    ) -> BuildResult<<BerachainNetwork as Network>::UnsignedTx, BerachainNetwork> {
-        Ok(<Self as TransactionBuilder<BerachainNetwork>>::output_tx_type(&self))
-    }
-
-    async fn build<W: NetworkWallet<BerachainNetwork>>(
-        self,
-        _wallet: &W,
-    ) -> Result<<BerachainNetwork as Network>::TxEnvelope, TransactionBuilderError<BerachainNetwork>>
-    {
-        Err(TransactionBuilderError::InvalidTransactionRequest(
-            <Self as TransactionBuilder<BerachainNetwork>>::output_tx_type(&self),
-            vec!["unsupported"],
-        ))
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct BerachainNetwork {
     _private: (),
 }
 
-impl Network for BerachainNetwork {
-    type TxType = BerachainTxType;
-
-    type TxEnvelope = BerachainTxEnvelope;
-
-    type UnsignedTx = BerachainTxType;
-
-    type ReceiptEnvelope = BerachainReceiptEnvelope;
-
-    type Header = BerachainHeader;
-
-    type TransactionRequest = TransactionRequest;
-
+impl reth_rpc_convert::RpcTypes for BerachainNetwork {
+    type Header = alloy_rpc_types_eth::Header<BerachainHeader>;
+    type Receipt = alloy_rpc_types_eth::TransactionReceipt<BerachainReceiptEnvelope>;
     type TransactionResponse = RpcTransaction<BerachainTxEnvelope>;
-
-    type ReceiptResponse = alloy_rpc_types_eth::TransactionReceipt<BerachainReceiptEnvelope>;
-
-    type HeaderResponse = alloy_rpc_types_eth::Header<BerachainHeader>;
-
-    type BlockResponse =
-        alloy_rpc_types_eth::Block<Self::TransactionResponse, Self::HeaderResponse>;
+    type TransactionRequest = TransactionRequest;
 }
 
 #[derive(Deref)]
@@ -409,7 +192,7 @@ where
     Rpc: RpcConvert<Error = EthApiError>,
 {
     #[inline]
-    fn io_task_spawner(&self) -> impl TaskSpawner {
+    fn io_task_spawner(&self) -> &Runtime {
         self.inner.task_spawner()
     }
 
@@ -444,19 +227,15 @@ where
         EthTransactions::send_raw_transaction_sync_timeout(&self.inner)
     }
 
-    async fn send_transaction(
+    async fn send_pool_transaction(
         &self,
         origin: TransactionOrigin,
-        tx: reth_primitives_traits::WithEncoded<
-            reth_primitives_traits::Recovered<reth_transaction_pool::PoolPooledTx<Self::Pool>>,
-        >,
+        tx: reth_primitives_traits::WithEncoded<<Self::Pool as TransactionPool>::Transaction>,
     ) -> Result<B256, Self::Error> {
-        let (raw_tx, recovered) = tx.split();
+        let (raw_tx, pool_transaction) = tx.split();
 
         // broadcast raw transaction to subscribers if there is any.
         self.broadcast_raw_transaction(raw_tx);
-
-        let pool_transaction = <Self::Pool as TransactionPool>::Transaction::from_pooled(recovered);
 
         let AddedTransactionOutcome { hash, .. } =
             self.pool().add_transaction(origin, pool_transaction).await?;
@@ -477,6 +256,21 @@ impl<N, Rpc> LoadReceipt for BerachainApi<N, Rpc>
 where
     N: RpcNodeCore,
     EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
+{
+}
+
+impl<N, Rpc> GetBlockAccessList for BerachainApi<N, Rpc>
+where
+    N: RpcNodeCore,
+    EthApiError: FromEvmError<N::Evm>,
+    Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError, Evm = N::Evm>,
+{
+}
+
+impl<N, Rpc> EthSubscriptions for BerachainApi<N, Rpc>
+where
+    N: RpcNodeCore,
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
 }
@@ -529,6 +323,11 @@ where
     #[inline]
     fn max_simulate_blocks(&self) -> u64 {
         self.inner.max_simulate_blocks()
+    }
+
+    #[inline]
+    fn compute_state_root_for_eth_simulate(&self) -> bool {
+        Call::compute_state_root_for_eth_simulate(&self.inner)
     }
 
     #[inline]

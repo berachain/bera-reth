@@ -5,20 +5,20 @@
 //! override the call returns `-38005 Unsupported fork`.
 
 use crate::e2e::berachain_payload_attributes_generator;
+use alloy_primitives::B256;
 use bera_reth::{chainspec::BerachainChainSpec, node::BerachainNode};
 use jsonrpsee::{core::client::ClientT, rpc_params};
-use reth::tasks::Runtime;
+use reth::{payload::BuildNewPayload, tasks::Runtime};
 use reth_cli::chainspec::parse_genesis;
 use reth_e2e_test_utils::node::NodeTestContext;
 use reth_node_builder::{NodeBuilder, NodeHandle};
 use reth_node_core::{args::RpcServerArgs, node_config::NodeConfig};
-use reth_payload_primitives::PayloadBuilderAttributes;
 use serde_json::Value;
 use std::sync::Arc;
 
 #[tokio::test]
 async fn test_get_payload_v4_p11_works_post_osaka() -> eyre::Result<()> {
-    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
+    let runtime = Runtime::test();
 
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path)?;
@@ -35,11 +35,19 @@ async fn test_get_payload_v4_p11_works_post_osaka() -> eyre::Result<()> {
         .launch()
         .await?;
 
+    let payload_builder = node.payload_builder_handle.clone();
     let mut ctx = NodeTestContext::new(node, berachain_payload_attributes_generator).await?;
 
     // Trigger a payload build via the local builder handle so we get a valid payload_id.
-    let attrs = ctx.payload.new_payload().await?;
-    let payload_id = attrs.payload_id();
+    let attrs = ctx.payload.next_attributes();
+    let payload_id = payload_builder
+        .send_new_payload(BuildNewPayload {
+            attributes: attrs,
+            parent_hash: B256::ZERO,
+            cache: None,
+            state_root_handle: None,
+        })
+        .await??;
     ctx.payload.wait_for_built_payload(payload_id).await;
 
     // Call engine_getPayloadV4P11 over the auth RPC. Pre-fix this returns

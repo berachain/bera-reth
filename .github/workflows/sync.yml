@@ -49,14 +49,14 @@ jobs:
         network:
           - name: berachain
             chain_id: 80094
-            genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80094/eth-genesis.json
-            peers_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80094/el-peers.txt
+            genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/v1.4.2-rc.0/testing/networks/80094/eth-genesis.json
+            peers_url: https://raw.githubusercontent.com/berachain/beacon-kit/v1.4.2-rc.0/testing/networks/80094/el-peers.txt
             etherscan_url: https://api.etherscan.io/v2/api?chainid=80094
             max_block: 1500000
           - name: berachain-bepolia
             chain_id: 80069
-            genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80069/eth-genesis.json
-            peers_url: https://raw.githubusercontent.com/berachain/beacon-kit/main/testing/networks/80069/el-peers.txt
+            genesis_url: https://raw.githubusercontent.com/berachain/beacon-kit/v1.4.2-rc.0/testing/networks/80069/eth-genesis.json
+            peers_url: https://raw.githubusercontent.com/berachain/beacon-kit/v1.4.2-rc.0/testing/networks/80069/el-peers.txt
             etherscan_url: https://api.etherscan.io/v2/api?chainid=80069
             max_block: 8600000
     steps:
@@ -84,6 +84,8 @@ jobs:
             --debug.terminate \
             --trusted-peers "$TRUSTED_PEERS" \
             -vvv
+      - name: Show storage settings
+        run: ./target/maxperf/bera-reth db --datadir ./tmp --chain ./eth-genesis.json settings || true
       - name: Verify sync progress
         run: |
           # Start node with HTTP API enabled

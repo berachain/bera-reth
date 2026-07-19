@@ -1,8 +1,6 @@
 use crate::{
     chainspec::BerachainChainSpec,
-    engine::payload::{
-        BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
-    },
+    engine::payload::{BerachainBuiltPayload, BerachainPayloadAttributes},
     hardforks::BerachainHardforks,
     node::evm::config::{BerachainEvmConfig, BerachainNextBlockEnvAttributes},
     primitives::{BerachainHeader, BerachainPrimitives},
@@ -12,7 +10,7 @@ use alloy_consensus::Transaction;
 use alloy_primitives::U256;
 use alloy_rlp::Encodable;
 use reth::{
-    api::{FullNodeTypes, NodeTypes, PayloadBuilderError, PayloadTypes, TxTy},
+    api::{FullNodeTypes, NodeTypes, PayloadAttributes, PayloadBuilderError, PayloadTypes, TxTy},
     chainspec::EthereumHardforks,
     providers::StateProviderFactory,
     revm::{State, context::Block, database::StateProviderDatabase},
@@ -33,7 +31,6 @@ use reth_evm::{
     execute::{BlockBuilder, BlockBuilderOutcome},
 };
 use reth_node_builder::{BuilderContext, PayloadBuilderConfig, components::PayloadBuilderBuilder};
-use reth_payload_primitives::PayloadBuilderAttributes;
 use reth_primitives_traits::transaction::error::InvalidTransactionError;
 use reth_transaction_pool::{
     BestTransactions, BestTransactionsAttributes, ValidPoolTransaction,
@@ -66,7 +63,6 @@ where
     Types::Payload: PayloadTypes<
             BuiltPayload = BerachainBuiltPayload,
             PayloadAttributes = BerachainPayloadAttributes,
-            PayloadBuilderAttributes = BerachainPayloadBuilderAttributes,
         >,
 {
     type PayloadBuilder = BerachainPayloadBuilder<Pool, Node::Provider>;
@@ -125,7 +121,7 @@ where
     Client: StateProviderFactory + ChainSpecProvider<ChainSpec = BerachainChainSpec> + Clone,
     Pool: TransactionPool<Transaction: PoolTransaction<Consensus = BerachainTxEnvelope>>,
 {
-    type Attributes = BerachainPayloadBuilderAttributes;
+    type Attributes = BerachainPayloadAttributes;
     type BuiltPayload = BerachainBuiltPayload;
 
     fn try_build(
@@ -155,9 +151,10 @@ where
 
     fn build_empty_payload(
         &self,
-        config: PayloadConfig<BerachainPayloadBuilderAttributes, BerachainHeader>,
+        config: PayloadConfig<BerachainPayloadAttributes, BerachainHeader>,
     ) -> Result<BerachainBuiltPayload, PayloadBuilderError> {
-        let args = BuildArguments::new(Default::default(), config, Default::default(), None);
+        let args =
+            BuildArguments::new(Default::default(), None, None, config, Default::default(), None);
 
         default_berachain_payload(
             self.evm_config.clone(),
@@ -183,7 +180,7 @@ pub fn default_berachain_payload<Client, Pool, F>(
     client: Client,
     pool: Pool,
     builder_config: EthereumBuilderConfig,
-    args: BuildArguments<BerachainPayloadBuilderAttributes, BerachainBuiltPayload>,
+    args: BuildArguments<BerachainPayloadAttributes, BerachainBuiltPayload>,
     best_txs: F,
 ) -> Result<BuildOutcome<BerachainBuiltPayload>, PayloadBuilderError>
 where
@@ -191,8 +188,17 @@ where
     Pool: TransactionPool<Transaction: PoolTransaction<Consensus = BerachainTxEnvelope>>,
     F: FnOnce(BestTransactionsAttributes) -> BestTransactionsIter<Pool>,
 {
-    let BuildArguments { mut cached_reads, config, cancel, best_payload } = args;
-    let PayloadConfig { parent_header, attributes } = config;
+    // The shared execution cache and incremental state-root task are engine-side
+    // optimizations; Berachain computes the state root synchronously in `finish`.
+    let BuildArguments {
+        mut cached_reads,
+        execution_cache: _,
+        state_root_handle: _,
+        config,
+        cancel,
+        best_payload,
+    } = args;
+    let PayloadConfig { parent_header, attributes, payload_id, .. } = config;
 
     let state_provider = client.state_by_block_hash(parent_header.hash())?;
     let state = StateProviderDatabase::new(&state_provider);
@@ -205,11 +211,12 @@ where
             &parent_header,
             BerachainNextBlockEnvAttributes {
                 timestamp: attributes.timestamp(),
-                suggested_fee_recipient: attributes.suggested_fee_recipient(),
-                prev_randao: attributes.prev_randao(),
-                gas_limit: builder_config.gas_limit(parent_header.gas_limit),
+                suggested_fee_recipient: attributes.inner.suggested_fee_recipient,
+                prev_randao: attributes.inner.prev_randao,
+                gas_limit: builder_config
+                    .gas_limit_with_target(parent_header.gas_limit, attributes.target_gas_limit()),
                 parent_beacon_block_root: attributes.parent_beacon_block_root(),
-                withdrawals: Some(attributes.withdrawals().clone()),
+                withdrawals: attributes.inner.withdrawals.clone().map(Into::into),
                 prev_proposer_pubkey: attributes.prev_proposer_pubkey,
                 extra_data: builder_config.extra_data.clone(),
             },
@@ -218,7 +225,7 @@ where
 
     let chain_spec = client.chain_spec();
 
-    debug!(target: "payload_builder", id=%attributes.id, parent_header = ?parent_header.hash(), parent_number = parent_header.number, "building new payload");
+    debug!(target: "payload_builder", id=%payload_id, parent_header = ?parent_header.hash(), parent_number = parent_header.number, "building new payload");
     let mut cumulative_gas_used = 0;
     let block_gas_limit: u64 = builder.evm_mut().block().gas_limit();
     let base_fee = builder.evm_mut().block().basefee();
@@ -241,7 +248,7 @@ where
     let mut block_blob_count = 0;
     let mut block_transactions_rlp_length = 0;
 
-    let blob_params = chain_spec.blob_params_at_timestamp(attributes.timestamp);
+    let blob_params = chain_spec.blob_params_at_timestamp(attributes.timestamp());
     let protocol_max_blob_count =
         blob_params.as_ref().map(|params| params.max_blob_count).unwrap_or_default();
 
@@ -252,8 +259,9 @@ where
         .map(|user_limit| std::cmp::min(user_limit, protocol_max_blob_count).max(1))
         .unwrap_or(protocol_max_blob_count);
 
-    let is_osaka = chain_spec.is_osaka_active_at_timestamp(attributes.timestamp);
-    let withdrawals_rlp_length = attributes.withdrawals().length();
+    let is_osaka = chain_spec.is_osaka_active_at_timestamp(attributes.timestamp());
+    let withdrawals_rlp_length =
+        attributes.inner.withdrawals.as_ref().map(|withdrawals| withdrawals.length()).unwrap_or(0);
 
     let prague3_active = chain_spec.is_prague3_active_at_timestamp(attributes.timestamp());
     if prague3_active {
@@ -268,7 +276,7 @@ where
             // continue
             best_txs.mark_invalid(
                 &pool_tx,
-                &InvalidPoolTransactionError::ExceedsGasLimit(pool_tx.gas_limit(), block_gas_limit),
+                InvalidPoolTransactionError::ExceedsGasLimit(pool_tx.gas_limit(), block_gas_limit),
             );
             continue;
         }
@@ -288,7 +296,7 @@ where
         if is_osaka && estimated_block_size_with_tx > MAX_RLP_BLOCK_SIZE {
             best_txs.mark_invalid(
                 &pool_tx,
-                &InvalidPoolTransactionError::OversizedData {
+                InvalidPoolTransactionError::OversizedData {
                     size: estimated_block_size_with_tx,
                     limit: MAX_RLP_BLOCK_SIZE,
                 },
@@ -310,7 +318,7 @@ where
                 trace!(target: "payload_builder", tx=?tx.hash(), ?block_blob_count, "skipping blob transaction because it would exceed the max blob count per block");
                 best_txs.mark_invalid(
                     &pool_tx,
-                    &InvalidPoolTransactionError::Eip4844(
+                    InvalidPoolTransactionError::Eip4844(
                         Eip4844PoolTransactionError::TooManyEip4844Blobs {
                             have: block_blob_count + tx_blob_count,
                             permitted: max_blob_count,
@@ -339,15 +347,15 @@ where
             blob_tx_sidecar = match blob_sidecar_result {
                 Ok(sidecar) => Some(sidecar),
                 Err(error) => {
-                    best_txs.mark_invalid(&pool_tx, &InvalidPoolTransactionError::Eip4844(error));
+                    best_txs.mark_invalid(&pool_tx, InvalidPoolTransactionError::Eip4844(error));
                     continue;
                 }
             };
         }
 
         // Execute the transaction
-        let gas_used = match builder.execute_transaction(tx.clone()) {
-            Ok(gas_used) => gas_used,
+        let gas_output = match builder.execute_transaction(tx.clone()) {
+            Ok(gas_output) => gas_output,
             Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx {
                 error, ..
             })) => {
@@ -360,7 +368,7 @@ where
                     trace!(target: "payload_builder", %error, ?tx, "skipping invalid transaction and its descendants");
                     best_txs.mark_invalid(
                         &pool_tx,
-                        &InvalidPoolTransactionError::Consensus(
+                        InvalidPoolTransactionError::Consensus(
                             InvalidTransactionError::TxTypeNotSupported,
                         ),
                     );
@@ -384,6 +392,7 @@ where
         block_transactions_rlp_length += tx_rlp_len;
 
         // update and add to total fees
+        let gas_used = gas_output.tx_gas_used();
         let miner_fee =
             tx.effective_tip_per_gas(base_fee).expect("fee is always valid; execution succeeded");
         total_fees += U256::from(miner_fee) * U256::from(gas_used);
@@ -403,14 +412,15 @@ where
         return Ok(BuildOutcome::Aborted { fees: total_fees, cached_reads });
     }
 
-    let BlockBuilderOutcome { execution_result, block, .. } = builder.finish(&state_provider)?;
+    let BlockBuilderOutcome { execution_result, block, .. } =
+        builder.finish(&state_provider, None)?;
 
     let requests = chain_spec
-        .is_prague_active_at_timestamp(attributes.timestamp)
+        .is_prague_active_at_timestamp(attributes.timestamp())
         .then_some(execution_result.requests);
 
     let sealed_block = Arc::new(block.sealed_block().clone());
-    debug!(target: "payload_builder", id=%attributes.id, sealed_block_header = ?sealed_block.sealed_header(), "sealed built block");
+    debug!(target: "payload_builder", id=%payload_id, sealed_block_header = ?sealed_block.sealed_header(), "sealed built block");
 
     if is_osaka && sealed_block.rlp_length() > MAX_RLP_BLOCK_SIZE {
         return Err(PayloadBuilderError::other(ConsensusError::BlockTooLarge {
@@ -419,7 +429,7 @@ where
         }));
     }
 
-    let payload = BerachainBuiltPayload::new(attributes.id, sealed_block, total_fees, requests)
+    let payload = BerachainBuiltPayload::new(payload_id, sealed_block, total_fees, requests)
         // add blob sidecars from the executed txs
         .with_sidecars(blob_sidecars);
 

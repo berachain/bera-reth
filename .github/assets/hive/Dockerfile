@@ -5,7 +5,8 @@
 # 
 # We'll use cargo-chef to speed up the build
 # 
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+# MSRV 1.95 (reth v2.4.0); pinned so stale cached latest-rust-1 digests cannot silently drop below it
+FROM lukemathwalker/cargo-chef:latest-rust-1.97 AS chef
 WORKDIR /app
 
 # Install system dependencies

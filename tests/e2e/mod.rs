@@ -1,14 +1,12 @@
 use alloy_primitives::{Address, B256};
 use alloy_signer_local::PrivateKeySigner;
 use bera_reth::{
-    chainspec::BerachainChainSpec,
-    engine::payload::{BerachainPayloadAttributes, BerachainPayloadBuilderAttributes},
+    chainspec::BerachainChainSpec, engine::payload::BerachainPayloadAttributes,
     primitives::header::BlsPublicKey,
 };
 use reth::tasks::Runtime;
 use reth_cli::chainspec::parse_genesis;
 use reth_ethereum_engine_primitives::EthPayloadAttributes;
-use reth_payload_primitives::PayloadBuilderAttributes;
 use std::{str::FromStr, sync::Arc};
 
 pub mod coinbase_system_state_change_test;
@@ -18,6 +16,7 @@ pub mod osaka_blob_test;
 pub mod osaka_engine_api_test;
 pub mod pol_revert_test;
 pub mod prague3_empty_block_test;
+pub mod storage_v2_test;
 pub mod transaction_tests;
 
 const TEST_PRIVATE_KEY: &str = "0xfffdbb37105441e14b0ee6330d855d8504ff39e705c3afa8f859ac9865f99306";
@@ -27,7 +26,7 @@ pub const POL_DISTRIBUTOR_ADDRESS: &str = "0x42000000000000000000000000000000000
 
 /// Setup test node boilerplate - returns Runtime and chain spec for individual test setup
 pub async fn setup_test_boilerplate() -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
-    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
+    let runtime = Runtime::test();
 
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path).expect("Failed to read genesis file");
@@ -44,17 +43,17 @@ pub fn test_signer() -> eyre::Result<PrivateKeySigner> {
 }
 
 /// Create Berachain payload attributes for testing
-pub fn berachain_payload_attributes_generator(timestamp: u64) -> BerachainPayloadBuilderAttributes {
+pub fn berachain_payload_attributes_generator(timestamp: u64) -> BerachainPayloadAttributes {
     let eth_attributes = EthPayloadAttributes {
         timestamp,
         prev_randao: B256::random(),
         suggested_fee_recipient: Address::random(),
         withdrawals: Some(vec![]),
         parent_beacon_block_root: Some(B256::random()),
+        ..Default::default()
     };
-    let berachain_attributes = BerachainPayloadAttributes {
+    BerachainPayloadAttributes {
         inner: eth_attributes,
         prev_proposer_pubkey: Some(BlsPublicKey::random()),
-    };
-    BerachainPayloadBuilderAttributes::try_new(B256::ZERO, berachain_attributes, 1).unwrap()
+    }
 }

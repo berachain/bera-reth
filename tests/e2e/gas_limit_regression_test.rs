@@ -1,10 +1,8 @@
 //! Gas limit regression tests for PoL transactions
 //!
-//! These tests verify that the 30M gas limit for system calls in REVM remains exactly 30,000,000.
-//! Any deviation from this exact value will cause the test to fail.
-//!
-//! Context: REVM hardcodes a 30M gas limit for system calls in the handler:
-//! https://github.com/bluealloy/revm/blob/f3c794b4df282d8053d60e67bca5c4a306031357/crates/handler/src/system_call.rs#L65
+//! These tests verify that the PoL system call runs with exactly the block gas
+//! limit (36M per the Berachain genesis configurations). Any deviation from this
+//! exact value will cause the test to fail.
 
 use crate::e2e::{POL_DISTRIBUTOR_ADDRESS, berachain_payload_attributes_generator};
 use alloy_genesis::Genesis;
@@ -23,28 +21,31 @@ use reth_payload_primitives::BuiltPayload;
 use std::{str::FromStr, sync::Arc};
 
 // Strict gas limit validation contract for regression testing
-// This contract expects exactly 29,999,646 gas remaining at execution time.
-// This precise value corresponds to the 30M system call gas limit minus the gas
+// This contract expects exactly 35,999,646 gas remaining at execution time.
+// This precise value corresponds to the 36M block gas limit minus the gas
 // consumed by transaction processing and function call overhead.
 sol! {
-    #[sol(bytecode = "0x608060405234801561000f575f80fd5b5060043610610029575f3560e01c806360644a6b1461002d575b5f80fd5b61004061003b366004610095565b610042565b005b5f5a9050806301c9c21e146100905760405162461bcd60e51b815260206004820152601060248201526f496e73756666696369656e742067617360801b604482015260640160405180910390fd5b505050565b5f80602083850312156100a6575f80fd5b823567ffffffffffffffff8111156100bc575f80fd5b8301601f810185136100cc575f80fd5b803567ffffffffffffffff8111156100e2575f80fd5b8560208284010111156100f3575f80fd5b602091909101959094509250505056fea2646970667358221220d5e6c7321d98a40b9a775d16eed1a1ef1182f64c7e8bf81f724feef606d28dde64736f6c634300081a0033")]
+    #[sol(bytecode = "0x608060405234801561000f575f80fd5b5060043610610029575f3560e01c806360644a6b1461002d575b5f80fd5b61004061003b366004610095565b610042565b005b5f5a9050806302254f9e146100905760405162461bcd60e51b815260206004820152601060248201526f496e73756666696369656e742067617360801b604482015260640160405180910390fd5b505050565b5f80602083850312156100a6575f80fd5b823567ffffffffffffffff8111156100bc575f80fd5b8301601f810185136100cc575f80fd5b803567ffffffffffffffff8111156100e2575f80fd5b8560208284010111156100f3575f80fd5b602091909101959094509250505056fea2646970667358221220d5e6c7321d98a40b9a775d16eed1a1ef1182f64c7e8bf81f724feef606d28dde64736f6c634300081a0033")]
     contract SimplePoLDistributor {
             function distributeFor(bytes calldata /*pubkey*/) public {
               uint256 start_gas = gasleft();
-              // Strict validation: exactly 29,999,646 gas must remain at this point
-              // Any change to REVM's 30M system call limit will cause this to fail
-              require(start_gas == 29_999_646, "Insufficient gas");
+              // Strict validation: exactly 35,999,646 gas must remain at this point
+              // Any change to the block-gas-limit system call budget will cause this to fail
+              require(start_gas == 35_999_646, "Insufficient gas");
         }
     }
 }
 
 async fn setup_test_with_gas_boundary_pol_contract()
 -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
-    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
+    let runtime = Runtime::test();
 
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path)?;
     let mut genesis: Genesis = parse_genesis(&genesis_json)?;
+    // Berachain networks run a 36M block gas limit; pin it at genesis so the
+    // first built block (parent-derived) uses exactly 36M.
+    genesis.gas_limit = 36_000_000;
     let pol_address = Address::from_str(POL_DISTRIBUTOR_ADDRESS)?;
     let new_bytecode = Bytes::from_str(&SimplePoLDistributor::BYTECODE.to_string())?;
 
@@ -63,7 +64,7 @@ async fn setup_test_with_gas_boundary_pol_contract()
 }
 
 #[tokio::test]
-async fn test_pol_gas_limit_is_30_million() -> eyre::Result<()> {
+async fn test_pol_gas_limit_matches_36m_block_gas_limit() -> eyre::Result<()> {
     let (runtime, chain_spec) = setup_test_with_gas_boundary_pol_contract().await?;
 
     let node_config = NodeConfig::new(chain_spec.clone())
@@ -100,7 +101,7 @@ async fn test_pol_gas_limit_is_30_million() -> eyre::Result<()> {
 
     if !receipt.status() {
         return Err(eyre::eyre!(
-            "PoL transaction reverted: {tx_hash:#x}. REVM's 30M system call gas limit may have changed."
+            "PoL transaction reverted: {tx_hash:#x}. The block-gas-limit system call budget may have changed."
         ));
     }
 
