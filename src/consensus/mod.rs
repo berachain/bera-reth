@@ -103,7 +103,6 @@ impl BerachainBeaconConsensus {
             expected_pubkey,
             alloy_primitives::U256::from(header.number),
             base_fee,
-            header.gas_limit,
         )
     }
 }
@@ -287,7 +286,10 @@ mod tests {
     use super::*;
     use crate::{
         primitives::{BerachainBlockBody, BerachainHeader, header::BlsPublicKey},
-        transaction::{BerachainTxEnvelope, pol::create_pol_transaction},
+        transaction::{
+            BerachainTxEnvelope,
+            pol::{POL_TX_GAS_LIMIT, create_pol_transaction},
+        },
     };
     use alloy_consensus::{EMPTY_OMMER_ROOT_HASH, Signed, TxLegacy, constants::EMPTY_WITHDRAWALS};
     use alloy_eips::eip4895::Withdrawals;
@@ -317,7 +319,7 @@ mod tests {
 
         // Create a PoL transaction
         let pol_tx_envelope =
-            create_pol_transaction(chain_spec, pubkey, block_number, base_fee, 36_000_000).unwrap();
+            create_pol_transaction(chain_spec, pubkey, block_number, base_fee).unwrap();
 
         // Create a block body with the PoL transaction
         let transactions = vec![pol_tx_envelope];
@@ -407,6 +409,49 @@ mod tests {
             result.is_ok(),
             "Pre-Prague1 block with normal transactions should pass validation"
         );
+    }
+
+    #[test]
+    fn test_live_pol_gas_limit_validates_in_larger_block() {
+        const LIVE_BLOCK_GAS_LIMIT: u64 = 36_000_000;
+
+        let chain_spec = bepolia_chainspec();
+        let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
+        let pubkey = mock_bls_pubkey();
+        let block_number = U256::from(10);
+        let base_fee = 47;
+
+        let pol_tx = create_pol_transaction(chain_spec, pubkey, block_number, base_fee)
+            .expect("live-compatible PoL transaction");
+        let BerachainTxEnvelope::Berachain(sealed_pol_tx) = &pol_tx else {
+            panic!("expected PoL transaction");
+        };
+        assert_eq!(sealed_pol_tx.gas_limit, POL_TX_GAS_LIMIT);
+        assert_ne!(sealed_pol_tx.gas_limit, LIVE_BLOCK_GAS_LIMIT);
+
+        let block_body = BerachainBlockBody {
+            transactions: vec![pol_tx],
+            withdrawals: Some(Withdrawals::default()),
+            ..Default::default()
+        };
+        let header = BerachainHeader {
+            number: block_number.to::<u64>(),
+            timestamp: 1_754_496_000,
+            gas_limit: LIVE_BLOCK_GAS_LIMIT,
+            base_fee_per_gas: Some(base_fee),
+            prev_proposer_pubkey: Some(pubkey),
+            ommers_hash: EMPTY_OMMER_ROOT_HASH,
+            transactions_root: block_body.calculate_tx_root(),
+            withdrawals_root: Some(EMPTY_WITHDRAWALS),
+            blob_gas_used: Some(0),
+            ..Default::default()
+        };
+        let block =
+            SealedBlock::from_sealed_parts(SealedHeader::new(header, BlockHash::ZERO), block_body);
+
+        consensus
+            .validate_pol_transaction(&block)
+            .expect("30M PoL transaction must validate inside current 36M blocks");
     }
 
     /// Build a header that satisfies upstream `EthBeaconConsensus::validate_header`

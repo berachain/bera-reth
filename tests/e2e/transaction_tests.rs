@@ -9,7 +9,7 @@ use alloy_sol_types::SolCall;
 use bera_reth::{
     node::BerachainNode,
     primitives::header::BlsPublicKey,
-    transaction::{BerachainTxEnvelope, PoLTx},
+    transaction::{BerachainTxEnvelope, PoLTx, pol::POL_TX_GAS_LIMIT},
 };
 use reth::{providers::BlockNumReader, transaction_pool::TransactionPool};
 use reth_chainspec::EthChainSpec;
@@ -228,7 +228,7 @@ async fn test_pol_transaction_auto_inclusion() -> eyre::Result<()> {
     assert_eq!(pol_tx.from, SYSTEM_ADDRESS);
     assert_eq!(pol_tx.to, expected_pol_contract);
     assert_eq!(pol_tx.nonce, 0);
-    assert_eq!(pol_tx.gas_limit, block.header().gas_limit());
+    assert_eq!(pol_tx.gas_limit, POL_TX_GAS_LIMIT);
     assert_eq!(pol_tx.gas_price, block_base_fee as u128);
     assert!(!pol_tx.input.is_empty());
 

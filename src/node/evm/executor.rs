@@ -123,7 +123,6 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             prev_proposer_pubkey,
             self.evm.block().number(),
             base_fee,
-            self.evm.block().gas_limit(),
         )?;
         let (caller_address, calldata, pol_distributor_address) =
             if let BerachainTxEnvelope::Berachain(pol_tx) = &pol_envelope {
