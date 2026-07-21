@@ -352,11 +352,7 @@ fn try_format_node_status(value: &Value) -> Option<String> {
             .or_else(|| obj.get("peer_count_total"))
             .and_then(hex_or_decimal_to_u64)
             .unwrap_or(0);
-        if total == 0 && peers_in + peers_out > 0 {
-            peers_in + peers_out
-        } else {
-            total
-        }
+        if total == 0 && peers_in + peers_out > 0 { peers_in + peers_out } else { total }
     };
     let client = obj
         .get("clientVersion")

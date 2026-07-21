@@ -60,7 +60,7 @@ After this work:
 - A single `pog_sealed_flush_tx_skipped_total{reason="system_tx"}` counter is
   incremented per filtered tx so operators can see PoL volume out of band.
 - The existing four buckets on
-  `pog_sealed_tx_facts_flushed_first_enode_total` (`present`, `null_hello_port_zero`,
+  `pog_sealed_tx_facts_flushed_first_enode_total` (`present`, `null_missing_address`,
   `null_no_peer`) keep their meanings; with PoL filtered out, `null_no_peer`
   now exclusively reflects locally-injected / RPC-only txs (canaries,
   `eth_sendRawTransaction` to the local node before gossip closes the loop).

@@ -207,8 +207,8 @@ pub(crate) fn ensure_sealed_tx_fact_schema(conn: &Connection) -> rusqlite::Resul
     // re-encoding happens at export time; see brief §5.5.
     //
     // `first_enode` (BERA-305) is the canonical `NodeRecord::Display` enode URL captured at
-    // the peer's first-hear session, NULL for sessions where the peer signalled
-    // `Hello.port == 0` and for pre-migration rows.
+    // first hear. Port zero means no redial port was advertised. It is NULL for non-p2p,
+    // legacy callbacks missing the remote IP, and pre-migration rows.
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS sealed_tx_fact (
             id                   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -284,8 +284,9 @@ pub struct SealedTxFactRecord {
     pub effective_tip_wei: String,
     pub tip_formula_version: u32,
     /// Canonical `enode://hex@ip:port` URL captured from the peer's first-hear session
-    /// (`NodeRecord::new(listening_addr, peer_id).to_string()`), `None` for pre-migration
-    /// rows or sessions whose `Hello.port == 0`. See BERA-305 brief.
+    /// (`NodeRecord::new(listening_addr, peer_id).to_string()`). A port-zero enode retains
+    /// attribution while declaring that no redial port is known. `None` is for pre-migration,
+    /// non-p2p, or legacy rows missing an address. See BERA-305 brief.
     pub first_enode: Option<String>,
 }
 
@@ -446,16 +447,13 @@ impl PogSqliteStore {
         let tx = conn.transaction()?;
         let mut new_high_water: Option<u64> = None;
         let mut inserted_with_peer: u64 = 0;
-        // BERA-305 / VC-1: bucket sealed_tx_fact writes by `first_enode` outcome so VC-1
-        // (Hello.port hit-rate spike) can be graphed at insert time, not just by paging
-        // the SQLite table. Buckets:
+        // Bucket sealed_tx_fact writes by `first_enode` outcome. Port-zero enodes belong to
+        // `present`; they retain the full attribution address but are not redialable.
         //   - present:              first_peer_id IS NOT NULL && first_enode IS NOT NULL
-        //   - null_hello_port_zero: first_peer_id IS NOT NULL && first_enode IS NULL (peer
-        //     attributed but Hello.port=0 — the VC-1 case)
-        //   - null_no_peer:         first_peer_id IS NULL (locally-built / RPC-only; first_enode is
-        //     structurally NULL)
+        //   - null_missing_address: first_peer_id IS NOT NULL && first_enode IS NULL
+        //   - null_no_peer:         first_peer_id IS NULL (locally-built / RPC-only)
         let mut sealed_first_enode_present: u64 = 0;
-        let mut sealed_first_enode_null_hello_port_zero: u64 = 0;
+        let mut sealed_first_enode_null_missing_address: u64 = 0;
         let mut sealed_first_enode_null_no_peer: u64 = 0;
         for row in rows {
             tx.execute(
@@ -482,7 +480,7 @@ impl PogSqliteStore {
                 }
                 (true, false) => {
                     inserted_with_peer += 1;
-                    sealed_first_enode_null_hello_port_zero += 1;
+                    sealed_first_enode_null_missing_address += 1;
                 }
                 (false, _) => {
                     sealed_first_enode_null_no_peer += 1;
@@ -519,9 +517,9 @@ impl PogSqliteStore {
         .increment(sealed_first_enode_present);
         metrics::counter!(
             "pog_sealed_tx_facts_flushed_first_enode_total",
-            "outcome" => "null_hello_port_zero",
+            "outcome" => "null_missing_address",
         )
-        .increment(sealed_first_enode_null_hello_port_zero);
+        .increment(sealed_first_enode_null_missing_address);
         metrics::counter!(
             "pog_sealed_tx_facts_flushed_first_enode_total",
             "outcome" => "null_no_peer",
@@ -962,9 +960,11 @@ pub struct InflightTx {
     pub first_peer_id: PeerId,
     pub first_heard_ms: u64,
     pub first_heard_at: Instant,
-    /// The peer's first-hear advertised listening socket — see BERA-305 brief and
-    /// `TransactionProvenanceSink::record_accepted_from_peer`. `None` when the peer
-    /// signalled `Hello.port == 0`.
+    /// Best-known address for the first-hear peer; see BERA-305 and
+    /// `TransactionProvenanceSink::record_accepted_from_peer`.
+    ///
+    /// Port zero means the peer did not advertise a redial port. `None` is reserved for a
+    /// legacy or synthetic callback that lacks even the observed remote IP.
     pub first_listening_addr: Option<SocketAddr>,
 }
 
@@ -986,11 +986,10 @@ impl InflightTransactions {
     /// On cap: runs an inline TTL sweep; if still at cap, refuses the insert and bumps
     /// `pog_inflight_tx_cap_rejections_total`.
     ///
-    /// `first_listening_addr` (BERA-305) is the peer's advertised devp2p Hello socket,
-    /// preserved through the seal-flush path so we can persist a re-dialable
-    /// `first_enode`. When it is `None` (`Hello.port == 0`), we **do not** insert an
-    /// inflight row: downstream cannot build an enode URL or join the sentinel fleet
-    /// registry from attribution alone, so attributing the tx to that peer is dropped.
+    /// `first_listening_addr` is preserved through seal flush so a full `first_enode` can be
+    /// stored. The upstream bridge uses the observed IP with port zero when the peer did not
+    /// advertise a listening port. That enode is attribution-only and must not be redialed.
+    /// A legacy `None` still retains peer-id attribution rather than dropping the first hear.
     pub fn record_first_hear(
         &mut self,
         tx_hash: TxHash,
@@ -998,24 +997,33 @@ impl InflightTransactions {
         first_listening_addr: Option<SocketAddr>,
         now_ms: u64,
     ) -> bool {
-        // BERA-305 / VC-1: split `first_hears_total` by whether the upstream provenance
-        // sink supplied a listening_addr (Hello.port != 0). Operators graph
-        // sum(rate{listening_addr_present="true"}) / sum(rate(...)) for the Hello.port
-        // hit-rate the brief calls out, without table-scanning sealed_tx_fact.
+        // Split first hears by address availability and redial-port confidence. Port zero keeps
+        // a full attribution enode while accurately reporting that no redial port is known.
         let listening_addr_present = if first_listening_addr.is_some() { "true" } else { "false" };
+        let redial_port_known = if first_listening_addr.is_some_and(|addr| addr.port() != 0) {
+            "true"
+        } else {
+            "false"
+        };
         if self.entries.contains_key(&tx_hash) {
             self.first_hears.fetch_add(1, Ordering::Relaxed);
             metrics::counter!(
                 "pog_inflight_tx_first_hears_total",
                 "listening_addr_present" => listening_addr_present,
+                "redial_port_known" => redial_port_known,
             )
             .increment(1);
             return true;
         }
-        if first_listening_addr.is_none() {
-            metrics::counter!("pog_inflight_tx_first_hears_skipped_no_listening_addr_total")
-                .increment(1);
-            return true;
+        match first_listening_addr {
+            Some(addr) if addr.port() == 0 => {
+                metrics::counter!("pog_inflight_tx_first_hears_unknown_redial_port_total")
+                    .increment(1);
+            }
+            None => {
+                metrics::counter!("pog_inflight_tx_first_hears_missing_address_total").increment(1);
+            }
+            Some(_) => {}
         }
         if self.entries.len() >= self.max_entries {
             self.evict_expired();
@@ -1045,6 +1053,7 @@ impl InflightTransactions {
         metrics::counter!(
             "pog_inflight_tx_first_hears_total",
             "listening_addr_present" => listening_addr_present,
+            "redial_port_known" => redial_port_known,
         )
         .increment(1);
         metrics::gauge!("pog_inflight_tx_count").set(self.entries.len() as f64);
@@ -1467,8 +1476,8 @@ pub fn build_sealed_tx_fact_inserts(
         let (first_peer_id, first_heard_ms, first_enode) = match ram {
             Some(entry) => {
                 // BERA-305: render the canonical `enode://hex@ip:port` form via
-                // `NodeRecord::Display` when both peer_id and listening_addr are
-                // present. Hello.port=0 sessions yield None → first_enode = NULL.
+                // `NodeRecord::Display` when both peer_id and an observed IP are present.
+                // Port zero is deliberately retained to mean the peer cannot be redialed.
                 let enode = entry
                     .first_listening_addr
                     .map(|addr| NodeRecord::new(addr, entry.first_peer_id).to_string());
@@ -1608,8 +1617,8 @@ mod tests {
     /// and asserts that:
     ///   - a `Some(addr)` listening_addr produces `first_enode == NodeRecord::new(addr,
     ///     peer_id).to_string()` on the persisted row;
-    ///   - a `None` listening_addr (Hello.port=0) produces no inflight row → seal flush is non-p2p
-    ///     (`first_peer_id` and `first_enode` both unset).
+    ///   - a port-zero listening_addr produces a complete enode that retains attribution while
+    ///     explicitly carrying no redial port.
     ///
     /// Routing through `flush_sealed_tx_facts` plus `export_sealed_tx_facts` exercises the
     /// SQLite round-trip end-to-end.
@@ -1620,7 +1629,7 @@ mod tests {
         let tmp = NamedTempFile::new().unwrap();
         let store = PogSqliteStore::open(tmp.path()).unwrap();
 
-        // Two parallel scenarios in one DB: peer A with listening_addr; peer B without.
+        // Two parallel scenarios: peer A advertised a port; peer B did not, so the bridge uses 0.
         let mut inflight = InflightTransactions::new(Duration::from_secs(60), 1024);
         let peer_a = PeerId::random();
         let listening = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7)), 30303);
@@ -1628,8 +1637,9 @@ mod tests {
         inflight.record_first_hear(tx_a, peer_a, Some(listening), 1_000);
 
         let peer_b = PeerId::random();
+        let unknown_port = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(198, 51, 100, 9)), 0);
         let tx_b = B256::random();
-        inflight.record_first_hear(tx_b, peer_b, None, 2_000);
+        inflight.record_first_hear(tx_b, peer_b, Some(unknown_port), 2_000);
 
         let drained = inflight.drain_for_seal(&[tx_a, tx_b]);
         let rows = build_sealed_tx_fact_inserts(99, &drained, &[100, 200], 9_999);
@@ -1637,10 +1647,12 @@ mod tests {
         let row_a = rows.iter().find(|r| r.tx_hash == format!("{tx_a:#x}")).unwrap();
         let row_b = rows.iter().find(|r| r.tx_hash == format!("{tx_b:#x}")).unwrap();
         let expected_enode = NodeRecord::new(listening, peer_a).to_string();
+        let expected_unknown_port_enode = NodeRecord::new(unknown_port, peer_b).to_string();
         assert_eq!(row_a.first_enode.as_deref(), Some(expected_enode.as_str()));
-        assert!(
-            row_b.first_peer_id.is_none() && row_b.first_enode.is_none(),
-            "Hello.port=0 first-hear must not create a p2p attribution row",
+        assert_eq!(
+            row_b.first_enode.as_deref(),
+            Some(expected_unknown_port_enode.as_str()),
+            "Hello.port=0 must preserve a full attribution enode with port zero",
         );
 
         store.flush_sealed_tx_facts(&rows, 0).unwrap();
@@ -1655,15 +1667,16 @@ mod tests {
             .rows
             .iter()
             .find(|r| r.tx_hash == format!("{tx_b:#x}"))
-            .expect("non-p2p row exported");
+            .expect("port-zero row exported");
         assert_eq!(
             exported_a.first_enode.as_deref(),
             Some(expected_enode.as_str()),
             "Some(listening_addr) must round-trip as canonical enode URL",
         );
-        assert!(
-            exported_b.first_peer_id.is_none() && exported_b.first_enode.is_none(),
-            "skipped first-hear must export as non-p2p (NULL peer + NULL enode)",
+        assert_eq!(
+            exported_b.first_enode.as_deref(),
+            Some(expected_unknown_port_enode.as_str()),
+            "port-zero attribution enode must survive SQLite round-trip",
         );
     }
 
@@ -2139,20 +2152,21 @@ mod tests {
     }
 
     #[test]
-    fn tp_r1b_record_first_hear_skips_none_listening_then_some_inserts() {
+    fn tp_r1b_record_first_hear_retains_peer_when_address_missing() {
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
         let mut w = InflightTransactions::new(Duration::from_secs(60), 1024);
         let tx = B256::random();
-        let p_skip = PeerId::random();
-        let p_win = PeerId::random();
+        let p_first = PeerId::random();
+        let p_later = PeerId::random();
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(198, 51, 100, 10)), 30303);
-        assert!(w.record_first_hear(tx, p_skip, None, 1));
-        assert!(w.record_first_hear(tx, p_win, Some(addr), 2));
+        assert!(w.record_first_hear(tx, p_first, None, 1));
+        assert!(w.record_first_hear(tx, p_later, Some(addr), 2));
         let drained = w.drain_for_seal(&[tx]);
-        let e = drained[0].1.expect("second hear with listening addr must insert");
-        assert_eq!(e.first_peer_id, p_win);
-        assert_eq!(e.first_heard_ms, 2);
+        let e = drained[0].1.expect("first hear must remain attributed to its peer ID");
+        assert_eq!(e.first_peer_id, p_first);
+        assert_eq!(e.first_heard_ms, 1);
+        assert_eq!(e.first_listening_addr, None);
     }
 
     // ---- PogSqliteStore probe API (inherited from PogDb) ----

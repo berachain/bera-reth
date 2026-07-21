@@ -104,8 +104,7 @@ fn split_paren_rpc_query_tail(line: &str) -> Option<(&str, String)> {
         return None;
     }
     let rpc_part = &line[..rpc_end];
-    let query =
-        if tail.starts_with('[') { format!(".{tail}") } else { tail.to_owned() };
+    let query = if tail.starts_with('[') { format!(".{tail}") } else { tail.to_owned() };
     Some((rpc_part, query))
 }
 
@@ -399,7 +398,8 @@ mod tests {
 
     #[test]
     fn parses_rpc_with_params_and_query_tail() {
-        let cmd = parse_input(r#"eth_getBlockByNumber ["latest", false].transactions.count"#).unwrap();
+        let cmd =
+            parse_input(r#"eth_getBlockByNumber ["latest", false].transactions.count"#).unwrap();
         assert_eq!(
             cmd,
             InputCommand::RpcWithQuery {

@@ -45,11 +45,11 @@ use std::{
 };
 use tracing::{debug, warn};
 
-/// BERA-305 / VC-1: latched once when the provenance sink first observes an accept-batch
-/// with `listening_addr = None` (i.e. a peer's devp2p `Hello.port == 0`). Surfaces a
-/// single `warn!` so operators get an actionable signal that some peers will only ever
-/// produce `first_enode = NULL` rows; subsequent occurrences are tracked via metrics.
-static OBSERVED_NONE_LISTENING_ADDR: AtomicBool = AtomicBool::new(false);
+/// Latched when the provenance bridge fails to retain even the peer's observed remote IP.
+///
+/// A zero port is expected when devp2p `Hello.port == 0`; it remains a valid attribution address.
+/// `None` means the upstream bridge violated that contract, so surface it once without spamming.
+static OBSERVED_MISSING_ATTRIBUTION_ADDR: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone)]
 struct PogTxProvenanceSink {
@@ -69,35 +69,33 @@ impl TransactionProvenanceSink for PogTxProvenanceSink {
         // forward each hash to the InflightTransactions RAM store; the safety belt /
         // metrics bookkeeping lives inside `record_first_hear`.
         //
-        // BERA-305: `listening_addr` (peer's first-hear advertised socket per devp2p Hello)
-        // is captured alongside `peer_id` so the seal-flush path can persist a re-dialable
-        // `first_enode`. When it is `None` (`Hello.port == 0`), `InflightTransactions` skips
-        // the first-hear insert so sealed-tx facts do not attribute txs to undialable peers.
+        // BERA-305: `listening_addr` is captured alongside `peer_id` so the seal-flush path
+        // can persist a full `first_enode`. When the peer advertises Hello.port=0, the reth
+        // bridge retains the observed remote IP and supplies port 0. That enode remains useful
+        // for attribution while explicitly saying it is not redialable.
         //
         // VC-1 observability: at trace/debug we log every accept-batch with whether the
-        // listening_addr was supplied. The first None observation in this process also
-        // emits a one-shot `warn!` so operators see an actionable signal without having
-        // to enable -vvvv. Per-tx outcomes are tracked via metric labels on
-        // `pog_inflight_tx_first_hears_total{listening_addr_present=...}` and at the
-        // SQL insert site via `pog_sealed_tx_facts_flushed_first_enode_total{outcome=...}`.
+        // listening_addr was supplied and whether its port is redialable. A `None` value is
+        // an upstream invariant violation; peer-id attribution is still retained.
         debug!(
             target: "bera_reth::pog",
             peer_id = %peer_id,
             listening_addr_present = listening_addr.is_some(),
+            redial_port_known = listening_addr.is_some_and(|addr| addr.port() != 0),
             listening_addr = ?listening_addr,
             n_hashes = accepted_tx_hashes.len(),
             "record_accepted_from_peer",
         );
-        if listening_addr.is_none() && !OBSERVED_NONE_LISTENING_ADDR.swap(true, Ordering::Relaxed) {
+        if listening_addr.is_none() &&
+            !OBSERVED_MISSING_ATTRIBUTION_ADDR.swap(true, Ordering::Relaxed)
+        {
             warn!(
                 target: "bera_reth::pog",
                 peer_id = %peer_id,
                 n_hashes = accepted_tx_hashes.len(),
-                "first peer accept with listening_addr=None observed (devp2p Hello.port=0); \
-                 first-hear inserts for such accepts are skipped (no p2p peer attribution). \
-                 Track Hello.port hit-rate via \
-                 pog_inflight_tx_first_hears_total{{listening_addr_present}} and skips via \
-                 pog_inflight_tx_first_hears_skipped_no_listening_addr_total.",
+                "provenance bridge omitted the peer attribution address; retaining peer-id \
+                 attribution with first_enode=NULL. Hello.port=0 must be represented by the \
+                 observed remote IP with port 0, not by None.",
             );
         }
         let now_ms = std::time::SystemTime::now()

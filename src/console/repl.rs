@@ -121,10 +121,8 @@ pub async fn run_repl(
 }
 
 fn format_beradmin_startup_line(status: &Value, chain_id: Option<u64>) -> String {
-    let client_version = status
-        .get("clientVersion")
-        .or_else(|| status.get("client_version"))
-        .and_then(as_string);
+    let client_version =
+        status.get("clientVersion").or_else(|| status.get("client_version")).and_then(as_string);
     let network_id =
         status.get("networkId").or_else(|| status.get("network_id")).and_then(as_string);
     let head_number = status
@@ -145,8 +143,7 @@ fn format_beradmin_startup_line(status: &Value, chain_id: Option<u64>) -> String
         .or_else(|| status.get("peer_count_outbound"))
         .and_then(hex_or_decimal_to_u64);
 
-    let peers_str =
-        format_startup_peers(peer_count_total, peer_count_inbound, peer_count_outbound);
+    let peers_str = format_startup_peers(peer_count_total, peer_count_inbound, peer_count_outbound);
 
     format!(
         "node :: {} | net={}{} | block={} | {}",
@@ -174,12 +171,8 @@ async fn print_startup_snapshot(
         );
 
         let version = version.ok().and_then(|v| as_string(&v));
-        let block = block
-            .ok()
-            .and_then(|v| hex_or_decimal_to_u64(&v).map(|n| n.to_string()));
-        let peers = peers
-            .ok()
-            .and_then(|v| hex_or_decimal_to_u64(&v).map(|n| n.to_string()));
+        let block = block.ok().and_then(|v| hex_or_decimal_to_u64(&v).map(|n| n.to_string()));
+        let peers = peers.ok().and_then(|v| hex_or_decimal_to_u64(&v).map(|n| n.to_string()));
         let network = network.ok().and_then(|v| as_string(&v));
 
         println!(
@@ -211,11 +204,7 @@ fn effective_peer_total(total: Option<u64>, inbound: Option<u64>, outbound: Opti
     }
 }
 
-fn format_startup_peers(
-    total: Option<u64>,
-    inbound: Option<u64>,
-    outbound: Option<u64>,
-) -> String {
+fn format_startup_peers(total: Option<u64>, inbound: Option<u64>, outbound: Option<u64>) -> String {
     if let (Some(in_count), Some(out_count)) = (inbound, outbound) {
         let peer_total = effective_peer_total(total, inbound, outbound);
         format!("peers={peer_total} (in={in_count} out={out_count})")
@@ -347,14 +336,8 @@ mod tests {
 
     #[test]
     fn startup_peer_total_falls_back_to_inbound_plus_outbound() {
-        assert_eq!(
-            format_startup_peers(Some(0), Some(3), Some(2)),
-            "peers=5 (in=3 out=2)"
-        );
-        assert_eq!(
-            format_startup_peers(None, Some(1), Some(4)),
-            "peers=5 (in=1 out=4)"
-        );
+        assert_eq!(format_startup_peers(Some(0), Some(3), Some(2)), "peers=5 (in=3 out=2)");
+        assert_eq!(format_startup_peers(None, Some(1), Some(4)), "peers=5 (in=1 out=4)");
     }
 
     #[test]
@@ -387,9 +370,6 @@ mod tests {
             "peer_count_outbound": 2,
         });
         let line = format_beradmin_startup_line(&status, None);
-        assert_eq!(
-            line,
-            "node :: bera-reth/snake | net=1 | block=100 | peers=4 (in=2 out=2)"
-        );
+        assert_eq!(line, "node :: bera-reth/snake | net=1 | block=100 | peers=4 (in=2 out=2)");
     }
 }

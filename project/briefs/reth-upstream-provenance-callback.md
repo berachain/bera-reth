@@ -123,7 +123,7 @@ Widen signature to include `listening_addr: Option<SocketAddr>` (Hello.port + re
 ### Upstream PR 2 (if split)
 
 - [ ] **TP-5** `Hello.port != 0` → `Some(SocketAddr)` on callback.
-- [ ] **TP-6** `Hello.port == 0` → `None`.
+- [ ] **TP-6** `Hello.port == 0` retains the observed remote IP with port `0`.
 
 ### bera-reth after upstream tag available
 
