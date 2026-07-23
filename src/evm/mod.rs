@@ -22,6 +22,12 @@ use reth_evm::{
 };
 use std::ops::{Deref, DerefMut};
 
+/// Gas budget for system calls, including the PoL transaction (BRIP-0004).
+///
+/// Fixed at the pre-EIP-8037 value: newer revm adds a state-gas reservoir on top,
+/// which would change the gas observable by system contracts via `gasleft()`.
+pub const SYSTEM_CALL_GAS_LIMIT: u64 = 30_000_000;
+
 /// Helper builder to construct `BerachainEvm` instances in a unified way.
 #[derive(Debug)]
 pub struct BerachainEvmBuilder<DB: Database, I = NoOpInspector> {
@@ -244,12 +250,12 @@ where
         contract: Address,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        // System calls run with the block gas limit (36M per the Berachain genesis
-        // configurations) instead of revm's default budget, which adds an EIP-8037
-        // state-gas reservoir that would be observable on-chain via `gasleft()`
-        // (e.g. by the PoL distributor).
+        // revm 41's default system-call budget adds an EIP-8037 state-gas reservoir
+        // on top of 30M. That extra headroom is observable on-chain via `gasleft()`
+        // (e.g. by the PoL distributor), so pin the exact 30M budget system calls
+        // had before the reth v2.4.0 upgrade.
         let mut tx = TxEnv::new_system_tx_with_caller(caller, contract, data);
-        tx.gas_limit = self.block.gas_limit;
+        tx.gas_limit = SYSTEM_CALL_GAS_LIMIT;
         self.inner.set_tx(tx);
         let result = if self.inspect {
             MainnetHandler::<_, Self::Error, EthFrame>::default()

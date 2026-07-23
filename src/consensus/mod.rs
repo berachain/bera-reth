@@ -103,7 +103,6 @@ impl BerachainBeaconConsensus {
             expected_pubkey,
             alloy_primitives::U256::from(header.number),
             base_fee,
-            header.gas_limit,
         )
     }
 }
@@ -317,7 +316,7 @@ mod tests {
 
         // Create a PoL transaction
         let pol_tx_envelope =
-            create_pol_transaction(chain_spec, pubkey, block_number, base_fee, 36_000_000).unwrap();
+            create_pol_transaction(chain_spec, pubkey, block_number, base_fee).unwrap();
 
         // Create a block body with the PoL transaction
         let transactions = vec![pol_tx_envelope];

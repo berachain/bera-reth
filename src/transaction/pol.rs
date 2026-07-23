@@ -12,12 +12,13 @@ use reth_chainspec::EthChainSpec;
 use reth_evm::block::{BlockExecutionError, InternalBlockExecutionError};
 use std::sync::Arc;
 
+pub const POL_TX_GAS_LIMIT: u64 = crate::evm::SYSTEM_CALL_GAS_LIMIT;
+
 pub fn create_pol_transaction(
     chain_spec: Arc<BerachainChainSpec>,
     prev_proposer_pubkey: BlsPublicKey,
     block_number: U256,
     base_fee: u64,
-    gas_limit: u64,
 ) -> Result<BerachainTxEnvelope, BlockExecutionError> {
     sol! {
         interface PoLDistributor {
@@ -44,9 +45,9 @@ pub fn create_pol_transaction(
         to: chain_spec.pol_contract(),
         input: Bytes::from(calldata),
         nonce,
-        gas_limit, // the block gas limit (36M per the Berachain genesis configurations)
-        gas_price: base_fee.into(), /* gas price is set to the base fee for RPC
-                    * compatibility reasons */
+        gas_limit: POL_TX_GAS_LIMIT, // this is the env value used in revm for system calls
+        gas_price: base_fee.into(),  /* gas price is set to the base fee for RPC
+                                      * compatibility reasons */
     };
 
     Ok(BerachainTxEnvelope::Berachain(Sealed::new(pol_tx)))
@@ -58,13 +59,11 @@ pub fn validate_pol_transaction(
     expected_pubkey: BlsPublicKey,
     block_number: U256,
     base_fee: u64,
-    gas_limit: u64,
 ) -> Result<(), ConsensusError> {
-    let expected_tx =
-        create_pol_transaction(chain_spec, expected_pubkey, block_number, base_fee, gas_limit)
-            .map_err(|e| {
-                ConsensusError::msg(format!("Failed to create expected PoL transaction: {e}"))
-            })?;
+    let expected_tx = create_pol_transaction(chain_spec, expected_pubkey, block_number, base_fee)
+        .map_err(|e| {
+        ConsensusError::msg(format!("Failed to create expected PoL transaction: {e}"))
+    })?;
 
     let expected_sealed_pol_tx = match expected_tx {
         BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
@@ -94,9 +93,6 @@ mod tests {
         BlsPublicKey::from([1u8; 48])
     }
 
-    /// Block gas limit used across these tests (Berachain networks run 36M).
-    const BLOCK_GAS_LIMIT: u64 = 36_000_000;
-
     #[test]
     fn test_pol_transaction_creation_and_validation() {
         let chain_spec = bepolia_chainspec();
@@ -104,13 +100,8 @@ mod tests {
         let block_number = U256::from(10);
         let base_fee = 1000u64;
 
-        let pol_tx_envelope = create_pol_transaction(
-            chain_spec.clone(),
-            pubkey,
-            block_number,
-            base_fee,
-            BLOCK_GAS_LIMIT,
-        );
+        let pol_tx_envelope =
+            create_pol_transaction(chain_spec.clone(), pubkey, block_number, base_fee);
 
         assert!(pol_tx_envelope.is_ok(), "PoL transaction creation should succeed");
 
@@ -119,14 +110,8 @@ mod tests {
             _ => panic!("Expected PoL transaction"),
         };
 
-        let validation_result = validate_pol_transaction(
-            &pol_tx,
-            chain_spec.clone(),
-            pubkey,
-            block_number,
-            base_fee,
-            BLOCK_GAS_LIMIT,
-        );
+        let validation_result =
+            validate_pol_transaction(&pol_tx, chain_spec.clone(), pubkey, block_number, base_fee);
 
         assert!(validation_result.is_ok(), "Valid PoL transaction should pass validation");
     }
@@ -139,28 +124,17 @@ mod tests {
         let block_number = U256::from(10);
         let base_fee = 1000u64;
 
-        let pol_tx_envelope = create_pol_transaction(
-            chain_spec.clone(),
-            correct_pubkey,
-            block_number,
-            base_fee,
-            BLOCK_GAS_LIMIT,
-        )
-        .unwrap();
+        let pol_tx_envelope =
+            create_pol_transaction(chain_spec.clone(), correct_pubkey, block_number, base_fee)
+                .unwrap();
 
         let pol_tx = match pol_tx_envelope {
             BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
             _ => panic!("Expected PoL transaction"),
         };
 
-        let validation_result = validate_pol_transaction(
-            &pol_tx,
-            chain_spec,
-            wrong_pubkey,
-            block_number,
-            base_fee,
-            BLOCK_GAS_LIMIT,
-        );
+        let validation_result =
+            validate_pol_transaction(&pol_tx, chain_spec, wrong_pubkey, block_number, base_fee);
 
         assert!(
             validation_result.is_err(),
@@ -177,28 +151,17 @@ mod tests {
         let correct_base_fee = 1000u64;
         let wrong_base_fee = 2000u64;
 
-        let pol_tx_envelope = create_pol_transaction(
-            chain_spec.clone(),
-            pubkey,
-            block_number,
-            correct_base_fee,
-            BLOCK_GAS_LIMIT,
-        )
-        .unwrap();
+        let pol_tx_envelope =
+            create_pol_transaction(chain_spec.clone(), pubkey, block_number, correct_base_fee)
+                .unwrap();
 
         let pol_tx = match pol_tx_envelope {
             BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
             _ => panic!("Expected PoL transaction"),
         };
 
-        let validation_result = validate_pol_transaction(
-            &pol_tx,
-            chain_spec,
-            pubkey,
-            block_number,
-            wrong_base_fee,
-            BLOCK_GAS_LIMIT,
-        );
+        let validation_result =
+            validate_pol_transaction(&pol_tx, chain_spec, pubkey, block_number, wrong_base_fee);
 
         assert!(
             validation_result.is_err(),
@@ -215,69 +178,21 @@ mod tests {
         let wrong_block_number = U256::from(20);
         let base_fee = 1000u64;
 
-        let pol_tx_envelope = create_pol_transaction(
-            chain_spec.clone(),
-            pubkey,
-            correct_block_number,
-            base_fee,
-            BLOCK_GAS_LIMIT,
-        )
-        .unwrap();
+        let pol_tx_envelope =
+            create_pol_transaction(chain_spec.clone(), pubkey, correct_block_number, base_fee)
+                .unwrap();
 
         let pol_tx = match pol_tx_envelope {
             BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
             _ => panic!("Expected PoL transaction"),
         };
 
-        let validation_result = validate_pol_transaction(
-            &pol_tx,
-            chain_spec,
-            pubkey,
-            wrong_block_number,
-            base_fee,
-            BLOCK_GAS_LIMIT,
-        );
+        let validation_result =
+            validate_pol_transaction(&pol_tx, chain_spec, pubkey, wrong_block_number, base_fee);
 
         assert!(
             validation_result.is_err(),
             "PoL transaction with wrong block number should fail validation"
-        );
-        assert!(validation_result.unwrap_err().to_string().contains("hash mismatch"));
-    }
-
-    #[test]
-    fn test_pol_transaction_validation_wrong_gas_limit() {
-        let chain_spec = bepolia_chainspec();
-        let pubkey = mock_bls_pubkey();
-        let block_number = U256::from(10);
-        let base_fee = 1000u64;
-
-        let pol_tx_envelope = create_pol_transaction(
-            chain_spec.clone(),
-            pubkey,
-            block_number,
-            base_fee,
-            BLOCK_GAS_LIMIT,
-        )
-        .unwrap();
-
-        let pol_tx = match pol_tx_envelope {
-            BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
-            _ => panic!("Expected PoL transaction"),
-        };
-
-        let validation_result = validate_pol_transaction(
-            &pol_tx,
-            chain_spec,
-            pubkey,
-            block_number,
-            base_fee,
-            30_000_000,
-        );
-
-        assert!(
-            validation_result.is_err(),
-            "PoL transaction with wrong gas limit should fail validation"
         );
         assert!(validation_result.unwrap_err().to_string().contains("hash mismatch"));
     }
@@ -298,18 +213,11 @@ mod tests {
         let block_number = U256::from(42);
         let base_fee = 1337u64;
 
-        let pol_tx1_envelope = create_pol_transaction(
-            chain_spec.clone(),
-            pubkey,
-            block_number,
-            base_fee,
-            BLOCK_GAS_LIMIT,
-        )
-        .unwrap();
+        let pol_tx1_envelope =
+            create_pol_transaction(chain_spec.clone(), pubkey, block_number, base_fee).unwrap();
 
         let pol_tx2_envelope =
-            create_pol_transaction(chain_spec, pubkey, block_number, base_fee, BLOCK_GAS_LIMIT)
-                .unwrap();
+            create_pol_transaction(chain_spec, pubkey, block_number, base_fee).unwrap();
 
         let pol_tx1 = match pol_tx1_envelope {
             BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,

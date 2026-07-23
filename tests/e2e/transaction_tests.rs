@@ -228,7 +228,7 @@ async fn test_pol_transaction_auto_inclusion() -> eyre::Result<()> {
     assert_eq!(pol_tx.from, SYSTEM_ADDRESS);
     assert_eq!(pol_tx.to, expected_pol_contract);
     assert_eq!(pol_tx.nonce, 0);
-    assert_eq!(pol_tx.gas_limit, block.header().gas_limit());
+    assert_eq!(pol_tx.gas_limit, 30_000_000);
     assert_eq!(pol_tx.gas_price, block_base_fee as u128);
     assert!(!pol_tx.input.is_empty());
 
