@@ -2,6 +2,7 @@ use reth_rpc_eth_api::helpers::config::EthConfigApiServer;
 pub mod api;
 pub mod config;
 pub mod receipt;
+pub mod txpool;
 
 use crate::{
     chainspec::BerachainChainSpec,
@@ -15,6 +16,7 @@ use crate::{
         api::{BerachainApi, BerachainNetwork},
         config::BerachainConfigHandler,
         receipt::BerachainEthReceiptConverter,
+        txpool::{TxpoolMinPriorityFeeApiServer, TxpoolMinPriorityFeeHandler},
     },
 };
 use reth::{
@@ -166,12 +168,18 @@ where
     ) -> eyre::Result<Self::Handle> {
         let berachain_config =
             BerachainConfigHandler::new(ctx.node.provider().clone(), ctx.node.evm_config().clone());
+        let min_priority_fee =
+            TxpoolMinPriorityFeeHandler::new(ctx.config.txpool.minimum_priority_fee);
 
         self.inner
             .launch_add_ons_with(ctx, move |container| {
                 container
                     .modules
                     .merge_if_module_configured(RethRpcModule::Eth, berachain_config.into_rpc())?;
+                container.modules.merge_if_module_configured(
+                    RethRpcModule::Txpool,
+                    min_priority_fee.into_rpc(),
+                )?;
                 Ok(())
             })
             .await
