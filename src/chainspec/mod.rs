@@ -2499,7 +2499,7 @@ mod tests {
         assert_eq!(fork_id_prague2.next, 1762164459, "next fork should be Prague3");
         assert_eq!(fork_id_prague3.next, 1762963200, "next fork should be Prague4");
         assert_eq!(fork_id_prague4.next, 1783526400, "next fork should be Osaka");
-        assert_eq!(fork_id_osaka.next, 9999999999, "next fork should be Osaka1");
+        assert_eq!(fork_id_osaka.next, 1785945600, "next fork should be Osaka1");
         assert_eq!(fork_id_future.next, 0, "no next fork in far future");
 
         // Expected fork hash values for mainnet
@@ -2511,7 +2511,7 @@ mod tests {
         assert_eq!(fork_id_prague3.hash, ForkHash([0x64, 0x94, 0xa1, 0x76]));
         assert_eq!(fork_id_prague4.hash, ForkHash([0x70, 0x1a, 0x09, 0x7f]));
         assert_eq!(fork_id_osaka.hash, ForkHash([0xbb, 0x99, 0xd3, 0xeb]));
-        assert_eq!(fork_id_future.hash, ForkHash([0x16, 0x66, 0xea, 0xde]));
+        assert_eq!(fork_id_future.hash, ForkHash([0x5a, 0xd9, 0x30, 0xbc]));
     }
 
     #[test]
