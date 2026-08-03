@@ -1,6 +1,6 @@
 [package]
 name = "bera-reth"
-version = "1.4.3"
+version = "1.4.4"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
@@ -84,6 +84,8 @@ alloy-rpc-types-trace = "2.1.1"
 eyre = "0.6.12"
 reth-e2e-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v2.4.0" }
 reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v2.4.0" }
+reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v2.4.0", features = ["test-utils"] }
+reth-trie-common = { git = "https://github.com/paradigmxyz/reth", tag = "v2.4.0" }
 revm-inspectors = "0.41.0"
 tempfile = "3"
 test-fuzz = "7"
