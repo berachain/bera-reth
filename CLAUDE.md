@@ -23,14 +23,14 @@ Bera-Reth is a high-performance Rust execution client for Berachain, built on th
 Users should clone these repositories alongside bera-reth for development reference:
 
 - **Prime Reference**: [Reth](https://github.com/paradigmxyz/reth) - Study `src/main.rs` and node builder patterns
-- **Integration**: [BeaconKit](https://github.com/berachain/beacon-kit) (v1.4.2) - Required for local testing
+- **Integration**: [BeaconKit](https://github.com/berachain/beacon-kit) - Required for local testing
 
 Recommended directory structure:
 ```
 Code/
 ├── bera-reth/          # This repository
 ├── reth/               # git clone https://github.com/paradigmxyz/reth.git && cd reth && git checkout v2.4.0
-└── beacon-kit/         # git clone --branch v1.4.2-rc.0 https://github.com/berachain/beacon-kit.git
+└── beacon-kit/         # git clone https://github.com/berachain/beacon-kit.git
 ```
 
 ## Development Workflow

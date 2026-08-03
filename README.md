@@ -35,12 +35,12 @@ cargo build --release
 
 ## Running with BeaconKit
 
-Bera-reth is the execution layer; [BeaconKit](https://github.com/berachain/beacon-kit) (v1.4.2) is the consensus layer that drives it over the Engine API. The authoritative version-pairing table per network lives at [docs.berachain.com/nodes/architecture/evm-execution](https://docs.berachain.com/nodes/architecture/evm-execution).
+Bera-reth is the execution layer; [BeaconKit](https://github.com/berachain/beacon-kit) is the consensus layer that drives it over the Engine API. The authoritative version-pairing table per network lives at [docs.berachain.com/nodes/architecture/evm-execution](https://docs.berachain.com/nodes/architecture/evm-execution).
 
 For local development, clone BeaconKit next to this repository:
 
 ```bash
-git clone --branch v1.4.2-rc.0 https://github.com/berachain/beacon-kit.git ../beacon-kit
+git clone https://github.com/berachain/beacon-kit.git ../beacon-kit
 ```
 
 Two-terminal flow:
