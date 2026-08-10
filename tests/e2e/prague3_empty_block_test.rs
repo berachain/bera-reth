@@ -1,3 +1,9 @@
+//! Pins the Prague3 empty-block builder behavior that ran on Berachain mainnet
+//! during the closed historical window `[1762164459, 1762963200)`. The genesis
+//! fixture lives under `tests/fixtures/historical/` (see the README there) to
+//! signal that it models a non-live fork window. The consensus rules being
+//! exercised are documented in `src/consensus/mod.rs`.
+
 use crate::e2e::berachain_payload_attributes_generator;
 use bera_reth::{
     chainspec::BerachainChainSpec, node::BerachainNode, transaction::BerachainTxEnvelope,
@@ -15,7 +21,7 @@ async fn test_prague3_builds_empty_block() -> eyre::Result<()> {
     let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
 
     let genesis_path =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis-prague3.json");
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/historical/eth-genesis-prague3.json");
     let genesis_json = std::fs::read_to_string(genesis_path)?;
     let genesis = parse_genesis(&genesis_json)?;
     let chain_spec = Arc::new(BerachainChainSpec::from(genesis));
