@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 alloy-consensus = "1.6.3"
-alloy-eips = "1.6.3"
+alloy-eips = "1.8.3"
 alloy-evm = "0.27.2"
 alloy-genesis = "1.6.3"
 alloy-network = "1.6.3"
