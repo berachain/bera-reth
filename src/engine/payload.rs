@@ -262,8 +262,8 @@ impl From<BerachainBuiltPayload> for BerachainExecutionData {
 /// Generates the payload id for Berachain payloads from the [`BerachainPayloadAttributes`].
 ///
 /// This extends the standard Ethereum payload_id generation by including the
-/// optional prev_proposer_pubkey in the hash calculation, ensuring payload IDs
-/// are unique when the proposer pubkey differs.
+/// optional target_gas_limit and prev_proposer_pubkey in the hash calculation,
+/// ensuring payload IDs are unique when either differs.
 ///
 /// Returns an 8-byte identifier by hashing the payload components with sha256 hash.
 pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttributes) -> PayloadId {
@@ -282,6 +282,15 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
 
     if let Some(parent_beacon_block) = attributes.inner.parent_beacon_block_root {
         hasher.update(parent_beacon_block);
+    }
+
+    // The gas limit steers block building, so it must be part of the ID or the
+    // payload cache could serve a block built with a stale limit. The tag byte
+    // discriminates presence from other optional fields; hashing nothing when
+    // absent preserves the legacy IDs.
+    if let Some(target_gas_limit) = attributes.inner.target_gas_limit {
+        hasher.update([1u8]);
+        hasher.update(target_gas_limit.to_be_bytes());
     }
 
     // Include prev_proposer_pubkey in the hash if present
@@ -397,6 +406,71 @@ mod tests {
         // Critical test: None vs Some([]) should produce different hashes
         // This matches geth behavior where None skips encoding, Some([]) encodes empty list
         assert_ne!(id_none, id_empty);
+    }
+
+    #[test]
+    fn test_target_gas_limit_affects_payload_id() {
+        let parent = b256!("0000000000000000000000000000000000000000000000000000000000000001");
+
+        let base_inner = EthPayloadAttributes {
+            timestamp: 1000,
+            prev_randao: b256!("0000000000000000000000000000000000000000000000000000000000000002"),
+            suggested_fee_recipient: Address::from([0x01; 20]),
+            withdrawals: None,
+            parent_beacon_block_root: None,
+            ..Default::default()
+        };
+
+        let attributes_without =
+            BerachainPayloadAttributes { inner: base_inner.clone(), prev_proposer_pubkey: None };
+        let attributes_with = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                target_gas_limit: Some(30_000_000),
+                ..base_inner.clone()
+            },
+            prev_proposer_pubkey: None,
+        };
+        let attributes_with_other = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes { target_gas_limit: Some(60_000_000), ..base_inner },
+            prev_proposer_pubkey: None,
+        };
+
+        let id_without = attributes_without.payload_id(&parent);
+        let id_with = attributes_with.payload_id(&parent);
+        let id_with_other = attributes_with_other.payload_id(&parent);
+
+        // Presence of a target gas limit must change the payload ID so the
+        // cache cannot return a block built without the limit applied.
+        assert_ne!(id_without, id_with);
+
+        // Different limits must yield different IDs.
+        assert_ne!(id_with, id_with_other);
+    }
+
+    #[test]
+    fn test_payload_id_stable_when_target_gas_limit_absent() {
+        // Golden value computed with the pre-target-gas-limit derivation:
+        // sha256(parent ++ timestamp ++ prev_randao ++ fee_recipient)[..8].
+        // Attributes without a target gas limit must keep producing legacy IDs.
+        let parent = b256!("0000000000000000000000000000000000000000000000000000000000000001");
+        let attributes = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                timestamp: 1000,
+                prev_randao: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                ),
+                suggested_fee_recipient: Address::from([0x01; 20]),
+                withdrawals: None,
+                parent_beacon_block_root: None,
+                ..Default::default()
+            },
+            prev_proposer_pubkey: None,
+        };
+
+        assert_eq!(
+            attributes.payload_id(&parent),
+            PayloadId::new([0x4a, 0x85, 0x13, 0xb9, 0x8d, 0xbf, 0xaf, 0x30])
+        );
     }
 
     #[test]
