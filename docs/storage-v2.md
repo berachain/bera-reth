@@ -74,5 +74,4 @@ P2P since there are no Berachain snapshots.
   version) of a datadir.
 - ERA history import (`--era.enable`) exists upstream but there are no published
   Berachain ERA files yet, so it is not usable on Berachain today.
-- The experimental JIT EVM (`--jit`) is present in the CLI but unvetted against
-  Berachain's custom EVM; do not enable it on validators.
+- The JIT EVM is not included in this build because reth's `jit` feature is disabled.
