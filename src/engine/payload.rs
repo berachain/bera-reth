@@ -1,14 +1,19 @@
-use super::{BerachainExecutionData, BerachainExecutionPayloadEnvelopeV4};
+use super::{
+    BerachainExecutionData, BerachainExecutionPayloadEnvelopeV4, BerachainExecutionPayloadSidecar,
+};
 use crate::{
     chainspec::BerachainChainSpec,
     primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
 };
 use alloy_consensus::BlockHeader;
-use alloy_eips::{eip4895::Withdrawal, eip7685::Requests};
+use alloy_eips::{
+    eip4895::Withdrawal,
+    eip7685::{Requests, RequestsOrHash},
+};
 use alloy_primitives::{Address, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rpc_types::engine::{
-    BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
+    BlobsBundleV1, CancunPayloadFields, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV5, ExecutionPayloadFieldV2, ExecutionPayloadV1, ExecutionPayloadV3,
     PayloadId,
 };
@@ -252,10 +257,28 @@ impl BuiltPayload for BerachainBuiltPayload {
 
 impl From<BerachainBuiltPayload> for BerachainExecutionData {
     fn from(value: BerachainBuiltPayload) -> Self {
-        crate::engine::BerachainEngineTypes::block_to_payload(
-            Arc::unwrap_or_clone(value.block),
+        let BerachainBuiltPayload { block, requests, .. } = value;
+        let mut data = crate::engine::BerachainEngineTypes::block_to_payload(
+            Arc::unwrap_or_clone(block),
             None,
-        )
+        );
+
+        // The sidecar derived from the block carries only the header's requests hash;
+        // restore the request list stored on the built payload so downstream
+        // validation sees the actual request bytes instead of skipping to the hash.
+        if let Some(requests) = requests &&
+            let Some(parent_beacon_block_root) = data.sidecar.parent_beacon_block_root()
+        {
+            let versioned_hashes = data.sidecar.versioned_hashes().cloned().unwrap_or_default();
+            let parent_proposer_pub_key = data.sidecar.parent_proposer_pub_key();
+            data.sidecar = BerachainExecutionPayloadSidecar::v4(
+                CancunPayloadFields { parent_beacon_block_root, versioned_hashes },
+                RequestsOrHash::Requests(requests),
+                parent_proposer_pub_key,
+            );
+        }
+
+        data
     }
 }
 
@@ -563,6 +586,54 @@ mod tests {
         assert!(
             envelope.execution_requests.is_empty(),
             "execution_requests must default to empty when payload has no requests"
+        );
+    }
+
+    #[test]
+    fn test_from_built_payload_preserves_requests() {
+        let pubkey = BlsPublicKey::from([0x42; 48]);
+        let requests =
+            Requests::new(vec![alloy_primitives::Bytes::from_static(b"\x00test_request")]);
+        let parent_beacon_block_root =
+            b256!("0000000000000000000000000000000000000000000000000000000000000003");
+
+        let header = BerachainHeader {
+            prev_proposer_pubkey: Some(pubkey),
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            parent_beacon_block_root: Some(parent_beacon_block_root),
+            requests_hash: Some(requests.requests_hash()),
+            ..Default::default()
+        };
+        let block = alloy_consensus::Block {
+            header,
+            body: alloy_consensus::BlockBody {
+                transactions: vec![],
+                ommers: vec![],
+                withdrawals: None,
+            },
+        };
+        let sealed = SealedBlock::new_unhashed(block);
+
+        let payload = BerachainBuiltPayload::new(
+            PayloadId::new([4; 8]),
+            std::sync::Arc::new(sealed),
+            U256::ZERO,
+            Some(requests.clone()),
+        );
+
+        let data = BerachainExecutionData::from(payload);
+
+        assert_eq!(
+            data.sidecar.requests(),
+            Some(&requests),
+            "converted sidecar must carry the request bytes, not just the requests hash"
+        );
+        assert_eq!(data.sidecar.parent_beacon_block_root(), Some(parent_beacon_block_root));
+        assert_eq!(
+            data.sidecar.parent_proposer_pub_key(),
+            Some(pubkey),
+            "proposer pubkey from the block must survive the sidecar rebuild"
         );
     }
 
