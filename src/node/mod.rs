@@ -45,11 +45,12 @@ const BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD: u64 = 0;
 const BERACHAIN_DEFAULT_MEMORY_BLOCK_BUFFER_TARGET: u64 = 0;
 
 /// Installs Berachain-tuned engine CLI defaults. Must be called before CLI parsing.
-pub fn init_engine_defaults() -> Result<(), DefaultEngineValues> {
+pub fn init_engine_defaults() {
     DefaultEngineValues::default()
         .with_persistence_threshold(BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD)
         .with_memory_block_buffer_target(BERACHAIN_DEFAULT_MEMORY_BLOCK_BUFFER_TARGET)
         .try_init()
+        .expect("engine defaults must initialize once");
 }
 
 /// Type configuration for a regular Berachain node.
@@ -145,7 +146,7 @@ mod tests {
     /// initialized once per process.
     #[test]
     fn engine_defaults_pin_zero_memory_block_buffer_target() {
-        init_engine_defaults().expect("engine defaults must initialize once");
+        init_engine_defaults();
 
         let parsed = TestParser::parse_from(["bera-reth"]);
         assert_eq!(parsed.args.persistence_threshold, 0);
