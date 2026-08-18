@@ -1,3 +1,7 @@
+// The jsonrpsee `rpc` macro (via async_trait) adds `#[must_use]` to generated methods that
+// already return `#[must_use]` futures, tripping clippy's `double_must_use` on nightly.
+#![allow(clippy::double_must_use)]
+
 use crate::{
     engine::{
         BerachainExecutionData, BerachainExecutionPayloadSidecar,
