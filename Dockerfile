@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1.7-labs
 
-# MSRV 1.95 (reth v2.4.0); pinned so stale cached latest-rust-1 digests cannot silently drop below it
+# MSRV 1.95 (reth v2.5.0); pinned so stale cached latest-rust-1 digests cannot silently drop below it
 FROM lukemathwalker/cargo-chef:latest-rust-1.97 AS chef
 WORKDIR /app
 

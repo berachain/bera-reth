@@ -4,7 +4,7 @@ Bera-Reth is a high-performance Rust execution client for Berachain, built on th
 
 ## Project Overview
 
-**What**: Rust execution client for Berachain using Reth SDK (git tag `v2.4.0` across all reth-* deps; reth node crates are not on crates.io)  
+**What**: Rust execution client for Berachain using Reth SDK (git tag `v2.5.0` across all reth-* deps; reth node crates are not on crates.io)  
 **Status**: Production (runs Berachain mainnet)  
 **Toolchain**: MSRV 1.95, edition 2024; `make pr` uses nightly for fmt/clippy  
 **Architecture**: Standard Ethereum execution with Berachain-specific chain configuration  
@@ -29,7 +29,7 @@ Recommended directory structure:
 ```
 Code/
 ├── bera-reth/          # This repository
-├── reth/               # git clone https://github.com/paradigmxyz/reth.git && cd reth && git checkout v2.4.0
+├── reth/               # git clone https://github.com/paradigmxyz/reth.git && cd reth && git checkout v2.5.0
 └── beacon-kit/         # git clone https://github.com/berachain/beacon-kit.git
 ```
 

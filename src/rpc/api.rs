@@ -103,6 +103,7 @@ impl reth_rpc_convert::RpcTypes for BerachainNetwork {
     type Receipt = alloy_rpc_types_eth::TransactionReceipt<BerachainReceiptEnvelope>;
     type TransactionResponse = RpcTransaction<BerachainTxEnvelope>;
     type TransactionRequest = TransactionRequest;
+    type Log = alloy_rpc_types_eth::Log;
 }
 
 #[derive(Deref)]

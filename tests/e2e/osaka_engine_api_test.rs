@@ -44,8 +44,7 @@ async fn test_get_payload_v4_p11_works_post_osaka() -> eyre::Result<()> {
         .send_new_payload(BuildNewPayload {
             attributes: attrs,
             parent_hash: B256::ZERO,
-            cache: None,
-            state_root_handle: None,
+            resources: Default::default(),
         })
         .await??;
     ctx.payload.wait_for_built_payload(payload_id).await;

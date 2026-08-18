@@ -1,5 +1,5 @@
 use crate::{
-    primitives::BerachainPrimitives,
+    primitives::{BerachainHeader, BerachainPrimitives},
     transaction::{BerachainTxType, POL_TX_TYPE},
 };
 use alloy_consensus::{Eip658Value, Receipt, ReceiptWithBloom, TxReceipt, TxType, Typed2718};
@@ -8,7 +8,7 @@ use alloy_primitives::Bloom;
 use alloy_rlp::BufMut;
 use alloy_rpc_types_eth::{Log, TransactionReceipt};
 use reth_chainspec::EthChainSpec;
-use reth_primitives_traits::InMemorySize;
+use reth_primitives_traits::{InMemorySize, SealedHeader};
 use reth_rpc_convert::transaction::{ConvertReceiptInput, ReceiptConverter};
 use reth_rpc_eth_types::{EthApiError, receipt::build_receipt};
 use std::sync::Arc;
@@ -205,7 +205,17 @@ where
     ChainSpec: EthChainSpec + 'static,
 {
     type RpcReceipt = TransactionReceipt<BerachainReceiptEnvelope>;
+    type RpcLog = Log;
     type Error = EthApiError;
+
+    fn convert_log(
+        &self,
+        log: Log,
+        _receipt: &reth_ethereum_primitives::Receipt<BerachainTxType>,
+        _header: &SealedHeader<BerachainHeader>,
+    ) -> Result<Self::RpcLog, Self::Error> {
+        Ok(log)
+    }
 
     fn convert_receipts(
         &self,

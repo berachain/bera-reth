@@ -190,7 +190,7 @@ impl PoolTransaction for BerachainPooledTransaction {
                 let tx = BerachainTxEnvelope::from(TransactionSigned::from(tx));
                 let tx = Recovered::new_unchecked(tx, signer);
                 let mut pooled = Self::new(tx, encoded_length);
-                pooled.blob_sidecar = EthBlobTransactionSidecar::Present(blob);
+                pooled.blob_sidecar = EthBlobTransactionSidecar::Present(blob.into());
                 pooled
             }
             tx => {

@@ -1,6 +1,6 @@
 # Storage V2 Operator Guide
 
-Bera-reth is built on reth `v2.4.0`, which ships reth's new hot/cold storage layout
+Bera-reth is built on reth `v2.5.0`, which ships reth's new hot/cold storage layout
 ("Storage V2"). This guide covers what changed and what, if anything, node operators
 need to do.
 

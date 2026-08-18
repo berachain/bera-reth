@@ -15,13 +15,13 @@
 
 # Bera-Reth
 
-A high-performance Rust execution client for Berachain, built with the Reth SDK (pinned to reth `v2.4.0`).
+A high-performance Rust execution client for Berachain, built with the Reth SDK (pinned to reth `v2.5.0`).
 
 ## Getting Started
 
 ### Prerequisites
 
-- Rust 1.95+ (MSRV inherited from reth v2.4.0; current stable works)
+- Rust 1.95+ (MSRV inherited from reth v2.5.0; current stable works)
 - A nightly toolchain for `make pr` (rustfmt/clippy)
 - Git
 
