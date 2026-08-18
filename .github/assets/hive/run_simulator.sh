@@ -6,12 +6,15 @@ cd hivetests/
 
 sim="${1}"
 limit="${2}"
-fixture_variant="${3:-}"
+fixture_variant="${3:-osaka}"
 
 if [[ "${fixture_variant}" == "osaka" && "${sim}" == *"eels"* && "${limit}" == *"tests/amsterdam"* ]]; then
     echo "osaka fixtures do not support amsterdam tests"
     exit 1
 fi
+
+log_file="$(mktemp)"
+trap 'rm -f "${log_file}"' EXIT
 
 # Use lower parallelism for eels tests to avoid OOM-killing the runner
 parallelism=16
@@ -26,11 +29,11 @@ run_hive() {
   --sim.limit.exact=false \
   --sim.parallelism "${parallelism}" \
   --client bera-reth \
-  2>&1 | tee /tmp/log || true
+  2>&1 | tee "${log_file}" || true
 }
 
 check_log() {
-    tail -n 1 /tmp/log | sed -r 's/\x1B\[[0-9;]*[mK]//g'
+    tail -n 1 "${log_file}" | sed -r 's/\x1B\[[0-9;]*[mK]//g'
 }
 
 attempt=0
