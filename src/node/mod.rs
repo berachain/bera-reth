@@ -29,9 +29,28 @@ use reth_node_builder::{
     DebugNode, Node, NodeAdapter, NodeComponentsBuilder,
     components::{BasicPayloadServiceBuilder, ComponentsBuilder},
 };
+use reth_node_core::args::DefaultEngineValues;
 use reth_node_ethereum::node::EthereumNetworkBuilder;
 use reth_payload_primitives::{PayloadAttributesBuilder, PayloadTypes};
 use std::sync::Arc;
+
+/// Persist every canonical block to disk immediately rather than buffering.
+/// Upstream reth defaults to 7, but Berachain's faster block times benefit from
+/// eager persistence to keep the in-memory block window minimal.
+const BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD: u64 = 0;
+
+/// Keep zero recent blocks in memory by default, preserving pre-v2.5.0 behavior after
+/// upstream raised `DEFAULT_MEMORY_BLOCK_BUFFER_TARGET` from 0 to 5 (paradigmxyz/reth#26462).
+/// An explicit `--engine.memory-block-buffer-target` flag still overrides this.
+const BERACHAIN_DEFAULT_MEMORY_BLOCK_BUFFER_TARGET: u64 = 0;
+
+/// Installs Berachain-tuned engine CLI defaults. Must be called before CLI parsing.
+pub fn init_engine_defaults() -> Result<(), DefaultEngineValues> {
+    DefaultEngineValues::default()
+        .with_persistence_threshold(BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD)
+        .with_memory_block_buffer_target(BERACHAIN_DEFAULT_MEMORY_BLOCK_BUFFER_TARGET)
+        .try_init()
+}
 
 /// Type configuration for a regular Berachain node.
 
@@ -107,5 +126,44 @@ where
         BerachainHeader,
     > {
         LocalPayloadAttributesBuilder::new(Arc::new(chain_spec.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+    use reth_node_core::args::EngineArgs;
+
+    #[derive(Parser)]
+    struct TestParser {
+        #[command(flatten)]
+        args: EngineArgs,
+    }
+
+    /// Single test covering all default assertions: the engine-defaults global can only be
+    /// initialized once per process.
+    #[test]
+    fn engine_defaults_pin_zero_memory_block_buffer_target() {
+        init_engine_defaults().expect("engine defaults must initialize once");
+
+        let parsed = TestParser::parse_from(["bera-reth"]);
+        assert_eq!(parsed.args.persistence_threshold, 0);
+        assert_eq!(parsed.args.memory_block_buffer_target(), 0);
+        let tree = parsed.args.tree_config();
+        assert_eq!(tree.persistence_threshold(), 0);
+        assert_eq!(tree.memory_block_buffer_target(), 0);
+
+        // A raised persistence threshold must not silently re-enable in-memory buffering
+        // via upstream's `min(persistence_threshold, default)` fallback.
+        let parsed = TestParser::parse_from(["bera-reth", "--engine.persistence-threshold", "7"]);
+        assert_eq!(parsed.args.memory_block_buffer_target(), 0);
+        assert_eq!(parsed.args.tree_config().memory_block_buffer_target(), 0);
+
+        // An explicit flag still wins over the pinned default.
+        let parsed =
+            TestParser::parse_from(["bera-reth", "--engine.memory-block-buffer-target", "3"]);
+        assert_eq!(parsed.args.memory_block_buffer_target(), 3);
+        assert_eq!(parsed.args.tree_config().memory_block_buffer_target(), 3);
     }
 }
