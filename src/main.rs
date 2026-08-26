@@ -1,5 +1,7 @@
 //! Bera-Reth main entry point
 
+mod download_manifest_url;
+
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
@@ -10,6 +12,7 @@ use bera_reth::{
     node::{BerachainNode, evm::config::BerachainEvmConfig, init_engine_defaults},
     version::init_bera_version,
 };
+use download_manifest_url::with_resolved_manifest_url;
 use clap::Parser;
 use reth::CliRunner;
 use reth_cli_commands::node::NoArgs;
@@ -39,7 +42,15 @@ fn main() {
         )
     };
 
-    if let Err(err) = Cli::<BerachainChainSpecParser, NoArgs>::parse()
+    // For `download --chain <mainnet|bepolia>` with no explicit manifest
+    // source, construct Berachain's fixed per-chain manifest URL before clap
+    // ever sees the args. Upstream reth's own snapshot auto-discovery only
+    // ever works for Ethereum mainnet (chain ID 1), which Berachain's chain
+    // IDs (80094, 80069) never match, so without this every restore requires
+    // an operator to hand-copy a manifest URL first.
+    let argv = with_resolved_manifest_url(std::env::args().collect());
+
+    if let Err(err) = Cli::<BerachainChainSpecParser, NoArgs>::parse_from(argv)
         .with_runner_and_components::<BerachainNode>(
             CliRunner::try_default_runtime().expect("Failed to create default runtime"),
             cli_components_builder,
