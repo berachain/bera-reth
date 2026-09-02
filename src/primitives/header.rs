@@ -1001,7 +1001,7 @@ mod db_format {
 
     /// On-disk Compact encoding of a fully-populated post-Prague1 header
     /// (requests_hash + prev_proposer_pubkey extension fields set).
-    const HEADER_V2_4_0_GOLDEN: &str = concat!(
+    const HEADER_V2_5_0_GOLDEN: &str = concat!(
         "812121f811111111111111111111111111111111111111111111111111111111",
         "1111111122222222222222222222222222222222222222222222222222222222",
         "2222222233333333333333333333333333333333333333334444444444444444",
@@ -1063,7 +1063,7 @@ mod db_format {
         let len = Compact::to_compact(&header, &mut buf);
 
         assert_eq!(len, 643, "encoded length changed");
-        assert_eq!(alloy_primitives::hex::encode(&buf), HEADER_V2_4_0_GOLDEN);
+        assert_eq!(alloy_primitives::hex::encode(&buf), HEADER_V2_5_0_GOLDEN);
 
         let (decoded, _) = BerachainHeader::from_compact(&buf, len);
         assert_eq!(decoded, header);

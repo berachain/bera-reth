@@ -1225,7 +1225,7 @@ mod db_format {
     /// On-disk Compact encoding of a PoL transaction envelope. This is the
     /// Berachain-specific extended-envelope format (type 0x7e); existing
     /// databases must keep decoding it byte-for-byte.
-    const POL_ENVELOPE_V2_4_0_GOLDEN: &str = concat!(
+    const POL_ENVELOPE_V2_5_0_GOLDEN: &str = concat!(
         "0600000000000000000000000000000000000000000000000000000000000000",
         "0000000000000000000000000000000000000000000000000000000000000000",
         "007e1344000138defefefefefefefefefefefefefefefefefefefefe42424242",
@@ -1253,7 +1253,7 @@ mod db_format {
         let len = Compact::to_compact(&envelope, &mut buf);
 
         assert_eq!(len, 125, "encoded length changed");
-        assert_eq!(alloy_primitives::hex::encode(&buf), POL_ENVELOPE_V2_4_0_GOLDEN);
+        assert_eq!(alloy_primitives::hex::encode(&buf), POL_ENVELOPE_V2_5_0_GOLDEN);
 
         let (decoded, _) = <BerachainTxEnvelope as Compact>::from_compact(&buf, len);
         assert_eq!(decoded, envelope);
