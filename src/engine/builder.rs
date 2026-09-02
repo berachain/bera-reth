@@ -190,6 +190,9 @@ where
 {
     // The shared execution cache and incremental state-root task are engine-side
     // optimizations; Berachain computes the state root synchronously in `finish`.
+    //
+    // TODO: measure the payload-builder build-duration / getPayload latency metrics (p50/p99) plus
+    // proposal round times; consume execution_cache/state_root_handle in default_berachain_payload 
     let BuildArguments {
         mut cached_reads,
         execution_cache: _,
