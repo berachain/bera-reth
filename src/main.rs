@@ -12,8 +12,8 @@ use bera_reth::{
     node::{BerachainNode, evm::config::BerachainEvmConfig, init_engine_defaults},
     version::init_bera_version,
 };
-use download_manifest_url::with_resolved_manifest_url;
 use clap::Parser;
+use download_manifest_url::with_resolved_manifest_url;
 use reth::CliRunner;
 use reth_cli_commands::node::NoArgs;
 use reth_ethereum_cli::Cli;

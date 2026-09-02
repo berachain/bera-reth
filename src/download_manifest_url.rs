@@ -32,17 +32,27 @@ const PUBLIC_BASE: &str = "https://bera-snapshots.fsn1.your-objectstorage.com";
 /// for example) is left untouched.
 const KNOWN_CHAINS: &[&str] = &["mainnet", "bepolia"];
 
+/// Boolean short flags on `download` that clap lets an operator cluster in
+/// front of `-u` in a single token (`-yu <URL>`, `-vvyu<URL>`): `-y`
+/// (`--non-interactive`) plus the global `-v`/`-q` display flags.
+const CLUSTERABLE_BOOL_SHORTS: &[char] = &['y', 'v', 'q'];
+
 /// Rewrites `argv` to inject `--manifest-url` when the caller ran
 /// `download --chain <mainnet|bepolia>` without supplying a manifest source
 /// of their own. Returns `argv` unchanged for every other invocation:
-/// non-`download` commands, a download that already names a manifest
-/// source, an unrecognized `--chain` value, or `--list`/`--help`.
+/// commands whose subcommand is not `download`, a download that already
+/// names a manifest source, an unrecognized `--chain` value, or
+/// `--list`/`--help`.
 pub(crate) fn with_resolved_manifest_url(argv: Vec<String>) -> Vec<String> {
-    if !is_bare_download_needing_manifest(&argv) {
+    let Some(download_args) = download_subcommand_args(&argv) else {
+        return argv;
+    };
+
+    if has_explicit_manifest_source(download_args) || is_list_or_help(download_args) {
         return argv;
     }
 
-    let Some(chain) = chain_arg(&argv) else {
+    let Some(chain) = chain_arg(download_args) else {
         return argv;
     };
 
@@ -61,37 +71,70 @@ fn manifest_url(chain: &str) -> String {
     format!("{PUBLIC_BASE}/v2/{chain}/reth/manifest.json")
 }
 
-/// Returns `true` only for a `download` invocation that has no manifest
-/// source of its own and isn't `--list`/`--help` (which don't need one).
-fn is_bare_download_needing_manifest(argv: &[String]) -> bool {
-    if !argv.iter().any(|a| a == "download") {
-        return false;
-    }
-
-    let has_explicit_source = argv.iter().any(|a| {
-        a == "--manifest-url"
-            || a.starts_with("--manifest-url=")
-            || a == "--manifest-path"
-            || a.starts_with("--manifest-path=")
-            || a == "-u"
-            || a == "--url"
-            || a.starts_with("--url=")
-    });
-    let is_list_or_help = argv
-        .iter()
-        .any(|a| a == "--list" || a == "--list-snapshots" || a == "-h" || a == "--help");
-
-    !has_explicit_source && !is_list_or_help
+/// Returns the arguments following the `download` subcommand token, or
+/// `None` if `download` is not the subcommand being invoked.
+///
+/// The subcommand is the first non-option token after the binary name; reth's
+/// global options (`-vvv`, `--quiet`, `--log.*=...`, `--color=...`) may
+/// legitimately precede it. A `download` token appearing anywhere else, e.g.
+/// as an option value in `node --datadir download`, is not a subcommand and
+/// must not trigger injection, since clap would then reject `--manifest-url`
+/// on a command that does not define it.
+///
+/// A value-taking global option written in separated form before the
+/// subcommand (`--color never download ...`) makes the value look like the
+/// subcommand, so no injection happens; the operator sees the normal
+/// upstream error and can either pass `--manifest-url` or write the option
+/// as `--color=never`. Failing closed here is deliberate.
+fn download_subcommand_args(argv: &[String]) -> Option<&[String]> {
+    let subcommand_index = argv.iter().skip(1).position(|a| !a.starts_with('-'))? + 1;
+    (argv[subcommand_index] == "download").then(|| &argv[subcommand_index + 1..])
 }
 
-/// Extracts the value of `--chain <value>` or `--chain=<value>` from argv.
-fn chain_arg(argv: &[String]) -> Option<String> {
-    for (i, arg) in argv.iter().enumerate() {
+/// Whether the operator already named a manifest source, in any of the
+/// spellings clap accepts for `DownloadCommand`'s `--manifest-url`,
+/// `--manifest-path`, and `-u`/`--url` options.
+fn has_explicit_manifest_source(download_args: &[String]) -> bool {
+    download_args.iter().any(|a| {
+        a == "--manifest-url" ||
+            a.starts_with("--manifest-url=") ||
+            a == "--manifest-path" ||
+            a.starts_with("--manifest-path=") ||
+            a == "--url" ||
+            a.starts_with("--url=") ||
+            is_short_url_option(a)
+    })
+}
+
+/// Matches every form clap accepts for the short `-u` option: `-u <URL>`,
+/// `-u=<URL>`, `-u<URL>`, and `-u` clustered behind boolean shorts such as
+/// `-yu <URL>` or `-yu<URL>`.
+fn is_short_url_option(arg: &str) -> bool {
+    let Some(shorts) = arg.strip_prefix('-') else {
+        return false;
+    };
+    if shorts.starts_with('-') {
+        return false;
+    }
+    shorts.trim_start_matches(CLUSTERABLE_BOOL_SHORTS).starts_with('u')
+}
+
+/// `--list` and `--help` never need a manifest source: `--list` conflicts
+/// with one in clap, and `--help` exits before any download runs.
+fn is_list_or_help(download_args: &[String]) -> bool {
+    download_args
+        .iter()
+        .any(|a| a == "--list" || a == "--list-snapshots" || a == "-h" || a == "--help")
+}
+
+/// Extracts the value of `--chain <value>` or `--chain=<value>`.
+fn chain_arg(download_args: &[String]) -> Option<String> {
+    for (i, arg) in download_args.iter().enumerate() {
         if let Some(value) = arg.strip_prefix("--chain=") {
             return Some(value.to_string());
         }
         if arg == "--chain" {
-            return argv.get(i + 1).cloned();
+            return download_args.get(i + 1).filter(|v| !v.starts_with('-')).cloned();
         }
     }
     None
@@ -125,9 +168,36 @@ mod tests {
     }
 
     #[test]
+    fn injects_when_global_options_precede_download_subcommand() {
+        let argv: Vec<String> = vec![
+            "bera-reth".into(),
+            "-vvv".into(),
+            "--color=never".into(),
+            "--log.file.directory=/tmp/logs".into(),
+            "download".into(),
+            "--chain".into(),
+            "mainnet".into(),
+        ];
+        let resolved = with_resolved_manifest_url(argv);
+        assert_eq!(
+            resolved.last().unwrap(),
+            "https://bera-snapshots.fsn1.your-objectstorage.com/v2/mainnet/reth/manifest.json"
+        );
+    }
+
+    #[test]
     fn chain_arg_supports_equals_form() {
         let argv = vec!["bera-reth".into(), "download".into(), "--chain=mainnet".into()];
-        assert_eq!(chain_arg(&argv), Some("mainnet".to_string()));
+        assert_eq!(
+            chain_arg(download_subcommand_args(&argv).unwrap()),
+            Some("mainnet".to_string())
+        );
+    }
+
+    #[test]
+    fn chain_arg_ignores_missing_value() {
+        let argv: Vec<String> = vec!["download".into(), "--chain".into(), "--minimal".into()];
+        assert_eq!(chain_arg(&argv[1..]), None);
     }
 
     #[test]
@@ -139,6 +209,59 @@ mod tests {
             "bepolia".into(),
             "--manifest-url".into(),
             "https://example.com/manifest.json".into(),
+        ];
+        assert_eq!(with_resolved_manifest_url(argv.clone()), argv);
+    }
+
+    #[test]
+    fn leaves_argv_alone_for_every_short_url_spelling() {
+        let base: Vec<String> =
+            vec!["bera-reth".into(), "download".into(), "--chain".into(), "bepolia".into()];
+        let spellings: [&[&str]; 6] = [
+            &["-u", "https://example.com/snap.tar.lz4"],
+            &["-u=https://example.com/snap.tar.lz4"],
+            &["-uhttps://example.com/snap.tar.lz4"],
+            &["-yu", "https://example.com/snap.tar.lz4"],
+            &["-yu=https://example.com/snap.tar.lz4"],
+            &["-vvyuhttps://example.com/snap.tar.lz4"],
+        ];
+        for spelling in spellings {
+            let mut argv = base.clone();
+            argv.extend(spelling.iter().map(|s| s.to_string()));
+            assert_eq!(with_resolved_manifest_url(argv.clone()), argv, "spelling: {spelling:?}");
+        }
+    }
+
+    #[test]
+    fn short_url_detection_does_not_match_other_short_flags() {
+        for flag in ["-y", "-vvv", "-q", "-h", "--url-ish"] {
+            assert!(!is_short_url_option(flag), "flag: {flag}");
+        }
+    }
+
+    #[test]
+    fn leaves_argv_alone_when_download_is_an_option_value_not_the_subcommand() {
+        let argv = vec![
+            "bera-reth".into(),
+            "node".into(),
+            "--datadir".into(),
+            "download".into(),
+            "--chain".into(),
+            "bepolia".into(),
+        ];
+        assert_eq!(with_resolved_manifest_url(argv.clone()), argv);
+    }
+
+    #[test]
+    fn fails_closed_when_separated_global_value_precedes_download() {
+        // `never` is what the scan sees as the subcommand, so no injection.
+        let argv = vec![
+            "bera-reth".into(),
+            "--color".into(),
+            "never".into(),
+            "download".into(),
+            "--chain".into(),
+            "bepolia".into(),
         ];
         assert_eq!(with_resolved_manifest_url(argv.clone()), argv);
     }
