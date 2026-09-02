@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Synced with reth v2.4.0
+# Synced with reth v2.5.0
 set -eo pipefail
 
 fixture_variant="${1:-osaka}"
