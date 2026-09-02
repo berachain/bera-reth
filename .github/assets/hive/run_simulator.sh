@@ -23,10 +23,11 @@ if [[ "${sim}" == *"eels"* ]]; then
 fi
 
 run_hive() {
+    # berachain/hive's CLI predates upstream's --sim.limit.exact flag; --sim.limit
+    # is already a regex match there.
     hive \
   --sim "${sim}" \
   --sim.limit "${limit}" \
-  --sim.limit.exact=false \
   --sim.parallelism "${parallelism}" \
   --client bera-reth \
   2>&1 | tee "${log_file}" || true
