@@ -21,6 +21,8 @@
 //! where `S3_EL_PREFIX = "v2/<chain>/reth"`. This mirrors the object layout
 //! documented in `infra-snapshots/project/reference/storage-v2.md`.
 
+use std::ffi::{OsStr, OsString};
+
 const PUBLIC_BASE: &str = "https://bera-snapshots.fsn1.your-objectstorage.com";
 
 /// Chains this resolver knows how to look up. Mirrors `chainspec::mod.rs`'s
@@ -43,7 +45,13 @@ const CLUSTERABLE_BOOL_SHORTS: &[char] = &['y', 'v', 'q'];
 /// commands whose subcommand is not `download`, a download that already
 /// names a manifest source, an unrecognized `--chain` value, or
 /// `--list`/`--help`.
-pub(crate) fn with_resolved_manifest_url(argv: Vec<String>) -> Vec<String> {
+///
+/// Operates on `OsString` so that arguments which are not valid UTF-8 (a
+/// non-UTF-8 datadir or custom genesis path, which clap accepts via
+/// `args_os`) pass through untouched instead of aborting the process. Such
+/// tokens can never spell `download`, `--chain`, or a manifest-source flag,
+/// so they are simply never matched.
+pub(crate) fn with_resolved_manifest_url(argv: Vec<OsString>) -> Vec<OsString> {
     let Some(download_args) = download_subcommand_args(&argv) else {
         return argv;
     };
@@ -56,19 +64,28 @@ pub(crate) fn with_resolved_manifest_url(argv: Vec<String>) -> Vec<String> {
         return argv;
     };
 
-    if !KNOWN_CHAINS.contains(&chain.as_str()) {
+    if !KNOWN_CHAINS.contains(&chain) {
         return argv;
     }
 
+    let url = manifest_url(chain);
     let mut argv = argv;
-    argv.push("--manifest-url".to_string());
-    argv.push(manifest_url(&chain));
+    argv.push("--manifest-url".into());
+    argv.push(url.into());
     argv
 }
 
 /// The fixed, in-place-overwritten manifest URL for a known chain.
 fn manifest_url(chain: &str) -> String {
     format!("{PUBLIC_BASE}/v2/{chain}/reth/manifest.json")
+}
+
+/// Whether an argument token begins with `-`, i.e. is an option rather than
+/// a subcommand or value. Checked at the byte level so that non-UTF-8 tokens
+/// are classified too: `OsStr::as_encoded_bytes` guarantees ASCII is
+/// preserved on every platform.
+fn is_option_like(arg: &OsStr) -> bool {
+    arg.as_encoded_bytes().starts_with(b"-")
 }
 
 /// Returns the arguments following the `download` subcommand token, or
@@ -86,16 +103,16 @@ fn manifest_url(chain: &str) -> String {
 /// subcommand, so no injection happens; the operator sees the normal
 /// upstream error and can either pass `--manifest-url` or write the option
 /// as `--color=never`. Failing closed here is deliberate.
-fn download_subcommand_args(argv: &[String]) -> Option<&[String]> {
-    let subcommand_index = argv.iter().skip(1).position(|a| !a.starts_with('-'))? + 1;
+fn download_subcommand_args(argv: &[OsString]) -> Option<&[OsString]> {
+    let subcommand_index = argv.iter().skip(1).position(|a| !is_option_like(a))? + 1;
     (argv[subcommand_index] == "download").then(|| &argv[subcommand_index + 1..])
 }
 
 /// Whether the operator already named a manifest source, in any of the
 /// spellings clap accepts for `DownloadCommand`'s `--manifest-url`,
 /// `--manifest-path`, and `-u`/`--url` options.
-fn has_explicit_manifest_source(download_args: &[String]) -> bool {
-    download_args.iter().any(|a| {
+fn has_explicit_manifest_source(download_args: &[OsString]) -> bool {
+    download_args.iter().filter_map(|a| a.to_str()).any(|a| {
         a == "--manifest-url" ||
             a.starts_with("--manifest-url=") ||
             a == "--manifest-path" ||
@@ -121,20 +138,23 @@ fn is_short_url_option(arg: &str) -> bool {
 
 /// `--list` and `--help` never need a manifest source: `--list` conflicts
 /// with one in clap, and `--help` exits before any download runs.
-fn is_list_or_help(download_args: &[String]) -> bool {
+fn is_list_or_help(download_args: &[OsString]) -> bool {
     download_args
         .iter()
         .any(|a| a == "--list" || a == "--list-snapshots" || a == "-h" || a == "--help")
 }
 
 /// Extracts the value of `--chain <value>` or `--chain=<value>`.
-fn chain_arg(download_args: &[String]) -> Option<String> {
+///
+/// Returns `None` for a non-UTF-8 value: that can only be a custom genesis
+/// path, which is never one of [`KNOWN_CHAINS`] and so needs no lookup.
+fn chain_arg(download_args: &[OsString]) -> Option<&str> {
     for (i, arg) in download_args.iter().enumerate() {
-        if let Some(value) = arg.strip_prefix("--chain=") {
-            return Some(value.to_string());
+        if let Some(value) = arg.to_str().and_then(|a| a.strip_prefix("--chain=")) {
+            return Some(value);
         }
         if arg == "--chain" {
-            return download_args.get(i + 1).filter(|v| !v.starts_with('-')).cloned();
+            return download_args.get(i + 1).filter(|v| !is_option_like(v))?.to_str();
         }
     }
     None
@@ -169,7 +189,7 @@ mod tests {
 
     #[test]
     fn injects_when_global_options_precede_download_subcommand() {
-        let argv: Vec<String> = vec![
+        let argv: Vec<OsString> = vec![
             "bera-reth".into(),
             "-vvv".into(),
             "--color=never".into(),
@@ -187,17 +207,51 @@ mod tests {
 
     #[test]
     fn chain_arg_supports_equals_form() {
-        let argv = vec!["bera-reth".into(), "download".into(), "--chain=mainnet".into()];
-        assert_eq!(
-            chain_arg(download_subcommand_args(&argv).unwrap()),
-            Some("mainnet".to_string())
-        );
+        let argv: Vec<OsString> =
+            vec!["bera-reth".into(), "download".into(), "--chain=mainnet".into()];
+        assert_eq!(chain_arg(download_subcommand_args(&argv).unwrap()), Some("mainnet"));
     }
 
     #[test]
     fn chain_arg_ignores_missing_value() {
-        let argv: Vec<String> = vec!["download".into(), "--chain".into(), "--minimal".into()];
+        let argv: Vec<OsString> = vec!["download".into(), "--chain".into(), "--minimal".into()];
         assert_eq!(chain_arg(&argv[1..]), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn passes_non_utf8_arguments_through_untouched() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let non_utf8 = OsStr::from_bytes(b"/data/gen\xff\xfesis.json").to_os_string();
+        assert!(non_utf8.to_str().is_none(), "fixture must not be valid UTF-8");
+
+        // A non-UTF-8 custom genesis path is never a known chain: no injection,
+        // and crucially no panic anywhere in the scan.
+        let genesis: Vec<OsString> =
+            vec!["bera-reth".into(), "download".into(), "--chain".into(), non_utf8.clone()];
+        assert_eq!(with_resolved_manifest_url(genesis.clone()), genesis);
+
+        // A non-UTF-8 value elsewhere on a `download` must not block a
+        // known-chain lookup.
+        let datadir: Vec<OsString> = vec![
+            "bera-reth".into(),
+            "download".into(),
+            "--datadir".into(),
+            non_utf8.clone(),
+            "--chain".into(),
+            "bepolia".into(),
+        ];
+        let resolved = with_resolved_manifest_url(datadir);
+        assert_eq!(
+            resolved.last().unwrap(),
+            "https://bera-snapshots.fsn1.your-objectstorage.com/v2/bepolia/reth/manifest.json"
+        );
+
+        // And a non-UTF-8 value on a non-`download` command is simply not ours.
+        let node: Vec<OsString> =
+            vec!["bera-reth".into(), "node".into(), "--datadir".into(), non_utf8];
+        assert_eq!(with_resolved_manifest_url(node.clone()), node);
     }
 
     #[test]
@@ -215,7 +269,7 @@ mod tests {
 
     #[test]
     fn leaves_argv_alone_for_every_short_url_spelling() {
-        let base: Vec<String> =
+        let base: Vec<OsString> =
             vec!["bera-reth".into(), "download".into(), "--chain".into(), "bepolia".into()];
         let spellings: [&[&str]; 6] = [
             &["-u", "https://example.com/snap.tar.lz4"],
@@ -227,7 +281,7 @@ mod tests {
         ];
         for spelling in spellings {
             let mut argv = base.clone();
-            argv.extend(spelling.iter().map(|s| s.to_string()));
+            argv.extend(spelling.iter().map(OsString::from));
             assert_eq!(with_resolved_manifest_url(argv.clone()), argv, "spelling: {spelling:?}");
         }
     }

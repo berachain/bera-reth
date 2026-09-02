@@ -47,8 +47,11 @@ fn main() {
     // ever sees the args. Upstream reth's own snapshot auto-discovery only
     // ever works for Ethereum mainnet (chain ID 1), which Berachain's chain
     // IDs (80094, 80069) never match, so without this every restore requires
-    // an operator to hand-copy a manifest URL first.
-    let argv = with_resolved_manifest_url(std::env::args().collect());
+    // an operator to hand-copy a manifest URL first. `args_os` rather than
+    // `args`: the latter panics on any non-UTF-8 argument, which would
+    // regress valid Unix paths (datadir, custom genesis) clap otherwise
+    // accepts.
+    let argv = with_resolved_manifest_url(std::env::args_os().collect());
 
     if let Err(err) = Cli::<BerachainChainSpecParser, NoArgs>::parse_from(argv)
         .with_runner_and_components::<BerachainNode>(
