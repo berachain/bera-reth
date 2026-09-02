@@ -67,22 +67,16 @@ feature-depth = 1
 [advisories]
 yanked = "warn"
 ignore = [
+  # https://rustsec.org/advisories/RUSTSEC-2023-0089 atomic-polyfill is unmaintained; dev-only transitive dep via test-fuzz -> postcard -> heapless 0.7
+  "RUSTSEC-2023-0089",
   # https://rustsec.org/advisories/RUSTSEC-2024-0436 paste! is unmaintained
   "RUSTSEC-2024-0436",
   # https://rustsec.org/advisories/RUSTSEC-2025-0141 bincode is unmaintained, need to transition all deps to wincode first
   "RUSTSEC-2025-0141",
-  # https://rustsec.org/advisories/RUSTSEC-2026-0105 core2 is unmaintained (all versions yanked), no safe upgrade available; transitive dep via ssz/multiaddr
-  "RUSTSEC-2026-0105",
-  # https://rustsec.org/advisories/RUSTSEC-2026-0118 hickory-proto NSEC3 unbounded loop; transitive dep via reth-dns-discovery, awaiting upstream bump to >=0.26.1
-  "RUSTSEC-2026-0118",
-  # https://rustsec.org/advisories/RUSTSEC-2026-0119 hickory-proto O(n^2) name compression; transitive dep via reth-dns-discovery, awaiting upstream bump to >=0.26.1
-  "RUSTSEC-2026-0119",
   # https://rustsec.org/advisories/RUSTSEC-2026-0173 proc-macro-error2 is unmaintained, no safe upgrade available; transitive dep via alloy-sol-macro
   "RUSTSEC-2026-0173",
-  # https://rustsec.org/advisories/RUSTSEC-2026-0183 git2 UB in Remote::list(), awaiting reth bump to vergen-git2 10
-  "RUSTSEC-2026-0183",
-  # https://rustsec.org/advisories/RUSTSEC-2026-0184 git2 UB in BlameHunk signatures, awaiting reth bump to vergen-git2 10
-  "RUSTSEC-2026-0184",
+  # https://rustsec.org/advisories/RUSTSEC-2026-0247 bitmaps is unmaintained (repo archived), no safe upgrade available; transitive dep via reth-transaction-pool -> imbl
+  "RUSTSEC-2026-0247",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.

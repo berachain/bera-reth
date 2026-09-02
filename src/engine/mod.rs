@@ -17,9 +17,7 @@ pub mod rpc;
 pub mod validator;
 
 use crate::{
-    engine::payload::{
-        BerachainBuiltPayload, BerachainPayloadAttributes, BerachainPayloadBuilderAttributes,
-    },
+    engine::payload::{BerachainBuiltPayload, BerachainPayloadAttributes},
     hardforks::BerachainHardforks,
     node::evm::error::BerachainExecutionError,
     primitives::header::BlsPublicKey,
@@ -56,12 +54,12 @@ impl PayloadTypes for BerachainEngineTypes {
 
     type BuiltPayload = BerachainBuiltPayload;
     type PayloadAttributes = BerachainPayloadAttributes;
-    type PayloadBuilderAttributes = BerachainPayloadBuilderAttributes;
 
     fn block_to_payload(
         block: SealedBlock<
             <<Self::BuiltPayload as BuiltPayload>::Primitives as NodePrimitives>::Block,
         >,
+        _bal: Option<Bytes>,
     ) -> Self::ExecutionData {
         let prev_proposer_pubkey = block.prev_proposer_pubkey;
         let block_hash = block.hash();
@@ -258,12 +256,20 @@ impl ExecutionPayloadTrait for BerachainExecutionData {
         self.payload.as_v1().gas_used
     }
 
+    fn gas_limit(&self) -> u64 {
+        self.payload.as_v1().gas_limit
+    }
+
     fn block_access_list(&self) -> Option<&Bytes> {
         None
     }
 
     fn transaction_count(&self) -> usize {
         self.payload.as_v1().transactions.len()
+    }
+
+    fn slot_number(&self) -> Option<u64> {
+        None
     }
 }
 

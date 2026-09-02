@@ -9,7 +9,7 @@ use alloy_eips::{
 };
 use alloy_primitives::{Address, B256, Bytes, TxHash, TxKind, U256};
 use reth_ethereum_primitives::{PooledTransactionVariant, TransactionSigned};
-use reth_primitives_traits::{InMemorySize, SignedTransaction};
+use reth_primitives_traits::{InMemorySize, SignedTransaction, transaction::TxHashRef};
 use reth_transaction_pool::{EthBlobTransactionSidecar, EthPoolTransaction, PoolTransaction};
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BerachainPooledTransaction {
     /// `EcRecovered` transaction, the consensus format.
-    pub transaction: Recovered<TransactionSigned>,
+    pub transaction: Recovered<BerachainTxEnvelope>,
 
     /// For EIP-1559 transactions: `max_fee_per_gas * gas_limit + tx_value`.
     /// For legacy transactions: `gas_price * gas_limit + tx_value`.
@@ -123,7 +123,7 @@ impl BerachainPooledTransaction {
     ///
     /// Caution: In case of blob transactions, this marks the blob sidecar as
     /// [`EthBlobTransactionSidecar::Missing`]
-    pub fn new(transaction: Recovered<TransactionSigned>, encoded_length: usize) -> Self {
+    pub fn new(transaction: Recovered<BerachainTxEnvelope>, encoded_length: usize) -> Self {
         let mut blob_sidecar = EthBlobTransactionSidecar::None;
 
         let gas_cost = U256::from(transaction.max_fee_per_gas())
@@ -148,7 +148,7 @@ impl BerachainPooledTransaction {
     }
 
     /// Return the reference to the underlying transaction.
-    pub const fn transaction(&self) -> &Recovered<TransactionSigned> {
+    pub const fn transaction(&self) -> &Recovered<BerachainTxEnvelope> {
         &self.transaction
     }
 }
@@ -167,15 +167,15 @@ impl PoolTransaction for BerachainPooledTransaction {
     type Pooled = PooledTransactionVariant;
 
     fn clone_into_consensus(&self) -> Recovered<Self::Consensus> {
-        let (tx_signed, signer) = self.transaction().clone().into_parts();
-        let berachain_tx = BerachainTxEnvelope::from(tx_signed);
-        Recovered::new_unchecked(berachain_tx, signer)
+        self.transaction.clone()
+    }
+
+    fn consensus_ref(&self) -> Recovered<&Self::Consensus> {
+        Recovered::new_unchecked(&*self.transaction, self.transaction.signer())
     }
 
     fn into_consensus(self) -> Recovered<Self::Consensus> {
-        let (tx_signed, signer) = self.transaction.into_parts();
-        let berachain_tx = BerachainTxEnvelope::from(tx_signed);
-        Recovered::new_unchecked(berachain_tx, signer)
+        self.transaction
     }
 
     fn from_pooled(tx: Recovered<Self::Pooled>) -> Self {
@@ -187,15 +187,18 @@ impl PoolTransaction for BerachainPooledTransaction {
                 let (tx, sig, hash) = tx.into_parts();
                 let (tx, blob) = tx.into_parts();
                 let tx = Signed::new_unchecked(tx, sig, hash);
-                let tx = TransactionSigned::from(tx);
+                let tx = BerachainTxEnvelope::from(TransactionSigned::from(tx));
                 let tx = Recovered::new_unchecked(tx, signer);
                 let mut pooled = Self::new(tx, encoded_length);
-                pooled.blob_sidecar = EthBlobTransactionSidecar::Present(blob);
+                pooled.blob_sidecar = EthBlobTransactionSidecar::Present(blob.into());
                 pooled
             }
             tx => {
                 // no blob sidecar
-                let tx = Recovered::new_unchecked(tx.into(), signer);
+                let tx = Recovered::new_unchecked(
+                    BerachainTxEnvelope::from(TransactionSigned::from(tx)),
+                    signer,
+                );
                 Self::new(tx, encoded_length)
             }
         }
@@ -245,7 +248,10 @@ impl EthPoolTransaction for BerachainPooledTransaction {
         self,
         sidecar: Arc<BlobTransactionSidecarVariant>,
     ) -> Option<Recovered<Self::Pooled>> {
-        let (signed_transaction, signer) = self.into_consensus().into_parts();
+        let (envelope, signer) = self.into_consensus().into_parts();
+        let BerachainTxEnvelope::Ethereum(signed_transaction) = envelope else {
+            return None;
+        };
         let pooled_transaction =
             signed_transaction.try_into_pooled_eip4844(Arc::unwrap_or_clone(sidecar)).ok()?;
 
@@ -256,7 +262,10 @@ impl EthPoolTransaction for BerachainPooledTransaction {
         tx: Recovered<Self::Consensus>,
         sidecar: BlobTransactionSidecarVariant,
     ) -> Option<Self> {
-        let (tx, signer) = tx.into_parts();
+        let (envelope, signer) = tx.into_parts();
+        let BerachainTxEnvelope::Ethereum(tx) = envelope else {
+            return None;
+        };
         tx.try_into_pooled_eip4844(sidecar)
             .ok()
             .map(|tx| tx.with_signer(signer))
@@ -268,9 +277,14 @@ impl EthPoolTransaction for BerachainPooledTransaction {
         sidecar: &BlobTransactionSidecarVariant,
         settings: &KzgSettings,
     ) -> Result<(), BlobTransactionValidationError> {
-        match self.transaction.inner().as_eip4844() {
-            Some(tx) => tx.tx().validate_blob(sidecar, settings),
-            _ => Err(BlobTransactionValidationError::NotBlobTransaction(self.ty())),
+        match self.transaction.inner() {
+            BerachainTxEnvelope::Ethereum(tx) => match tx.as_eip4844() {
+                Some(tx) => tx.tx().validate_blob(sidecar, settings),
+                _ => Err(BlobTransactionValidationError::NotBlobTransaction(self.ty())),
+            },
+            BerachainTxEnvelope::Berachain(_) => {
+                Err(BlobTransactionValidationError::NotBlobTransaction(self.ty()))
+            }
         }
     }
 }

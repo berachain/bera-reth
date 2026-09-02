@@ -11,16 +11,13 @@ use crate::{
 };
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
-use alloy_evm::{
-    RecoveredTx,
-    block::state_changes::{balance_increment_state, post_block_balance_increments},
-};
+use alloy_evm::{RecoveredTx, block::state_changes::post_block_balance_increments};
 use alloy_primitives::Bytes;
 use reth::{
     chainspec::{EthereumHardfork, EthereumHardforks},
     providers::BlockExecutionResult,
     revm::{
-        DatabaseCommit, Inspector, State,
+        DatabaseCommit, Inspector,
         context::{
             Block as _,
             result::{ExecutionResult, Output, ResultAndState, SuccessReason},
@@ -29,11 +26,10 @@ use reth::{
     },
 };
 use reth_evm::{
-    Database, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, OnStateHook,
+    Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded,
     block::{
-        BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockExecutorFor,
-        BlockValidationError, ExecutableTx, StateChangePostBlockSource, StateChangeSource,
-        SystemCaller, TxResult,
+        BlockExecutionError, BlockExecutor, BlockExecutorFactory, BlockValidationError,
+        ExecutableTx, GasOutput, StateDB, SystemCaller, TxResult,
     },
     eth::{
         dao_fork, eip6110,
@@ -41,7 +37,7 @@ use reth_evm::{
         spec::EthExecutorSpec,
     },
 };
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug)]
 pub struct BerachainTxResult<H> {
@@ -50,10 +46,14 @@ pub struct BerachainTxResult<H> {
     pub tx_type: BerachainTxType,
 }
 
-impl<H> TxResult for BerachainTxResult<H> {
+impl<H: Send + 'static> TxResult for BerachainTxResult<H> {
     type HaltReason = H;
     fn result(&self) -> &ResultAndState<H> {
         &self.result
+    }
+
+    fn into_result(self) -> ResultAndState<H> {
+        self.result
     }
 }
 
@@ -152,13 +152,6 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
                 // Add receipt to block
                 self.receipts.push(receipt);
 
-                // Notify system caller of state changes from system call
-                self.system_caller.on_state(
-                    StateChangeSource::Transaction(0), /* POL is always the first transaction
-                                                        * (index 0) */
-                    &result_and_state.state,
-                );
-
                 // Commit the POL transaction state changes to the database
                 self.evm.db_mut().commit(result_and_state.state);
 
@@ -174,11 +167,10 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
     }
 }
 
-impl<'db, DB, E> BlockExecutor for BerachainBlockExecutor<'_, E>
+impl<E> BlockExecutor for BerachainBlockExecutor<'_, E>
 where
-    DB: Database + 'db,
     E: Evm<
-            DB = &'db mut State<DB>,
+            DB: StateDB,
             Tx: FromRecoveredTx<BerachainTxEnvelope> + FromTxWithEncoded<BerachainTxEnvelope>,
         >,
 {
@@ -188,11 +180,6 @@ where
     type Result = BerachainTxResult<E::HaltReason>;
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
-        // Set state clear flag if the block is after the Spurious Dragon hardfork.
-        let state_clear_flag =
-            self.spec.is_spurious_dragon_active_at_block(self.evm.block().number().saturating_to());
-        self.evm.db_mut().set_state_clear_flag(state_clear_flag);
-
         self.system_caller.apply_blockhashes_contract_call(self.ctx.parent_hash, &mut self.evm)?;
         self.system_caller
             .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
@@ -216,8 +203,7 @@ where
                 result: ResultAndState {
                     result: ExecutionResult::Success {
                         reason: SuccessReason::Stop,
-                        gas_used: 0,
-                        gas_refunded: 0,
+                        gas: reth::revm::context::result::ResultGas::default(),
                         logs: Vec::new(),
                         output: Output::Call(Bytes::default()),
                     },
@@ -251,19 +237,17 @@ where
         Ok(BerachainTxResult { result, blob_gas_used, tx_type })
     }
 
-    fn commit_transaction(&mut self, output: Self::Result) -> Result<u64, BlockExecutionError> {
+    fn commit_transaction(&mut self, output: Self::Result) -> GasOutput {
         // Skip commit for POL transactions as it's already been applied in
         // apply_pre_execution_changes
         if output.tx_type == BerachainTxType::Berachain {
-            return Ok(0);
+            return GasOutput::new(0);
         }
 
         let BerachainTxResult { result: ResultAndState { result, state }, blob_gas_used, tx_type } =
             output;
 
-        self.system_caller.on_state(StateChangeSource::Transaction(self.receipts.len()), &state);
-
-        let gas_used = result.gas_used();
+        let gas_used = result.tx_gas_used();
 
         // append gas used
         self.gas_used += gas_used;
@@ -285,7 +269,7 @@ where
         // Commit the state changes.
         self.evm.db_mut().commit(state);
 
-        Ok(gas_used)
+        GasOutput::new(gas_used)
     }
 
     fn finish(
@@ -331,7 +315,7 @@ where
             &self.spec,
             self.evm.block(),
             self.ctx.ommers,
-            self.ctx.withdrawals.as_deref(),
+            self.ctx.withdrawals.as_deref().map(|w| w.as_slice()),
         );
 
         // Irregular state change at Ethereum DAO hardfork
@@ -356,18 +340,8 @@ where
         // increment balances
         self.evm
             .db_mut()
-            .increment_balances(balance_increments.clone())
+            .increment_balances(balance_increments)
             .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
-
-        // call state hook with changes due to balance increments.
-        self.system_caller.try_on_state_with(|| {
-            balance_increment_state(&balance_increments, self.evm.db_mut()).map(|state| {
-                (
-                    StateChangeSource::PostBlock(StateChangePostBlockSource::BalanceIncrements),
-                    Cow::Owned(state),
-                )
-            })
-        })?;
 
         Ok((
             self.evm,
@@ -378,10 +352,6 @@ where
                 blob_gas_used: self.blob_gas_used,
             },
         ))
-    }
-
-    fn set_state_hook(&mut self, hook: Option<Box<dyn OnStateHook>>) {
-        self.system_caller.with_state_hook(hook);
     }
 
     fn evm_mut(&mut self) -> &mut Self::Evm {
@@ -402,6 +372,9 @@ impl BlockExecutorFactory for BerachainEvmConfig {
     type ExecutionCtx<'a> = BerachainBlockExecutionCtx<'a>;
     type Transaction = BerachainTxEnvelope;
     type Receipt = reth_ethereum_primitives::Receipt<BerachainTxType>;
+    type TxExecutionResult = BerachainTxResult<<BerachainEvmFactory as EvmFactory>::HaltReason>;
+    type Executor<'a, DB: StateDB, I: Inspector<<BerachainEvmFactory as EvmFactory>::Context<DB>>> =
+        BerachainBlockExecutor<'a, <BerachainEvmFactory as EvmFactory>::Evm<DB, I>>;
 
     fn evm_factory(&self) -> &Self::EvmFactory {
         &self.evm_factory
@@ -409,12 +382,12 @@ impl BlockExecutorFactory for BerachainEvmConfig {
 
     fn create_executor<'a, DB, I>(
         &'a self,
-        evm: <Self::EvmFactory as EvmFactory>::Evm<&'a mut State<DB>, I>,
+        evm: <Self::EvmFactory as EvmFactory>::Evm<DB, I>,
         ctx: Self::ExecutionCtx<'a>,
-    ) -> impl BlockExecutorFor<'a, Self, DB, I>
+    ) -> Self::Executor<'a, DB, I>
     where
-        DB: Database + 'a,
-        I: Inspector<<Self::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a,
+        DB: StateDB,
+        I: Inspector<<Self::EvmFactory as EvmFactory>::Context<DB>>,
     {
         BerachainBlockExecutor::new(evm, ctx, self.spec.clone(), self.receipt_builder)
     }

@@ -1,5 +1,5 @@
 use crate::{
-    primitives::BerachainPrimitives,
+    primitives::{BerachainHeader, BerachainPrimitives},
     transaction::{BerachainTxType, POL_TX_TYPE},
 };
 use alloy_consensus::{Eip658Value, Receipt, ReceiptWithBloom, TxReceipt, TxType, Typed2718};
@@ -8,7 +8,7 @@ use alloy_primitives::Bloom;
 use alloy_rlp::BufMut;
 use alloy_rpc_types_eth::{Log, TransactionReceipt};
 use reth_chainspec::EthChainSpec;
-use reth_primitives_traits::InMemorySize;
+use reth_primitives_traits::{InMemorySize, SealedHeader};
 use reth_rpc_convert::transaction::{ConvertReceiptInput, ReceiptConverter};
 use reth_rpc_eth_types::{EthApiError, receipt::build_receipt};
 use std::sync::Arc;
@@ -38,9 +38,23 @@ impl BerachainReceiptEnvelope {
         next_log_index: usize,
         meta: alloy_consensus::transaction::TransactionMeta,
     ) -> Self {
-        let rpc_receipt = receipt.into_rpc(next_log_index, meta);
+        let mut log_index = next_log_index;
+        let rpc_receipt = receipt.map_logs(|log| {
+            let idx = log_index;
+            log_index += 1;
+            Log {
+                inner: log,
+                block_hash: Some(meta.block_hash),
+                block_number: Some(meta.block_number),
+                block_timestamp: Some(meta.timestamp),
+                transaction_hash: Some(meta.tx_hash),
+                transaction_index: Some(meta.index),
+                log_index: Some(idx as u64),
+                removed: false,
+            }
+        });
         let alloy_receipt = Receipt {
-            status: Eip658Value::Eip658(rpc_receipt.status()),
+            status: Eip658Value::Eip658(rpc_receipt.success),
             cumulative_gas_used: rpc_receipt.cumulative_gas_used,
             logs: rpc_receipt.logs,
         };
@@ -191,7 +205,17 @@ where
     ChainSpec: EthChainSpec + 'static,
 {
     type RpcReceipt = TransactionReceipt<BerachainReceiptEnvelope>;
+    type RpcLog = Log;
     type Error = EthApiError;
+
+    fn convert_log(
+        &self,
+        log: Log,
+        _receipt: &reth_ethereum_primitives::Receipt<BerachainTxType>,
+        _header: &SealedHeader<BerachainHeader>,
+    ) -> Result<Self::RpcLog, Self::Error> {
+        Ok(log)
+    }
 
     fn convert_receipts(
         &self,

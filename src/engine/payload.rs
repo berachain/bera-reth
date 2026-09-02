@@ -1,23 +1,25 @@
-use super::BerachainExecutionPayloadEnvelopeV4;
+use super::{
+    BerachainExecutionData, BerachainExecutionPayloadEnvelopeV4, BerachainExecutionPayloadSidecar,
+};
 use crate::{
     chainspec::BerachainChainSpec,
     primitives::{BerachainBlock, BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
 };
 use alloy_consensus::BlockHeader;
 use alloy_eips::{
-    eip4895::{Withdrawal, Withdrawals},
-    eip7685::Requests,
+    eip4895::Withdrawal,
+    eip7685::{Requests, RequestsOrHash},
 };
 use alloy_primitives::{Address, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_rpc_types::engine::{
-    BlobsBundleV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
+    BlobsBundleV1, CancunPayloadFields, ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3,
     ExecutionPayloadEnvelopeV5, ExecutionPayloadFieldV2, ExecutionPayloadV1, ExecutionPayloadV3,
     PayloadId,
 };
 use reth::{
-    api::PayloadAttributes,
-    builder::{PayloadAttributesBuilder, PayloadBuilderAttributes},
+    api::{PayloadAttributes, PayloadTypes},
+    builder::PayloadAttributesBuilder,
     chainspec::EthereumHardforks,
 };
 use reth_engine_local::LocalPayloadAttributesBuilder;
@@ -25,7 +27,7 @@ use reth_ethereum_engine_primitives::{BlobSidecars, BuiltPayloadConversionError}
 use reth_node_ethereum::engine::EthPayloadAttributes;
 use reth_payload_primitives::BuiltPayload;
 use reth_primitives_traits::{NodePrimitives, SealedBlock, SealedHeader};
-use std::{convert::Infallible, sync::Arc};
+use std::sync::Arc;
 
 /// Berachain-specific payload attributes
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -37,6 +39,10 @@ pub struct BerachainPayloadAttributes {
 }
 
 impl PayloadAttributes for BerachainPayloadAttributes {
+    fn payload_id(&self, parent_hash: &B256) -> PayloadId {
+        berachain_payload_id(parent_hash, self)
+    }
+
     fn timestamp(&self) -> u64 {
         self.inner.timestamp
     }
@@ -47,92 +53,17 @@ impl PayloadAttributes for BerachainPayloadAttributes {
     fn parent_beacon_block_root(&self) -> Option<B256> {
         self.inner.parent_beacon_block_root
     }
+
+    fn slot_number(&self) -> Option<u64> {
+        self.inner.slot_number
+    }
+
+    fn target_gas_limit(&self) -> Option<u64> {
+        self.inner.target_gas_limit
+    }
 }
 
 impl BerachainPayloadAttributes {
-    pub fn prev_proposer_pubkey(&self) -> Option<BlsPublicKey> {
-        self.prev_proposer_pubkey
-    }
-}
-
-/// Berachain payload builder attributes
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BerachainPayloadBuilderAttributes {
-    /// Id of the payload
-    pub id: PayloadId,
-    /// Parent block to build the payload on top
-    pub parent: B256,
-    /// Unix timestamp for the generated payload
-    ///
-    /// Number of seconds since the Unix epoch.
-    pub timestamp: u64,
-    /// Address of the recipient for collecting transaction fee
-    pub suggested_fee_recipient: Address,
-    /// Randomness value for the generated payload
-    pub prev_randao: B256,
-    /// Withdrawals for the generated payload
-    pub withdrawals: Withdrawals,
-    /// Root of the parent beacon block
-    pub parent_beacon_block_root: Option<B256>,
-    /// Previous proposer public key
-    pub prev_proposer_pubkey: Option<BlsPublicKey>,
-}
-
-impl PayloadBuilderAttributes for BerachainPayloadBuilderAttributes {
-    type RpcPayloadAttributes = BerachainPayloadAttributes;
-    type Error = Infallible;
-
-    fn try_new(
-        parent: B256,
-        attributes: Self::RpcPayloadAttributes,
-        _version: u8,
-    ) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        let payload_id = berachain_payload_id(&parent, &attributes);
-        Ok(Self {
-            id: payload_id,
-            parent,
-            timestamp: attributes.inner.timestamp,
-            suggested_fee_recipient: attributes.inner.suggested_fee_recipient,
-            prev_randao: attributes.inner.prev_randao,
-            withdrawals: attributes.inner.withdrawals.unwrap_or_default().into(),
-            parent_beacon_block_root: attributes.inner.parent_beacon_block_root,
-            prev_proposer_pubkey: attributes.prev_proposer_pubkey,
-        })
-    }
-
-    fn payload_id(&self) -> PayloadId {
-        self.id
-    }
-
-    fn parent(&self) -> B256 {
-        self.parent
-    }
-
-    fn timestamp(&self) -> u64 {
-        self.timestamp
-    }
-
-    fn parent_beacon_block_root(&self) -> Option<B256> {
-        self.parent_beacon_block_root
-    }
-
-    fn suggested_fee_recipient(&self) -> Address {
-        self.suggested_fee_recipient
-    }
-
-    fn prev_randao(&self) -> B256 {
-        self.prev_randao
-    }
-
-    fn withdrawals(&self) -> &Withdrawals {
-        &self.withdrawals
-    }
-}
-
-impl BerachainPayloadBuilderAttributes {
     pub fn prev_proposer_pubkey(&self) -> Option<BlsPublicKey> {
         self.prev_proposer_pubkey
     }
@@ -163,6 +94,7 @@ impl PayloadAttributesBuilder<BerachainPayloadAttributes, BerachainHeader>
                     .chain_spec
                     .is_cancun_active_at_timestamp(timestamp)
                     .then(B256::random),
+                ..Default::default()
             },
             prev_proposer_pubkey: None,
         }
@@ -323,11 +255,38 @@ impl BuiltPayload for BerachainBuiltPayload {
     }
 }
 
+impl From<BerachainBuiltPayload> for BerachainExecutionData {
+    fn from(value: BerachainBuiltPayload) -> Self {
+        let BerachainBuiltPayload { block, requests, .. } = value;
+        let mut data = crate::engine::BerachainEngineTypes::block_to_payload(
+            Arc::unwrap_or_clone(block),
+            None,
+        );
+
+        // The sidecar derived from the block carries only the header's requests hash;
+        // restore the request list stored on the built payload so downstream
+        // validation sees the actual request bytes instead of skipping to the hash.
+        if let Some(requests) = requests &&
+            let Some(parent_beacon_block_root) = data.sidecar.parent_beacon_block_root()
+        {
+            let versioned_hashes = data.sidecar.versioned_hashes().cloned().unwrap_or_default();
+            let parent_proposer_pub_key = data.sidecar.parent_proposer_pub_key();
+            data.sidecar = BerachainExecutionPayloadSidecar::v4(
+                CancunPayloadFields { parent_beacon_block_root, versioned_hashes },
+                RequestsOrHash::Requests(requests),
+                parent_proposer_pub_key,
+            );
+        }
+
+        data
+    }
+}
+
 /// Generates the payload id for Berachain payloads from the [`BerachainPayloadAttributes`].
 ///
 /// This extends the standard Ethereum payload_id generation by including the
-/// optional prev_proposer_pubkey in the hash calculation, ensuring payload IDs
-/// are unique when the proposer pubkey differs.
+/// optional target_gas_limit and prev_proposer_pubkey in the hash calculation,
+/// ensuring payload IDs are unique when either differs.
 ///
 /// Returns an 8-byte identifier by hashing the payload components with sha256 hash.
 pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttributes) -> PayloadId {
@@ -346,6 +305,15 @@ pub fn berachain_payload_id(parent: &B256, attributes: &BerachainPayloadAttribut
 
     if let Some(parent_beacon_block) = attributes.inner.parent_beacon_block_root {
         hasher.update(parent_beacon_block);
+    }
+
+    // The gas limit steers block building, so it must be part of the ID or the
+    // payload cache could serve a block built with a stale limit. The tag byte
+    // discriminates presence from other optional fields; hashing nothing when
+    // absent preserves the legacy IDs.
+    if let Some(target_gas_limit) = attributes.inner.target_gas_limit {
+        hasher.update([1u8]);
+        hasher.update(target_gas_limit.to_be_bytes());
     }
 
     // Include prev_proposer_pubkey in the hash if present
@@ -377,6 +345,7 @@ mod tests {
                 suggested_fee_recipient: Address::from([0x01; 20]),
                 withdrawals: None,
                 parent_beacon_block_root: None,
+                ..Default::default()
             },
             prev_proposer_pubkey: None,
         };
@@ -390,18 +359,17 @@ mod tests {
                 suggested_fee_recipient: Address::from([0x01; 20]),
                 withdrawals: None,
                 parent_beacon_block_root: None,
+                ..Default::default()
             },
             prev_proposer_pubkey: Some(BlsPublicKey::from([0x42; 48])),
         };
 
-        // Test via BerachainPayloadBuilderAttributes::try_new which calls berachain_payload_id
-        let builder_no_pubkey =
-            BerachainPayloadBuilderAttributes::try_new(parent, attributes_no_pubkey, 0).unwrap();
-        let builder_with_pubkey =
-            BerachainPayloadBuilderAttributes::try_new(parent, attributes_with_pubkey, 0).unwrap();
+        // Test via PayloadAttributes::payload_id which calls berachain_payload_id
+        let id_no_pubkey = attributes_no_pubkey.payload_id(&parent);
+        let id_with_pubkey = attributes_with_pubkey.payload_id(&parent);
 
         // Critical test: presence of pubkey should affect payload ID
-        assert_ne!(builder_no_pubkey.payload_id(), builder_with_pubkey.payload_id());
+        assert_ne!(id_no_pubkey, id_with_pubkey);
 
         // Test different pubkeys produce different IDs
         let attributes_different_pubkey = BerachainPayloadAttributes {
@@ -413,14 +381,13 @@ mod tests {
                 suggested_fee_recipient: Address::from([0x01; 20]),
                 withdrawals: None,
                 parent_beacon_block_root: None,
+                ..Default::default()
             },
             prev_proposer_pubkey: Some(BlsPublicKey::from([0x43; 48])),
         };
 
-        let builder_different_pubkey =
-            BerachainPayloadBuilderAttributes::try_new(parent, attributes_different_pubkey, 0)
-                .unwrap();
-        assert_ne!(builder_with_pubkey.payload_id(), builder_different_pubkey.payload_id());
+        let id_different_pubkey = attributes_different_pubkey.payload_id(&parent);
+        assert_ne!(id_with_pubkey, id_different_pubkey);
     }
 
     #[test]
@@ -436,6 +403,7 @@ mod tests {
                 suggested_fee_recipient: Address::from([0x01; 20]),
                 withdrawals: None, // No withdrawals
                 parent_beacon_block_root: None,
+                ..Default::default()
             },
             prev_proposer_pubkey: None,
         };
@@ -449,19 +417,83 @@ mod tests {
                 suggested_fee_recipient: Address::from([0x01; 20]),
                 withdrawals: Some(vec![]), // Empty withdrawals
                 parent_beacon_block_root: None,
+                ..Default::default()
             },
             prev_proposer_pubkey: None,
         };
 
-        // Test via BerachainPayloadBuilderAttributes::try_new which calls berachain_payload_id
-        let builder_none =
-            BerachainPayloadBuilderAttributes::try_new(parent, attributes_none, 0).unwrap();
-        let builder_empty =
-            BerachainPayloadBuilderAttributes::try_new(parent, attributes_empty, 0).unwrap();
+        // Test via PayloadAttributes::payload_id which calls berachain_payload_id
+        let id_none = attributes_none.payload_id(&parent);
+        let id_empty = attributes_empty.payload_id(&parent);
 
         // Critical test: None vs Some([]) should produce different hashes
         // This matches geth behavior where None skips encoding, Some([]) encodes empty list
-        assert_ne!(builder_none.payload_id(), builder_empty.payload_id());
+        assert_ne!(id_none, id_empty);
+    }
+
+    #[test]
+    fn test_target_gas_limit_affects_payload_id() {
+        let parent = b256!("0000000000000000000000000000000000000000000000000000000000000001");
+
+        let base_inner = EthPayloadAttributes {
+            timestamp: 1000,
+            prev_randao: b256!("0000000000000000000000000000000000000000000000000000000000000002"),
+            suggested_fee_recipient: Address::from([0x01; 20]),
+            withdrawals: None,
+            parent_beacon_block_root: None,
+            ..Default::default()
+        };
+
+        let attributes_without =
+            BerachainPayloadAttributes { inner: base_inner.clone(), prev_proposer_pubkey: None };
+        let attributes_with = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                target_gas_limit: Some(30_000_000),
+                ..base_inner.clone()
+            },
+            prev_proposer_pubkey: None,
+        };
+        let attributes_with_other = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes { target_gas_limit: Some(60_000_000), ..base_inner },
+            prev_proposer_pubkey: None,
+        };
+
+        let id_without = attributes_without.payload_id(&parent);
+        let id_with = attributes_with.payload_id(&parent);
+        let id_with_other = attributes_with_other.payload_id(&parent);
+
+        // Presence of a target gas limit must change the payload ID so the
+        // cache cannot return a block built without the limit applied.
+        assert_ne!(id_without, id_with);
+
+        // Different limits must yield different IDs.
+        assert_ne!(id_with, id_with_other);
+    }
+
+    #[test]
+    fn test_payload_id_stable_when_target_gas_limit_absent() {
+        // Golden value computed with the pre-target-gas-limit derivation:
+        // sha256(parent ++ timestamp ++ prev_randao ++ fee_recipient)[..8].
+        // Attributes without a target gas limit must keep producing legacy IDs.
+        let parent = b256!("0000000000000000000000000000000000000000000000000000000000000001");
+        let attributes = BerachainPayloadAttributes {
+            inner: EthPayloadAttributes {
+                timestamp: 1000,
+                prev_randao: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                ),
+                suggested_fee_recipient: Address::from([0x01; 20]),
+                withdrawals: None,
+                parent_beacon_block_root: None,
+                ..Default::default()
+            },
+            prev_proposer_pubkey: None,
+        };
+
+        assert_eq!(
+            attributes.payload_id(&parent),
+            PayloadId::new([0x4a, 0x85, 0x13, 0xb9, 0x8d, 0xbf, 0xaf, 0x30])
+        );
     }
 
     #[test]
@@ -554,6 +586,54 @@ mod tests {
         assert!(
             envelope.execution_requests.is_empty(),
             "execution_requests must default to empty when payload has no requests"
+        );
+    }
+
+    #[test]
+    fn test_from_built_payload_preserves_requests() {
+        let pubkey = BlsPublicKey::from([0x42; 48]);
+        let requests =
+            Requests::new(vec![alloy_primitives::Bytes::from_static(b"\x00test_request")]);
+        let parent_beacon_block_root =
+            b256!("0000000000000000000000000000000000000000000000000000000000000003");
+
+        let header = BerachainHeader {
+            prev_proposer_pubkey: Some(pubkey),
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            parent_beacon_block_root: Some(parent_beacon_block_root),
+            requests_hash: Some(requests.requests_hash()),
+            ..Default::default()
+        };
+        let block = alloy_consensus::Block {
+            header,
+            body: alloy_consensus::BlockBody {
+                transactions: vec![],
+                ommers: vec![],
+                withdrawals: None,
+            },
+        };
+        let sealed = SealedBlock::new_unhashed(block);
+
+        let payload = BerachainBuiltPayload::new(
+            PayloadId::new([4; 8]),
+            std::sync::Arc::new(sealed),
+            U256::ZERO,
+            Some(requests.clone()),
+        );
+
+        let data = BerachainExecutionData::from(payload);
+
+        assert_eq!(
+            data.sidecar.requests(),
+            Some(&requests),
+            "converted sidecar must carry the request bytes, not just the requests hash"
+        );
+        assert_eq!(data.sidecar.parent_beacon_block_root(), Some(parent_beacon_block_root));
+        assert_eq!(
+            data.sidecar.parent_proposer_pub_key(),
+            Some(pubkey),
+            "proposer pubkey from the block must survive the sidecar rebuild"
         );
     }
 

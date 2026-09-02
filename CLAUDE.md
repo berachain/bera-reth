@@ -4,10 +4,11 @@ Bera-Reth is a high-performance Rust execution client for Berachain, built on th
 
 ## Project Overview
 
-**What**: Rust execution client for Berachain using Reth SDK  
-**Status**: In development, not production ready  
+**What**: Rust execution client for Berachain using Reth SDK (git tag `v2.5.0` across all reth-* deps; reth node crates are not on crates.io)  
+**Status**: Production (runs Berachain mainnet)  
+**Toolchain**: MSRV 1.95, edition 2024; `make pr` uses nightly for fmt/clippy  
 **Architecture**: Standard Ethereum execution with Berachain-specific chain configuration  
-**Key Difference**: Prague1 hardfork activated at genesis (time: 0) for 1 gwei minimum base fee
+**Key Differences**: Berachain fork ladder (Prague1–4, Osaka1), PoL system transaction (type 0x7E), custom header with `prevProposerPubkey`, 1 gwei minimum base fee from genesis
 
 ## Core Architecture
 
@@ -16,21 +17,19 @@ Bera-Reth is a high-performance Rust execution client for Berachain, built on th
 - **Genesis Configuration**: `src/genesis/mod.rs:53` - Prague1 fork timing
 - **Hardforks**: `src/hardforks/mod.rs` - Prague1 activation logic
 - **Node Builder**: `src/node/mod.rs` - Reth SDK integration
-- **CLI**: `src/node/cli.rs` - Command-line interface
+- **CLI / Entry Point**: `src/main.rs` - Command-line interface wiring
 
 ### Reference Implementations
 Users should clone these repositories alongside bera-reth for development reference:
 
 - **Prime Reference**: [Reth](https://github.com/paradigmxyz/reth) - Study `src/main.rs` and node builder patterns
-- **Inspiration**: [Reth-BSC](https://github.com/paradigmxyz/reth/tree/main/examples/bsc) - Chain-specific adaptations  
 - **Integration**: [BeaconKit](https://github.com/berachain/beacon-kit) - Required for local testing
 
 Recommended directory structure:
 ```
 Code/
 ├── bera-reth/          # This repository
-├── reth/               # git clone https://github.com/paradigmxyz/reth.git
-├── reth-bsc/           # git clone https://github.com/paradigmxyz/reth.git reth-bsc && cd reth-bsc && git checkout examples/bsc
+├── reth/               # git clone https://github.com/paradigmxyz/reth.git && cd reth && git checkout v2.5.0
 └── beacon-kit/         # git clone https://github.com/berachain/beacon-kit.git
 ```
 
@@ -115,6 +114,7 @@ make pr-fix
 - Monitor both BeaconKit and Reth logs with prefixes
 - Check genesis file generation: `.tmp/beacond/eth-genesis.json`
 - Verify port availability: 8545, 8551, 30303, 3500
+- Fresh datadirs use reth Storage V2 (RocksDB + static files alongside MDBX); see docs/storage-v2.md
 
 ### Performance Optimization
 - Focus on Reth SDK optimization patterns
