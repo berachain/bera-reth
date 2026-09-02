@@ -1,4 +1,4 @@
-# Last tuned against reth v1.11.4; re-validate via a hive run on the reth v2.4.0 nightly image
+# Last tuned against reth v1.11.4; re-validate via a hive run on the reth v2.5.0 nightly image
 # Ignored Tests Configuration
 #
 # This file contains tests that should be ignored for various reasons (flaky, known issues, etc).
