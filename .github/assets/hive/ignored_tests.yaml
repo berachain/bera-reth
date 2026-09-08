@@ -1,4 +1,4 @@
-# Last tuned against reth v1.11.4; re-validate via a hive run on the reth v2.5.0 nightly image
+# Re-validated against the reth v2.5.x hive run https://github.com/berachain/bera-reth/actions/runs/33685694817
 # Ignored Tests Configuration
 #
 # This file contains tests that should be ignored for various reasons (flaky, known issues, etc).

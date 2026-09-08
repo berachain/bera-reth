@@ -15,6 +15,7 @@ pub mod gas_limit_regression_test;
 pub mod osaka_blob_test;
 pub mod osaka_engine_api_test;
 pub mod pol_revert_test;
+pub mod pol_trace_test;
 pub mod prague3_empty_block_test;
 pub mod storage_v2_test;
 pub mod transaction_tests;

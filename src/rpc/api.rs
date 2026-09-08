@@ -9,7 +9,7 @@ use alloy_rpc_types_eth::{Transaction as RpcTransaction, TransactionRequest};
 use core::fmt;
 use derive_more::Deref;
 use reth::{
-    providers::ProviderHeader,
+    providers::{ProviderBlock, ProviderHeader},
     rpc::compat::RpcConvert,
     tasks::{
         Runtime,
@@ -17,6 +17,10 @@ use reth::{
     },
     transaction_pool::TransactionPool,
 };
+use reth_chainspec::ChainSpecProvider;
+use reth_errors::{BlockExecutionError, RethError};
+use reth_evm::{ConfigureEvm, block::SystemCaller};
+use reth_primitives_traits::RecoveredBlock;
 use reth_rpc_eth_api::{
     EthApiTypes, RpcNodeCore, RpcNodeCoreExt,
     helpers::{
@@ -28,7 +32,7 @@ use reth_rpc_eth_api::{
 };
 use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock,
-    builder::config::PendingBlockKind, error::FromEvmError,
+    builder::config::PendingBlockKind, cache::db::StateCacheDb, error::FromEvmError,
 };
 use reth_transaction_pool::{AddedTransactionOutcome, TransactionOrigin};
 
@@ -371,6 +375,34 @@ where
     EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives, Evm = N::Evm, Error = EthApiError>,
 {
+    /// Applies only the protocol system calls (EIP-2935 block hashes, EIP-4788 beacon root)
+    /// before a block's transactions are replayed for tracing.
+    ///
+    /// Upstream's default delegates to the block executor's `apply_pre_execution_changes`,
+    /// which for Berachain also executes the PoL distribution. But the PoL system transaction
+    /// is a real transaction at index 0 of every block, and the trace replay path
+    /// (`replay_transactions_until_with_evm` / `try_trace_many`) drives every block transaction
+    /// through `Evm::transact`, where the PoL envelope is executed as a system call. Running
+    /// the executor's pre-execution hook too would apply PoL twice, so traces of the PoL
+    /// transaction (and of any later transaction reading its state) would see storage one
+    /// distribution ahead of what the block actually committed.
+    ///
+    /// Block execution is unaffected: `BerachainBlockExecutor::execute_transaction` skips the
+    /// PoL envelope precisely because it already ran in its own pre-execution hook.
+    fn apply_pre_execution_changes(
+        &self,
+        block: &RecoveredBlock<ProviderBlock<Self::Provider>>,
+        db: &mut StateCacheDb,
+    ) -> Result<(), Self::Error> {
+        let mut evm = self
+            .evm_config()
+            .evm_for_block(db, block.header())
+            .map_err(|err| EthApiError::Internal(RethError::other(err)))?;
+
+        SystemCaller::new(self.provider().chain_spec())
+            .apply_pre_execution_changes(block.header(), &mut evm)
+            .map_err(<EthApiError as From<BlockExecutionError>>::from)
+    }
 }
 
 impl<N, Rpc> LoadState for BerachainApi<N, Rpc>
