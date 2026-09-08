@@ -181,9 +181,11 @@ eels/consume-engine:
   # `eip6110_deposits` / `eip7685 multi_type_requests` case that expects a Prague deposit
   # request in the requests hash fails. The remaining families (Osaka deposit variants,
   # `eip3860` over-limit initcode at fork_Osaka, `eip6780` reentrancy selfdestruct in
-  # consume-rlp, frontier SUICIDE-debug scenarios) still need triage.
-  - tests/frontier/scenarios/test_scenarios.py::test_scenarios[fork_Paris-blockchain_test_engine-test_program_program_SUICIDE-debug]-bera-reth
-  - tests/frontier/scenarios/test_scenarios.py::test_scenarios[fork_Shanghai-blockchain_test_engine-test_program_program_SUICIDE-debug]-bera-reth
+  # consume-rlp) still need triage.
+  #
+  # The two frontier `test_program_program_SUICIDE-debug` scenarios (fork_Paris/fork_Shanghai)
+  # failed on the reth v2.5.0 image but passed on v2.5.2 (34266112103) and were dropped from
+  # this list; if they flip back, move them to ignored_tests.yaml as flaky.
   - tests/prague/eip6110_deposits/test_deposits.py::test_deposit[fork_Osaka-blockchain_test_engine-many_deposits_from_contract]-bera-reth
   - tests/prague/eip6110_deposits/test_deposits.py::test_deposit[fork_Osaka-blockchain_test_engine-multiple_deposit_from_different_eoa]-bera-reth
   - tests/prague/eip6110_deposits/test_deposits.py::test_deposit[fork_Osaka-blockchain_test_engine-multiple_deposit_from_same_eoa]-bera-reth
