@@ -186,7 +186,16 @@ fn import_blocks(datadir: &Path, blocks_rlp: &[u8]) -> eyre::Result<()> {
         "--fail-on-invalid-block",
         rlp_path.to_str().unwrap(),
     ]);
-    assert!(out.status.success(), "import failed: {}", String::from_utf8_lossy(&out.stderr));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    // Known exit race, not an import failure: reth's `run_blocking_until_ctrl_c` returns before
+    // its runtime has finished tearing down, so the process can exit while RocksDB handles are
+    // still being dropped and abort with "pthread lock: Invalid argument" after the import has
+    // completed and been persisted. Only tolerate that exact shape; the assertions that follow
+    // in each test still verify the imported data. Remove once the runtime shutdown is fixed.
+    let aborted_after_completion = !out.status.success() &&
+        stderr.contains("Import complete.") &&
+        stderr.contains("pthread lock: Invalid argument");
+    assert!(out.status.success() || aborted_after_completion, "import failed: {stderr}");
     Ok(())
 }
 
