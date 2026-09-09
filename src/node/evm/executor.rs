@@ -2,12 +2,11 @@ use crate::{
     chainspec::BerachainChainSpec,
     engine::validate_proposer_pubkey_prague1,
     evm::BerachainEvmFactory,
-    hardforks::BerachainHardforks,
     node::evm::{
         block_context::BerachainBlockExecutionCtx, config::BerachainEvmConfig,
-        error::BerachainExecutionError, receipt::BerachainReceiptBuilder,
+        receipt::BerachainReceiptBuilder,
     },
-    transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
+    transaction::{BerachainTxEnvelope, BerachainTxType},
 };
 use alloy_consensus::Transaction;
 use alloy_eips::{Encodable2718, eip7685::Requests};
@@ -15,16 +14,12 @@ use alloy_evm::{
     RecoveredTx,
     block::state_changes::{balance_increment_state, post_block_balance_increments},
 };
-use alloy_primitives::Bytes;
 use reth::{
     chainspec::{EthereumHardfork, EthereumHardforks},
     providers::BlockExecutionResult,
     revm::{
         DatabaseCommit, Inspector, State,
-        context::{
-            Block as _,
-            result::{ExecutionResult, Output, ResultAndState, SuccessReason},
-        },
+        context::{Block as _, result::ResultAndState},
         database_interface::DatabaseCommitExt,
     },
 };
@@ -41,7 +36,7 @@ use reth_evm::{
         spec::EthExecutorSpec,
     },
 };
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::{borrow::Cow, sync::Arc};
 
 #[derive(Debug)]
 pub struct BerachainTxResult<H> {
@@ -96,82 +91,6 @@ impl<'a, Evm> BerachainBlockExecutor<'a, Evm> {
             receipt_builder,
         }
     }
-
-    /// Execute POL transaction as system call and manually capture receipt
-    fn execute_pol_transaction_with_receipt(&mut self) -> Result<(), BlockExecutionError>
-    where
-        Evm: reth_evm::Evm,
-        <Evm as reth_evm::Evm>::DB: DatabaseCommit,
-    {
-        let timestamp = self.evm.block().timestamp().saturating_to();
-
-        // Validate proposer pubkey presence for Prague1
-        validate_proposer_pubkey_prague1(&*self.spec, timestamp, self.ctx.prev_proposer_pubkey)?;
-
-        // Check if Prague1 hardfork is active (after validation)
-        if !self.spec.is_prague1_active_at_timestamp(timestamp) {
-            return Ok(());
-        }
-
-        // This panic should never occur due to the above validation
-        let prev_proposer_pubkey = self.ctx.prev_proposer_pubkey.unwrap();
-
-        // Use shared POL transaction creation logic
-        let base_fee = self.evm.block().basefee();
-        let pol_envelope = create_pol_transaction(
-            self.spec.clone(),
-            prev_proposer_pubkey,
-            self.evm.block().number(),
-            base_fee,
-        )?;
-        let (caller_address, calldata, pol_distributor_address) =
-            if let BerachainTxEnvelope::Berachain(pol_tx) = &pol_envelope {
-                (pol_tx.from, pol_tx.input.clone(), pol_tx.to)
-            } else {
-                return Err(BerachainExecutionError::InvalidPolTransactionType.into());
-            };
-
-        // Execute as system call (maintains zero gas cost and unlimited gas)
-        match self.evm.transact_system_call(
-            caller_address,
-            pol_distributor_address,
-            calldata.clone(),
-        ) {
-            Ok(result_and_state) => {
-                tracing::debug!(target: "executor", ?result_and_state, "POL transaction executed successfully");
-
-                // Build receipt manually for the system call
-                let receipt = self.receipt_builder.build_receipt(ReceiptBuilderCtx {
-                    tx_type: BerachainTxType::Berachain,
-                    evm: &self.evm,
-                    result: result_and_state.result,
-                    state: &result_and_state.state,
-                    cumulative_gas_used: self.gas_used, // No gas consumed by system call
-                });
-
-                // Add receipt to block
-                self.receipts.push(receipt);
-
-                // Notify system caller of state changes from system call
-                self.system_caller.on_state(
-                    StateChangeSource::Transaction(0), /* POL is always the first transaction
-                                                        * (index 0) */
-                    &result_and_state.state,
-                );
-
-                // Commit the POL transaction state changes to the database
-                self.evm.db_mut().commit(result_and_state.state);
-
-                tracing::debug!(target: "executor", "POL transaction state changes committed to database");
-
-                Ok(())
-            }
-            Err(e) => {
-                tracing::error!(target: "executor", %e, "POL system call execution failed");
-                Err(BlockExecutionError::other(e))
-            }
-        }
-    }
 }
 
 impl<'db, DB, E> BlockExecutor for BerachainBlockExecutor<'_, E>
@@ -197,8 +116,9 @@ where
         self.system_caller
             .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
 
-        // Execute POL transaction and capture receipt
-        self.execute_pol_transaction_with_receipt()?;
+        // Enforce prev_proposer_pubkey presence rules for Prague1.
+        let timestamp = self.evm.block().timestamp().saturating_to();
+        validate_proposer_pubkey_prague1(&*self.spec, timestamp, self.ctx.prev_proposer_pubkey)?;
         Ok(())
     }
 
@@ -208,25 +128,6 @@ where
     ) -> Result<Self::Result, BlockExecutionError> {
         let (tx_env, recovered) = tx.into_parts();
         let consensus_tx = recovered.tx();
-
-        // For PoL txs, we simply populate a dummy result and state as it is ultimately ignored
-        // during commit_transaction.
-        if let BerachainTxEnvelope::Berachain(_) = consensus_tx {
-            return Ok(BerachainTxResult {
-                result: ResultAndState {
-                    result: ExecutionResult::Success {
-                        reason: SuccessReason::Stop,
-                        gas_used: 0,
-                        gas_refunded: 0,
-                        logs: Vec::new(),
-                        output: Output::Call(Bytes::default()),
-                    },
-                    state: HashMap::default(),
-                },
-                blob_gas_used: 0,
-                tx_type: BerachainTxType::Berachain,
-            });
-        }
 
         // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
         // must be no greater than the block's gasLimit.
@@ -252,12 +153,6 @@ where
     }
 
     fn commit_transaction(&mut self, output: Self::Result) -> Result<u64, BlockExecutionError> {
-        // Skip commit for POL transactions as it's already been applied in
-        // apply_pre_execution_changes
-        if output.tx_type == BerachainTxType::Berachain {
-            return Ok(0);
-        }
-
         let BerachainTxResult { result: ResultAndState { result, state }, blob_gas_used, tx_type } =
             output;
 

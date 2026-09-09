@@ -3,10 +3,11 @@ use crate::{
     primitives::header::BlsPublicKey,
     transaction::{BerachainTxEnvelope, PoLTx},
 };
+use alloy_eips::eip7002::SYSTEM_ADDRESS;
 use alloy_primitives::{Bytes, Sealed, U256};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
-use reth::{consensus::ConsensusError, revm::handler::SYSTEM_ADDRESS};
+use reth::consensus::ConsensusError;
 use reth_chainspec::EthChainSpec;
 use reth_evm::block::{BlockExecutionError, InternalBlockExecutionError};
 use std::sync::Arc;
@@ -83,7 +84,6 @@ pub fn validate_pol_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_eips::eip7002::SYSTEM_ADDRESS;
     use alloy_primitives::{U256, address};
 
     use crate::test_utils::bepolia_chainspec;
