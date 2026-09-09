@@ -5,7 +5,8 @@
 # 
 # We'll use cargo-chef to speed up the build
 # 
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+# MSRV 1.95 (reth v2.5.0); pinned so stale cached latest-rust-1 digests cannot silently drop below it
+FROM lukemathwalker/cargo-chef:latest-rust-1.97 AS chef
 WORKDIR /app
 
 # Install system dependencies
@@ -39,7 +40,9 @@ RUN cargo chef cook \
     ${FEATURES:+--features "$FEATURES"}  \
     --recipe-path recipe.json
 
-COPY --exclude=.git --exclude=dist . .
+# .git must be included: vergen-git2 10 hard-fails the build without a repo
+# (the production Dockerfile builder stage includes it the same way).
+COPY --exclude=dist . .
 RUN cargo build \
     --profile $BUILD_PROFILE \
     --bin $CARGO_BIN \

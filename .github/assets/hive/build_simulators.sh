@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
-# Synced with reth v1.11.4
+# Synced with reth v2.5.0
 set -eo pipefail
+
+fixture_variant="${1:-osaka}"
+
+case "${fixture_variant}" in
+    osaka)
+        eels_fixtures="https://github.com/ethereum/execution-spec-tests/releases/download/v5.3.0/fixtures_develop.tar.gz"
+        eels_branch="mainnet"
+        ;;
+    *)
+        echo "unknown hive fixture variant: ${fixture_variant}"
+        exit 1
+        ;;
+esac
 
 # Create the hive_assets directory
 mkdir hive_assets/
@@ -12,8 +25,14 @@ go build .
 
 # Run each hive command in the background for each simulator and wait
 echo "Building images"
-# TODO: test code has been moved from https://github.com/ethereum/execution-spec-tests to https://github.com/ethereum/execution-specs  we need to pin eels branch with `--sim.buildarg branch=<release-branch-name>` once we have the fusaka release tagged on the new repo
-./hive -client bera-reth --sim "ethereum/eels" --sim.buildarg fixtures=https://github.com/ethereum/execution-spec-tests/releases/download/v5.3.0/fixtures_develop.tar.gz -sim.timelimit 1s || true &
+./hive -client bera-reth --sim "ethereum/eels/consume-engine" \
+    --sim.buildarg fixtures="${eels_fixtures}" \
+    --sim.buildarg branch="${eels_branch}" \
+    --sim.timelimit 1s || true &
+./hive -client bera-reth --sim "ethereum/eels/consume-rlp" \
+    --sim.buildarg fixtures="${eels_fixtures}" \
+    --sim.buildarg branch="${eels_branch}" \
+    --sim.timelimit 1s || true &
 ./hive -client bera-reth --sim "ethereum/engine" -sim.timelimit 1s || true &
 ./hive -client bera-reth --sim "devp2p" -sim.timelimit 1s || true &
 ./hive -client bera-reth --sim "ethereum/rpc-compat" -sim.timelimit 1s || true &

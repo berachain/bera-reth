@@ -53,8 +53,8 @@ impl BerachainBeaconConsensus {
         let transactions: Vec<_> = block.body().transactions().collect();
 
         if transactions.is_empty() {
-            return Err(ConsensusError::Other(
-                "Prague1 block must contain at least one PoL transaction".into(),
+            return Err(ConsensusError::msg(
+                "Prague1 block must contain at least one PoL transaction",
             ));
         }
 
@@ -63,15 +63,15 @@ impl BerachainBeaconConsensus {
         if let BerachainTxEnvelope::Berachain(pol_tx) = first_tx {
             self.validate_pol_transaction_shape(pol_tx, block)?;
         } else {
-            return Err(ConsensusError::Other(
-                "First transaction in Prague1 block must be a PoL transaction".into(),
+            return Err(ConsensusError::msg(
+                "First transaction in Prague1 block must be a PoL transaction",
             ));
         }
 
         // Check no other transactions are PoL
         for (index, tx) in transactions.iter().enumerate().skip(1) {
             if matches!(tx, BerachainTxEnvelope::Berachain(_)) {
-                return Err(ConsensusError::Other(format!(
+                return Err(ConsensusError::msg(format!(
                     "PoL transaction found at invalid position {index}, only first transaction can be PoL"
                 )));
             }
@@ -88,14 +88,14 @@ impl BerachainBeaconConsensus {
         let header = block.header();
 
         let expected_pubkey = header.prev_proposer_pubkey.ok_or_else(|| {
-            ConsensusError::Other(
-                "Block header missing prev_proposer_pubkey for PoL transaction validation".into(),
+            ConsensusError::msg(
+                "Block header missing prev_proposer_pubkey for PoL transaction validation",
             )
         })?;
 
         let base_fee = header
             .base_fee_per_gas
-            .ok_or_else(|| ConsensusError::Other("Base fee must be present in header".into()))?;
+            .ok_or_else(|| ConsensusError::msg("Base fee must be present in header"))?;
 
         validate_pol_transaction(
             pol_tx,
@@ -113,9 +113,10 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
         block: &RecoveredBlock<BerachainBlock>,
         result: &BlockExecutionResult<<BerachainPrimitives as NodePrimitives>::Receipt>,
         receipt_root_bloom: Option<ReceiptRootBloom>,
+        block_access_list_hash: Option<alloy_primitives::B256>,
     ) -> Result<(), ConsensusError> {
         // First run the standard validation
-        <EthBeaconConsensus<BerachainChainSpec> as FullConsensus<BerachainPrimitives>>::validate_block_post_execution(&self.inner, block, result, receipt_root_bloom)?;
+        <EthBeaconConsensus<BerachainChainSpec> as FullConsensus<BerachainPrimitives>>::validate_block_post_execution(&self.inner, block, result, receipt_root_bloom, block_access_list_hash)?;
 
         // Check for Prague3 blocked address transfers if the hardfork is active
         let timestamp = block.header().timestamp();
@@ -147,11 +148,10 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
                         if let Some(bex_vault) = bex_vault_address &&
                             (from_addr == bex_vault || to_addr == bex_vault)
                         {
-                            return Err(ConsensusError::Other(
+                            return Err(ConsensusError::other(
                                 BerachainExecutionError::Prague3BexVaultTransfer {
                                     vault_address: bex_vault,
-                                }
-                                .to_string(),
+                                },
                             ));
                         }
 
@@ -159,22 +159,20 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
                         if blocked_addresses.contains(&from_addr) {
                             // Blocked addresses can only send to rescue address
                             if rescue_address != Some(to_addr) {
-                                return Err(ConsensusError::Other(
+                                return Err(ConsensusError::other(
                                     BerachainExecutionError::Prague3BlockedAddressTransfer {
                                         blocked_address: from_addr,
-                                    }
-                                    .to_string(),
+                                    },
                                 ));
                             }
                         }
 
                         // Check if to address is blocked (blocked addresses cannot receive)
                         if blocked_addresses.contains(&to_addr) {
-                            return Err(ConsensusError::Other(
+                            return Err(ConsensusError::other(
                                 BerachainExecutionError::Prague3BlockedAddressTransfer {
                                     blocked_address: to_addr,
-                                }
-                                .to_string(),
+                                },
                             ));
                         }
                     }
@@ -200,11 +198,10 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
                     if log.address == bex_vault_address &&
                         log.topics().first() == Some(&INTERNAL_BALANCE_CHANGED_SIGNATURE)
                     {
-                        return Err(ConsensusError::Other(
+                        return Err(ConsensusError::other(
                             BerachainExecutionError::Prague3BexVaultEvent {
                                 vault_address: bex_vault_address,
-                            }
-                            .to_string(),
+                            },
                         ));
                     }
                 }
@@ -244,7 +241,7 @@ impl Consensus<BerachainBlock> for BerachainBeaconConsensus {
             .transactions()
             .position(|tx| matches!(tx, BerachainTxEnvelope::Berachain(_)))
         {
-            return Err(ConsensusError::Other(format!(
+            return Err(ConsensusError::msg(format!(
                 "PoL transaction found at position {index} before Prague1 fork activation"
             )));
         }
@@ -270,7 +267,7 @@ impl HeaderValidator<BerachainHeader> for BerachainBeaconConsensus {
             header.timestamp(),
             header.prev_proposer_pubkey,
         )
-        .map_err(|err| ConsensusError::Other(err.to_string()))?;
+        .map_err(ConsensusError::other)?;
 
         Ok(())
     }

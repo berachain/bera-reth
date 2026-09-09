@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn test_eip4844_blob_tx_accepted_post_osaka() -> eyre::Result<()> {
-    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
+    let runtime = Runtime::test();
 
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path)?;

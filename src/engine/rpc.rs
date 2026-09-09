@@ -1,3 +1,7 @@
+// The jsonrpsee `rpc` macro (via async_trait) adds `#[must_use]` to generated methods that
+// already return `#[must_use]` futures, tripping clippy's `double_must_use` on nightly.
+#![allow(clippy::double_must_use)]
+
 use crate::{
     engine::{
         BerachainExecutionData, BerachainExecutionPayloadSidecar,
@@ -25,7 +29,7 @@ use reth::{
     api::NodeTypes,
     chainspec::EthereumHardforks,
     payload::PayloadStore,
-    providers::{BlockReader, HeaderProvider, StateProviderFactory},
+    providers::{BalProvider, BlockReader, HeaderProvider, StateProviderFactory},
     rpc::api::IntoEngineApiRpcModule,
 };
 use reth_engine_primitives::{EngineApiValidator, EngineTypes};
@@ -95,7 +99,7 @@ where
             ctx.beacon_engine_handle.clone(),
             PayloadStore::new(ctx.node.payload_builder_handle().clone()),
             ctx.node.pool().clone(),
-            Box::new(ctx.node.task_executor().clone()),
+            ctx.node.task_executor().clone(),
             client,
             EngineCapabilities::default(),
             engine_validator,
@@ -397,7 +401,7 @@ where
 impl<Provider, EngineT, Pool, Validator, ChainSpec> BerachainEngineApiServer<EngineT>
     for BerachainEngineApi<Provider, EngineT, Pool, Validator, ChainSpec>
 where
-    Provider: HeaderProvider + BlockReader + StateProviderFactory + 'static,
+    Provider: HeaderProvider + BlockReader + StateProviderFactory + BalProvider + 'static,
     EngineT: EngineTypes<
             ExecutionData = BerachainExecutionData,
             PayloadAttributes = BerachainPayloadAttributes,

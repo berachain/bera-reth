@@ -3,15 +3,16 @@ use crate::{
     primitives::header::BlsPublicKey,
     transaction::{BerachainTxEnvelope, PoLTx},
 };
+use alloy_eips::eip7002::SYSTEM_ADDRESS;
 use alloy_primitives::{Bytes, Sealed, U256};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
-use reth::{consensus::ConsensusError, revm::handler::SYSTEM_ADDRESS};
+use reth::consensus::ConsensusError;
 use reth_chainspec::EthChainSpec;
 use reth_evm::block::{BlockExecutionError, InternalBlockExecutionError};
 use std::sync::Arc;
 
-pub const POL_TX_GAS_LIMIT: u64 = 30_000_000;
+pub const POL_TX_GAS_LIMIT: u64 = crate::evm::SYSTEM_CALL_GAS_LIMIT;
 
 pub fn create_pol_transaction(
     chain_spec: Arc<BerachainChainSpec>,
@@ -61,16 +62,16 @@ pub fn validate_pol_transaction(
 ) -> Result<(), ConsensusError> {
     let expected_tx = create_pol_transaction(chain_spec, expected_pubkey, block_number, base_fee)
         .map_err(|e| {
-        ConsensusError::Other(format!("Failed to create expected PoL transaction: {e}"))
+        ConsensusError::msg(format!("Failed to create expected PoL transaction: {e}"))
     })?;
 
     let expected_sealed_pol_tx = match expected_tx {
         BerachainTxEnvelope::Berachain(sealed_tx) => sealed_tx,
-        _ => return Err(ConsensusError::Other("Expected PoL transaction envelope".into())),
+        _ => return Err(ConsensusError::msg("Expected PoL transaction envelope")),
     };
 
     if pol_tx.hash() != expected_sealed_pol_tx.hash() {
-        return Err(ConsensusError::Other(format!(
+        return Err(ConsensusError::msg(format!(
             "PoL transaction hash mismatch: expected {}, got {}",
             expected_sealed_pol_tx.hash(),
             pol_tx.hash()

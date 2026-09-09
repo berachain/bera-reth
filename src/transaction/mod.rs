@@ -20,7 +20,7 @@ use alloy_primitives::{
 };
 use alloy_rlp::{Decodable, Encodable};
 use alloy_rpc_types_eth::TransactionRequest;
-use reth::{providers::errors::db::DatabaseError, revm::context::TxEnv};
+use reth::revm::context::TxEnv;
 use reth_codecs::{
     Compact,
     alloy::transaction::{CompactEnvelope, Envelope, FromTxCompact, ToTxCompact},
@@ -28,9 +28,7 @@ use reth_codecs::{
 use reth_db::table::{Compress, Decompress};
 use reth_ethereum_primitives::TransactionSigned;
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded};
-use reth_primitives_traits::{
-    InMemorySize, MaybeSerde, SignedTransaction, serde_bincode_compat::RlpBincode,
-};
+use reth_primitives_traits::InMemorySize;
 use reth_rpc_convert::{SignTxRequestError, SignableTxRequest};
 use std::{hash::Hash, mem::size_of};
 
@@ -262,7 +260,7 @@ impl Compress for BerachainTxEnvelope {
 }
 
 impl Decompress for BerachainTxEnvelope {
-    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
+    fn decompress(value: &[u8]) -> Result<Self, reth_codecs::DecompressError> {
         let (tx, _) = reth_codecs::Compact::from_compact(value, value.len());
         Ok(tx)
     }
@@ -427,14 +425,6 @@ impl TxHashRef for BerachainTxEnvelope {
         }
     }
 }
-
-impl SignedTransaction for BerachainTxEnvelope where
-    Self: Clone + PartialEq + Eq + Decodable + Decodable2718 + MaybeSerde + InMemorySize
-{
-}
-
-impl RlpBincode for BerachainTxEnvelope {}
-impl RlpBincode for PoLTx {}
 
 impl reth_codecs::Compact for BerachainTxEnvelope {
     fn to_compact<B>(&self, buf: &mut B) -> usize
@@ -1225,5 +1215,47 @@ mod pol_tx_rlp_tests {
 
         let result = PoLTx::rlp_decode(&mut malformed_rlp.as_slice());
         assert!(matches!(result, Err(alloy_rlp::Error::InputTooShort)));
+    }
+}
+
+#[cfg(test)]
+mod db_format {
+    use super::*;
+
+    /// On-disk Compact encoding of a PoL transaction envelope. This is the
+    /// Berachain-specific extended-envelope format (type 0x7e); existing
+    /// databases must keep decoding it byte-for-byte.
+    const POL_ENVELOPE_V2_5_0_GOLDEN: &str = concat!(
+        "0600000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "007e1344000138defefefefefefefefefefefefefefefefefefefefe42424242",
+        "424242424242424242424242424242422901c9c3803b9aca00deadbeef",
+    );
+
+    /// Databases written by earlier releases must keep decoding: the Compact
+    /// encoding of [`BerachainTxEnvelope`] is on-disk format and must never
+    /// change. Ethereum-variant byte compatibility with upstream reth is
+    /// covered separately by the database-compatibility tests above.
+    #[test]
+    fn test_pol_envelope_compact_db_format_is_stable() {
+        let pol = PoLTx {
+            chain_id: 80094,
+            from: Address::repeat_byte(0xfe),
+            to: Address::repeat_byte(0x42),
+            nonce: 41,
+            gas_limit: 30_000_000,
+            gas_price: 1_000_000_000,
+            input: Bytes::from_static(&[0xde, 0xad, 0xbe, 0xef]),
+        };
+        let envelope = BerachainTxEnvelope::Berachain(Sealed::new(pol));
+
+        let mut buf = Vec::new();
+        let len = Compact::to_compact(&envelope, &mut buf);
+
+        assert_eq!(len, 125, "encoded length changed");
+        assert_eq!(alloy_primitives::hex::encode(&buf), POL_ENVELOPE_V2_5_0_GOLDEN);
+
+        let (decoded, _) = <BerachainTxEnvelope as Compact>::from_compact(&buf, len);
+        assert_eq!(decoded, envelope);
     }
 }

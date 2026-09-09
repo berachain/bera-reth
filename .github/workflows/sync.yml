@@ -84,6 +84,8 @@ jobs:
             --debug.terminate \
             --trusted-peers "$TRUSTED_PEERS" \
             -vvv
+      - name: Show storage settings
+        run: ./target/maxperf/bera-reth db --datadir ./tmp --chain ./eth-genesis.json settings || true
       - name: Verify sync progress
         run: |
           # Start node with HTTP API enabled

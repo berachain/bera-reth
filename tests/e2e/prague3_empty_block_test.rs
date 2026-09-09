@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn test_prague3_builds_empty_block() -> eyre::Result<()> {
-    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
+    let runtime = Runtime::test();
 
     let genesis_path =
         concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis-prague3.json");

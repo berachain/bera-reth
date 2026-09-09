@@ -104,6 +104,7 @@ where
                 BerachainEngineApiBuilder::<BerachainEngineValidatorBuilder>::default(),
                 BasicEngineValidatorBuilder::new(BerachainEngineValidatorBuilder::default()),
                 Default::default(),
+                Default::default(),
             ),
         }
     }

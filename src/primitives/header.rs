@@ -6,9 +6,7 @@ use alloy_rlp::{Decodable, Encodable, length_of_length};
 use bytes::BufMut;
 use reth_codecs::Compact;
 use reth_db_api::table::{Compress, Decompress};
-use reth_primitives_traits::{
-    BlockHeader, InMemorySize, header::HeaderMut, serde_bincode_compat::RlpBincode,
-};
+use reth_primitives_traits::{BlockHeader, InMemorySize, header::HeaderMut};
 use serde::{Deserialize, Serialize};
 
 /// 48-byte BLS12-381 public key for Berachain consensus
@@ -114,6 +112,18 @@ impl HeaderMut for BerachainHeader {
 
     fn set_difficulty(&mut self, difficulty: U256) {
         self.difficulty = difficulty;
+    }
+
+    fn set_mix_hash(&mut self, mix_hash: B256) {
+        self.mix_hash = mix_hash;
+    }
+
+    fn set_extra_data(&mut self, extra_data: Bytes) {
+        self.extra_data = extra_data;
+    }
+
+    fn set_parent_beacon_block_root(&mut self, parent_beacon_block_root: Option<B256>) {
+        self.parent_beacon_block_root = parent_beacon_block_root;
     }
 }
 
@@ -298,6 +308,14 @@ impl Decodable for BerachainHeader {
 }
 
 impl alloy_consensus::BlockHeader for BerachainHeader {
+    fn block_access_list_hash(&self) -> Option<B256> {
+        None
+    }
+
+    fn slot_number(&self) -> Option<u64> {
+        None
+    }
+
     fn parent_hash(&self) -> B256 {
         self.parent_hash
     }
@@ -419,8 +437,6 @@ impl InMemorySize for BerachainHeader {
         self.extra_data.len() // extra_data
     }
 }
-
-impl RlpBincode for BerachainHeader {}
 
 impl AsRef<Self> for BerachainHeader {
     fn as_ref(&self) -> &Self {
@@ -627,7 +643,7 @@ impl Compress for BerachainHeader {
 }
 
 impl Decompress for BerachainHeader {
-    fn decompress(value: &[u8]) -> Result<Self, reth_db_api::DatabaseError> {
+    fn decompress(value: &[u8]) -> Result<Self, reth_codecs::DecompressError> {
         let (obj, _) = Compact::from_compact(value, value.len());
         Ok(obj)
     }
@@ -669,6 +685,8 @@ mod tests {
                 excess_blob_gas: None,
                 parent_beacon_block_root: None,
                 requests_hash: None,
+                block_access_list_hash: None,
+                slot_number: None,
             },
             // Header with EIP-1559 (London fork)
             Header {
@@ -696,6 +714,8 @@ mod tests {
                 excess_blob_gas: None,
                 parent_beacon_block_root: None,
                 requests_hash: None,
+                block_access_list_hash: None,
+                slot_number: None,
             },
             // Header with Shanghai fork (withdrawals)
             Header {
@@ -726,6 +746,8 @@ mod tests {
                 excess_blob_gas: None,
                 parent_beacon_block_root: Some(B256::random()),
                 requests_hash: None,
+                block_access_list_hash: None,
+                slot_number: None,
             },
             // Header with Cancun fork (blobs)
             Header {
@@ -753,6 +775,8 @@ mod tests {
                 excess_blob_gas: Some(262144), // 256KB
                 parent_beacon_block_root: Some(B256::random()),
                 requests_hash: None,
+                block_access_list_hash: None,
+                slot_number: None,
             },
             // Header with Prague fork (requests)
             Header {
@@ -780,6 +804,8 @@ mod tests {
                 excess_blob_gas: Some(1048576), // 1MB
                 parent_beacon_block_root: Some(B256::random()),
                 requests_hash: Some(B256::random()),
+                block_access_list_hash: None,
+                slot_number: None,
             },
         ];
 
@@ -946,5 +972,123 @@ mod tests {
             buf.len() > buf_no_pubkey.len(),
             "Header with prev_proposer_pubkey should be larger when compressed"
         );
+    }
+}
+
+#[cfg(test)]
+mod db_format {
+    use super::*;
+
+    /// On-disk Compact encoding of a pre-Prague1 header (no extension fields).
+    const HEADER_PRE_PRAGUE1_GOLDEN: &str = concat!(
+        "8020200811111111111111111111111111111111111111111111111111111111",
+        "1111111100000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000002a01c9c3806553f1",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "00043b9aca0062657261",
+    );
+
+    /// On-disk Compact encoding of a fully-populated post-Prague1 header
+    /// (requests_hash + prev_proposer_pubkey extension fields set).
+    const HEADER_V2_5_0_GOLDEN: &str = concat!(
+        "812121f811111111111111111111111111111111111111111111111111111111",
+        "1111111122222222222222222222222222222222222222222222222222222222",
+        "2222222233333333333333333333333333333333333333334444444444444444",
+        "4444444444444444444444444444444444444444444444445555555555555555",
+        "5555555555555555555555555555555555555555555555556666666666666666",
+        "6666666666666666666666666666666666666666666666667777777777777777",
+        "7777777777777777777777777777777777777777777777778888888888888888",
+        "8888888888888888888888888888888888888888888888888888888888888888",
+        "8888888888888888888888888888888888888888888888888888888888888888",
+        "8888888888888888888888888888888888888888888888888888888888888888",
+        "8888888888888888888888888888888888888888888888888888888888888888",
+        "8888888888888888888888888888888888888888888888888888888888888888",
+        "8888888888888888888888888888888888888888888888888888888888888888",
+        "8888888888888888888888888888888888888888888888888888888888888888",
+        "88888888888888888888888888888888888888888888888812d68701c9c38052",
+        "08687ca840999999999999999999999999999999999999999999999999999999",
+        "9999999999043b9aca000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "aaaaaaaaaaaaaaaaaaaaaaaa5203bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbb30cccccccccccccccccccccccccccccccccc",
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc62",
+        "657261",
+    );
+
+    fn full_header() -> BerachainHeader {
+        BerachainHeader {
+            parent_hash: B256::repeat_byte(0x11),
+            ommers_hash: B256::repeat_byte(0x22),
+            beneficiary: Address::repeat_byte(0x33),
+            state_root: B256::repeat_byte(0x44),
+            transactions_root: B256::repeat_byte(0x55),
+            receipts_root: B256::repeat_byte(0x66),
+            withdrawals_root: Some(B256::repeat_byte(0x77)),
+            logs_bloom: Bloom::repeat_byte(0x88),
+            difficulty: U256::ZERO,
+            number: 1_234_567,
+            gas_limit: 30_000_000,
+            gas_used: 21_000,
+            timestamp: 1_753_000_000,
+            mix_hash: B256::repeat_byte(0x99),
+            nonce: B64::ZERO,
+            base_fee_per_gas: Some(1_000_000_000),
+            blob_gas_used: Some(0),
+            excess_blob_gas: Some(0),
+            parent_beacon_block_root: Some(B256::repeat_byte(0xaa)),
+            requests_hash: Some(B256::repeat_byte(0xbb)),
+            prev_proposer_pubkey: Some(BlsPublicKey::repeat_byte(0xcc)),
+            extra_data: Bytes::from_static(b"bera"),
+        }
+    }
+
+    /// Databases written by earlier releases must keep decoding: the Compact
+    /// encoding of [`BerachainHeader`] is consensus-adjacent on-disk format
+    /// and must never change. If this test fails, the change breaks existing
+    /// V1 and V2 datadirs and requires a resync or an explicit DB migration.
+    #[test]
+    fn test_header_compact_db_format_is_stable() {
+        let header = full_header();
+        let mut buf = Vec::new();
+        let len = Compact::to_compact(&header, &mut buf);
+
+        assert_eq!(len, 643, "encoded length changed");
+        assert_eq!(alloy_primitives::hex::encode(&buf), HEADER_V2_5_0_GOLDEN);
+
+        let (decoded, _) = BerachainHeader::from_compact(&buf, len);
+        assert_eq!(decoded, header);
+    }
+
+    /// Headers written before Prague1 (no extension fields) must decode from
+    /// their historical encoding as well.
+    #[test]
+    fn test_pre_prague1_header_compact_db_format_is_stable() {
+        let header = BerachainHeader {
+            parent_hash: B256::repeat_byte(0x11),
+            number: 42,
+            gas_limit: 30_000_000,
+            timestamp: 1_700_000_000,
+            base_fee_per_gas: Some(1_000_000_000),
+            extra_data: Bytes::from_static(b"bera"),
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        let len = Compact::to_compact(&header, &mut buf);
+
+        assert_eq!(len, 490, "encoded length changed");
+        assert_eq!(alloy_primitives::hex::encode(&buf), HEADER_PRE_PRAGUE1_GOLDEN);
+
+        let (decoded, _) = BerachainHeader::from_compact(&buf, len);
+        assert_eq!(decoded, header);
     }
 }

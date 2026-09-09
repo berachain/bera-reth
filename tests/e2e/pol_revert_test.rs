@@ -31,7 +31,7 @@ sol! {
 
 async fn setup_test_with_reverting_pol_contract() -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)>
 {
-    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
+    let runtime = Runtime::test();
 
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let genesis_json = std::fs::read_to_string(genesis_path)?;

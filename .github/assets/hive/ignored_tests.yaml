@@ -1,4 +1,6 @@
-# Synced with reth v1.11.4
+# Re-validated against the reth v2.5.x hive runs
+# https://github.com/berachain/bera-reth/actions/runs/33685694817 and
+# https://github.com/berachain/bera-reth/actions/runs/34266112103
 # Ignored Tests Configuration
 #
 # This file contains tests that should be ignored for various reasons (flaky, known issues, etc).
@@ -19,11 +21,15 @@ engine-withdrawals:
   - Withdrawals Fork on Canonical Block 8 / Side Block 7 - 10 Block Re-Org (Paris) (bera-reth)
   - Sync after 128 blocks - Withdrawals on Block 2 - Multiple Withdrawal Accounts (Paris) (bera-reth)
 engine-cancun:
+  # Failed on 2-3 of the last 7 scheduled main (reth v1.11.4) runs; passed on both reth v2.5.x
+  # runs so far (33685694817, 34266112103). Keep ignored until a few more v2 runs confirm.
   - Transaction Re-Org, New Payload on Revert Back (Cancun) (bera-reth)
   - Transaction Re-Org, Re-Org to Different Block (Cancun) (bera-reth)
   - Transaction Re-Org, Re-Org Out (Cancun) (bera-reth)
-  - Invalid Missing Ancestor ReOrg, StateRoot, EmptyTxs=False, Invalid P9 (Cancun) (bera-reth)
-  - Multiple New Payloads Extending Canonical Chain, Wait for Canonical Payload (Cancun) (bera-reth)
+  # Fails on every main run, passed on the first reth v2.5.x run (33685694817) and failed again
+  # on the second (34266112103): flips between runs on v2, so it belongs here rather than in
+  # expected_failures.
+  - Blob Transaction Ordering, Multiple Clients (Cancun) (bera-reth)
 engine-api:
   - Transaction Re-Org, Re-Org Out (Paris) (bera-reth)
   - Transaction Re-Org, Re-Org to Different Block (Paris) (bera-reth)

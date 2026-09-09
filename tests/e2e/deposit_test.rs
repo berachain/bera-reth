@@ -98,7 +98,7 @@ async fn setup_deposit_test() -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)
 async fn setup_deposit_test_with_osaka(
     osaka_time: Option<u64>,
 ) -> eyre::Result<(Runtime, Arc<BerachainChainSpec>)> {
-    let runtime = Runtime::with_existing_handle(tokio::runtime::Handle::current())?;
+    let runtime = Runtime::test();
     let genesis_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eth-genesis.json");
     let mut genesis_json: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(genesis_path)?)?;

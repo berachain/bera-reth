@@ -156,6 +156,7 @@ impl ConfigureEvm for BerachainEvmConfig {
             gas_limit: header.gas_limit(),
             basefee: header.base_fee_per_gas().unwrap_or_default(),
             blob_excess_gas_and_price,
+            slot_num: 0,
         };
 
         Ok(EvmEnv { cfg_env, block_env })
@@ -227,6 +228,7 @@ impl ConfigureEvm for BerachainEvmConfig {
             basefee: basefee.unwrap_or_default(),
             // calculate excess gas based on parent block's blob gas usage
             blob_excess_gas_and_price,
+            slot_num: 0,
         };
 
         Ok((cfg, block_env).into())
@@ -266,7 +268,7 @@ impl ConfigureEvm for BerachainEvmConfig {
         ctx: <Self::BlockExecutorFactory as BlockExecutorFactory>::ExecutionCtx<'a>,
     ) -> impl reth_evm::execute::BlockBuilder<
         Primitives = Self::Primitives,
-        Executor: reth_evm::block::BlockExecutorFor<'a, Self::BlockExecutorFactory, DB, I>,
+        Executor = reth_evm::BlockExecutorForEvm<'a, Self, DB, I>,
     >
     where
         DB: Database,
@@ -285,7 +287,10 @@ impl ConfigureEvm for BerachainEvmConfig {
 }
 
 impl BuildPendingEnv<BerachainHeader> for BerachainNextBlockEnvAttributes {
-    fn build_pending_env(parent: &SealedHeader<BerachainHeader>) -> Self {
+    fn build_pending_env(
+        parent: &SealedHeader<BerachainHeader>,
+        _block_overrides: Option<&alloy_rpc_types_eth::BlockOverrides>,
+    ) -> Self {
         Self {
             timestamp: parent.timestamp().saturating_add(BERACHAIN_BLOCK_TIME_SECONDS),
             suggested_fee_recipient: parent.beneficiary(),
@@ -347,6 +352,7 @@ impl ConfigureEngineEvm<BerachainExecutionData> for BerachainEvmConfig {
             gas_limit: payload.payload.gas_limit(),
             basefee: payload.payload.saturated_base_fee_per_gas(),
             blob_excess_gas_and_price,
+            slot_num: 0,
         };
 
         Ok(EvmEnv { cfg_env, block_env })

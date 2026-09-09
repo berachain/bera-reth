@@ -12,8 +12,8 @@ IMAGES=(
     "/tmp/smoke_genesis.tar"
     "/tmp/smoke_network.tar"
     "/tmp/ethereum_sync.tar"
-    "/tmp/eest_engine.tar"
-    "/tmp/eest_rlp.tar"
+    "/tmp/eels_engine.tar"
+    "/tmp/eels_rlp.tar"
     "/tmp/bera-reth_image.tar"
     "/tmp/berachain_rpc_compat.tar"
 )
