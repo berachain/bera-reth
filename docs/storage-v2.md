@@ -26,11 +26,12 @@ the layout when a **new** datadir is created.
 |---|---|
 | Fresh node (new datadir) | Nothing — V2 is the default for new datadirs. |
 | Existing node, staying on V1 | Nothing — V1 datadirs keep working on this binary. Note that upstream reth plans to drop V1 support in a future release, so plan a migration window. |
-| Existing node, moving to V2 | Stop the node, run `bera-reth db migrate-v2` (below), restart. Or resync from scratch. |
+| Existing node, moving to V2 | Stop the node, run `bera-reth db migrate-v2` (below), restart. Or restore a V2 snapshot into a fresh datadir, or resync from scratch. |
 
-There are no Berachain snapshots on [snapshots.reth.rs](https://snapshots.reth.rs)
-(Ethereum mainnet only), so in-place migration and resync are the only two paths to V2
-for an existing node.
+Berachain publishes V2-layout [snapshots](https://snapshots.berachain.com/) for mainnet
+and bepolia in pruned and archive flavors. `bera-reth download --chain <mainnet|bepolia>`
+resolves the manifest for the chain automatically; pick the component set with
+`--archive`, `--full`, or `--minimal` (or `--list` to inspect what is available).
 
 ## In-place migration
 
@@ -65,8 +66,18 @@ Archive remains the default. Two pruned presets exist for lighter RPC nodes:
 - `--full` — keeps recent state plus a bounded history window.
 - `--minimal` — maximum pruning, smallest disk footprint.
 
-Pruning is destructive and irreversible; a pruned node still syncs the full history from
-P2P since there are no Berachain snapshots.
+These are `bera-reth node` flags (and, with the same meaning, `bera-reth download`
+component selectors). `db migrate-v2` does not accept them: it takes only the shared
+`--datadir`/`--chain`/`--config` arguments and reads pruning from the datadir's
+`reth.toml`, which the node writes on start whenever `--full`/`--minimal` change the
+prune configuration. So a node that has been running with a preset is migrated with that
+preset's pruning honored (migration starts each segment at its prune checkpoint, and with
+receipt log-filter pruning receipts are left in MDBX), and a node's mode is chosen or
+changed by (re)starting `node` with the flag, not during migration.
+
+Pruning is destructive and irreversible. A pruned node can be bootstrapped from a pruned
+Berachain snapshot (`download --full` / `--minimal`) instead of syncing the full history
+from P2P.
 
 ## Related tooling
 
