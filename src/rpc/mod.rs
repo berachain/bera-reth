@@ -1,6 +1,7 @@
 use reth_rpc_eth_api::helpers::config::EthConfigApiServer;
 pub mod api;
 pub mod config;
+pub mod pog;
 pub mod receipt;
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
     rpc::{
         api::{BerachainApi, BerachainNetwork},
         config::BerachainConfigHandler,
+        pog::{PogApiImpl, PogApiServer, PogNet},
         receipt::BerachainEthReceiptConverter,
     },
 };
@@ -37,6 +39,7 @@ use reth_node_builder::rpc::{
 };
 use reth_rpc_convert::{RpcConvert, RpcConverter};
 use reth_rpc_eth_api::helpers::pending_block::BuildPendingEnv;
+use std::sync::Arc;
 
 /// Builds `BerachainEthApi` for Berachain.
 #[derive(Debug, Default)]
@@ -148,6 +151,7 @@ where
                 >,
             >,
             Provider: ChainSpecProvider<ChainSpec: EthereumHardforks>,
+            Network: PogNet,
             Evm = BerachainEvmConfig,
         >,
     EthB: EthApiBuilder<N>,
@@ -167,11 +171,41 @@ where
         let berachain_config =
             BerachainConfigHandler::new(ctx.node.provider().clone(), ctx.node.evm_config().clone());
 
+        if !crate::pog::pog_cli_enabled() {
+            return self
+                .inner
+                .launch_add_ons_with(ctx, move |container| {
+                    container.modules.merge_if_module_configured(
+                        RethRpcModule::Eth,
+                        berachain_config.into_rpc(),
+                    )?;
+                    Ok(())
+                })
+                .await;
+        }
+
+        let task_executor = ctx.node.task_executor().clone();
+        let network = ctx.node.network().clone();
+        let provider = ctx.node.provider().clone();
+        let provider_watcher = provider.clone();
+        let sends = Arc::new(crate::pog::SendMap::default());
+        let pog_api = PogApiImpl::new(network, provider, sends.clone());
+
+        let canon_events = {
+            use reth::providers::CanonStateSubscriptions as _;
+            provider_watcher.subscribe_to_canonical_state()
+        };
+        task_executor.spawn_with_graceful_shutdown_signal(move |shutdown| {
+            let map = sends.clone();
+            async move { crate::pog::run_send_watcher(shutdown, map, canon_events).await }
+        });
+
         self.inner
             .launch_add_ons_with(ctx, move |container| {
                 container
                     .modules
                     .merge_if_module_configured(RethRpcModule::Eth, berachain_config.into_rpc())?;
+                container.modules.merge_ipc(PogApiServer::into_rpc(pog_api))?;
                 Ok(())
             })
             .await
@@ -188,6 +222,7 @@ where
                     ExecutionData = BerachainExecutionData,
                 >,
             >,
+            Network: PogNet,
             Evm = BerachainEvmConfig,
         >,
     EthB: EthApiBuilder<N>,
