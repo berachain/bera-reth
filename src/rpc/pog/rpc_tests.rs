@@ -122,7 +122,7 @@ async fn land_flips_status() {
     let (api, map) = harness(net);
     let (raw, _) = signed_raw(0).await;
     let resp = api.send_raw_inner(peer_hex(peer), raw).await.unwrap();
-    map.note_canonical(42, &[resp.tx_hash]);
+    map.note_block(42, &[resp.tx_hash]);
     let row = &api.sends_inner()[0];
     assert_eq!(row.status, "landed");
     assert_eq!(row.block_number, Some(42));
@@ -140,7 +140,7 @@ async fn timeout_then_late_land_via_rpc_map() {
     std::thread::sleep(Duration::from_millis(5));
     sends.expire_timeouts();
     assert_eq!(api.sends_inner()[0].status, "timeout");
-    sends.note_canonical(99, &[resp.tx_hash]);
+    sends.note_block(99, &[resp.tx_hash]);
     assert_eq!(api.sends_inner()[0].status, "landed");
     assert_eq!(api.sends_inner()[0].block_number, Some(99));
 }

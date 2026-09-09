@@ -1,8 +1,7 @@
 # Sentry-free Proof of Gossip
 
 Proof of Gossip (PoG) proves one thing: the node sent a transaction to exactly one
-peer, and that transaction later landed on the canonical chain. It does not prove
-the peer relayed anything.
+peer, and that transaction later landed in a block.
 
 The node keeps the smallest surface that only it can provide: the live peer table,
 a targeted send, and an in-memory record of what landed. A downstream collector
@@ -21,7 +20,7 @@ Operators running `bera-reth` and developers writing a collector against it.
 | Collector | The downstream process that signs canaries, calls PoG, and stores results. |
 | `peerId` | The peer's stable 64-byte node public key. PoG credits sends to this. |
 | Session enode | `enode://peerId@ip:port` built from the live TCP connection. |
-| Landing | The canary appearing in a canonical block. |
+| Landing | The canary appearing in a block on the chain. |
 
 ## Enable PoG
 
@@ -39,7 +38,7 @@ sequenceDiagram
     participant C as Collector
     participant N as bera-reth
     participant P as Target peer
-    participant B as Canonical chain
+    participant B as Chain
 
     C->>N: pog_peers
     N-->>C: peerId + session enode
@@ -47,7 +46,7 @@ sequenceDiagram
     C->>N: pog_sendRawTransaction(peerId, rawTx)
     N->>P: Targeted send
     N-->>C: txHash + peerId + enode
-    B-->>N: Canonical block
+    B-->>N: New block
     N->>N: Flip matching row to landed
     C->>N: pog_sends
     N-->>C: status + blockNumber
@@ -176,8 +175,9 @@ Returns the in-memory send window. Takes no parameters.
 | `status` | string | `sent`, `landed`, or `timeout`. |
 | `blockNumber` | number | Present once the canary lands. |
 
-A canonical-block watcher flips matching hashes to `landed`. A send becomes
-`timeout` after 25 seconds, and a later canonical match still flips it to `landed`.
+A watcher on new blocks flips matching hashes to `landed`. A send becomes
+`timeout` after 25 seconds, and a later match in a new block still flips it to
+`landed`.
 Rows drop after 15 minutes. A restart discards unresolved rows, so the collector
 owns durable history.
 
@@ -188,8 +188,8 @@ Returns node readiness and backpressure. Takes no parameters.
 | Field | Type | Description |
 |---|---|---|
 | `syncing` | boolean | Sends are refused while `true`. |
-| `headNumber` | number | Canonical head height. |
-| `headHash` | string | Canonical head hash. |
+| `headNumber` | number | Head block number. |
+| `headHash` | string | Head block hash. |
 | `sendsInflight` | number | Rows still in `sent`. |
 
 ## Prometheus metrics
@@ -206,21 +206,43 @@ Peer IDs and single IP addresses stay off metric labels, which keeps series coun
 flat as the peer set churns. Join a subnet series to `pog_peers` and `pog_sends`
 when you need per-peer attribution.
 
-## Write a collector
+## Bronze++ sentry
 
-1. Read `pog_nodeStatus` and stop while `syncing` is `true`.
-2. Read `pog_peers` and choose a target `peerId`.
-3. Read the signer nonce with `eth_getTransactionCount(latest)` and reconcile it
-   against your own ledger.
-4. Sign the canary yourself and call `pog_sendRawTransaction`.
-5. Store `txHash`, `peerId`, and `enode` from the response before you poll.
-6. Poll `pog_sends` until the row reports `landed` or `timeout`, then persist the
-   outcome. Poll again after a timeout, because a late block can still flip it.
+`scripts/pog_sentry.py` is the smallest useful collector: a cron job against one
+node. It holds the key. The node does not.
+
+Each run sends **at most one** canary, then exits. A peer is eligible when it is
+connected, not on the skip list, and has no completed test in the last **3 days**.
+Never-tested peers go first. Timeouts count as a completed test, so a black hole
+is not retried for 3 days. Three timeout hashes for the same `peerId` put it on a
+local skip list ("banned"). That list does not call Reth reputation.
+
+On start, `sent` rows are reconciled against `pog_sends` and
+`eth_getTransactionReceipt` so a killed job does not lose the nonce. Metrics are
+written to `$STATE_DIR/metrics.prom` for node_exporter textfile collection:
+`pog_sentry_checked_total`, `pog_sentry_first_day`, `pog_sentry_skipped`,
+`pog_sentry_last_outcome_info`.
+
+Requires `cast` on `PATH`.
+
+```bash
+python3 scripts/pog_sentry.py \
+  --ipc /tmp/reth.ipc \
+  --key-file /secret/pog.key \
+  --state-dir /var/lib/pog-sentry
+```
+
+```cron
+*/10 * * * * python3 /opt/bera-reth/scripts/pog_sentry.py --ipc /tmp/reth.ipc --key-file /secret/pog.key --state-dir /var/lib/pog-sentry
+```
+
+Out of this sentry: `pog_penalize`, first-hear, a second signer, `/24` quotas, more
+than one send per tick.
 
 ## Claim boundary
 
-PoG supports one claim: the node sent hash `H` to peer `P` alone, and `H` reached
-the canonical chain.
+PoG supports one claim: the node sent hash `H` to peer `P` alone, and `H` later
+appeared in a block.
 
 PoG does not support the claim that `P` relayed `H`, or that `P` announced it
 first. Both need transaction provenance, which stock Reth does not record.

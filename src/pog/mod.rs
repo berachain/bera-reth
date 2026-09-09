@@ -125,7 +125,7 @@ impl SendMap {
     }
 
     /// Mark matching hashes landed. Returns subnets of newly landed rows.
-    pub fn note_canonical(&self, block_number: u64, hashes: &[TxHash]) -> Vec<String> {
+    pub fn note_block(&self, block_number: u64, hashes: &[TxHash]) -> Vec<String> {
         let mut inner = self.lock();
         let mut landed_subnets = Vec::new();
         for hash in hashes {
@@ -233,7 +233,7 @@ pub async fn run_send_watcher(
                         .transactions_iter()
                         .map(|tx| *tx.tx_hash())
                         .collect();
-                    for subnet in map.note_canonical(block_num, &hashes) {
+                    for subnet in map.note_block(block_num, &hashes) {
                         record_send_result(&subnet, "landed");
                     }
                 }
@@ -289,7 +289,7 @@ mod tests {
         });
         assert!(map.signer_inflight(from));
         assert_eq!(map.inflight_count(), 1);
-        map.note_canonical(10, &[TxHash::repeat_byte(1)]);
+        map.note_block(10, &[TxHash::repeat_byte(1)]);
         assert!(!map.signer_inflight(from));
         assert_eq!(map.snapshot()[0].status, SendStatus::Landed);
         assert_eq!(map.snapshot()[0].block_number, Some(10));
@@ -313,7 +313,7 @@ mod tests {
         });
         let timed = map.expire_timeouts();
         assert_eq!(timed, vec!["1.2.3.0/24".to_string()]);
-        map.note_canonical(11, &[hash]);
+        map.note_block(11, &[hash]);
         assert_eq!(map.snapshot()[0].status, SendStatus::Landed);
     }
 }
