@@ -11,6 +11,8 @@ signing key and no database.
 ## Audience
 
 Operators running `bera-reth` and developers writing a collector against it.
+A one-to-two page client brief is [proof-of-gossip-client.md](proof-of-gossip-client.md).
+The shipped cron collector is [pog-sentry.md](pog-sentry.md).
 
 ## Terms
 
@@ -139,6 +141,37 @@ three cases.
 The node never builds transactions and never reserves nonces. One inflight send per
 signer is the concurrency limit; add signer accounts to send in parallel.
 
+### `pog_penalize`
+
+Drops one peer below Reth's ban threshold.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `peerId` | string | Yes | Peer to ban, hex with or without `0x`. |
+
+**Example response**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "peerId": "1c2f...9ab4",
+    "connected": true
+  }
+}
+```
+
+The node applies the stock `BadProtocol` reputation change: disconnect now, no
+redial until `ban_duration` expires (12 hours by default). Trusted peers are
+exempt. `connected` reports whether the peer held a session at call time; the
+penalty applies either way, so a collector can ban a peer that just left.
+
+The node never decides who deserves this. It counts nothing and forgets the call
+as soon as the reputation change is queued. Deciding which peer is useless, and
+holding the ban back when the whole network looks dead, belongs to the collector
+([pog-sentry.md](pog-sentry.md)).
+
 ### `pog_sends`
 
 Returns the in-memory send window. Takes no parameters.
@@ -201,43 +234,17 @@ Metrics label by subnet, never by peer.
 | `pog_peers` | `subnet`, `direction` | Connected peers per IPv4 `/24` or IPv6 `/48`. |
 | `pog_sends_total` | `subnet`, `result` | Counts of `sent`, `landed`, `timeout`, `refused`. |
 | `pog_sends_inflight` | none | Sends awaiting inclusion or timeout. |
+| `pog_penalized_total` | `subnet` | `pog_penalize` calls; `unknown` subnet when the peer had already left. |
 
 Peer IDs and single IP addresses stay off metric labels, which keeps series count
 flat as the peer set churns. Join a subnet series to `pog_peers` and `pog_sends`
 when you need per-peer attribution.
 
-## Bronze++ sentry
+## Cron sentry
 
-`scripts/pog_sentry.py` is the smallest useful collector: a cron job against one
-node. It holds the key. The node does not.
-
-Each run sends **at most one** canary, then exits. A peer is eligible when it is
-connected, not on the skip list, and has no completed test in the last **3 days**.
-Never-tested peers go first. Timeouts count as a completed test, so a black hole
-is not retried for 3 days. Three timeout hashes for the same `peerId` put it on a
-local skip list ("banned"). That list does not call Reth reputation.
-
-On start, `sent` rows are reconciled against `pog_sends` and
-`eth_getTransactionReceipt` so a killed job does not lose the nonce. Metrics are
-written to `$STATE_DIR/metrics.prom` for node_exporter textfile collection:
-`pog_sentry_checked_total`, `pog_sentry_first_day`, `pog_sentry_skipped`,
-`pog_sentry_last_outcome_info`.
-
-Requires `cast` on `PATH`.
-
-```bash
-python3 scripts/pog_sentry.py \
-  --ipc /tmp/reth.ipc \
-  --key-file /secret/pog.key \
-  --state-dir /var/lib/pog-sentry
-```
-
-```cron
-*/10 * * * * python3 /opt/bera-reth/scripts/pog_sentry.py --ipc /tmp/reth.ipc --key-file /secret/pog.key --state-dir /var/lib/pog-sentry
-```
-
-Out of this sentry: `pog_penalize`, first-hear, a second signer, `/24` quotas, more
-than one send per tick.
+Operator runbook for `scripts/pog_sentry.py`: [pog-sentry.md](pog-sentry.md).
+One canary per process, key off the node, 3-day cooldown, `pog_penalize` at three
+strikes behind a chain-health guard, JSONL plus a Prometheus textfile.
 
 ## Claim boundary
 
