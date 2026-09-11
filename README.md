@@ -40,8 +40,8 @@ BEACON_KIT_PATH=/path/to/beacon-kit ./scripts/test-block-progression.sh
 
 ### Proof of Gossip
 
-See [Sentry-free Proof of Gossip](docs/proof-of-gossip.md) for the IPC API,
-[cron sentry](docs/pog-sentry.md) (`scripts/pog_sentry.py`), and Prometheus metrics.
+See [Proof of Gossip](docs/proof-of-gossip.md) for `--bera.pog` and the `pog`
+IPC namespace, and [`pog_sentry.py`](docs/pog-sentry.md) for the cron collector.
 
 ## Development
 

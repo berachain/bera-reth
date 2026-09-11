@@ -1,22 +1,15 @@
-# Proof of Gossip sentry
+# `pog_sentry.py`
 
-`scripts/pog_sentry.py` is a cron collector for one `bera-reth` node with
-`--bera.pog`. Each process signs at most one canary, writes state, and exits. The
-hex key stays on the collector host.
+Cron collector in `scripts/pog_sentry.py`. One process, one canary, then exit.
+Talks to one `bera-reth` IPC socket that already has `--bera.pog`. Holds the
+signer; the node does not.
 
-Node IPC contract: [proof-of-gossip.md](proof-of-gossip.md). Client duties:
-[proof-of-gossip-client.md](proof-of-gossip-client.md).
+Namespace: [proof-of-gossip.md](proof-of-gossip.md).
 
-## Requirements
+## Run
 
-- Python 3.10+
-- Foundry `cast` on `PATH`
-- IPC to a node that answers `pog_nodeStatus` (default `/tmp/reth.ipc`)
-- Funded EOA whose key is in a file (`0600` recommended; `0x` prefix optional)
-- Persistent `--state-dir` (default `./pog-sentry`)
-
-The canary is an EIP-1559 1-wei self-transfer: 21_000 gas, 1 gwei tip, 2 gwei max
-fee. The tip must clear the pool floor.
+Needs Python 3.10+, Foundry `cast` on `PATH`, a hex private-key file, and a
+funded EOA.
 
 ```bash
 python3 scripts/pog_sentry.py \
@@ -30,113 +23,85 @@ python3 scripts/pog_sentry.py \
   --key-file /secret/pog.key --ipc /tmp/reth.ipc --state-dir /var/lib/pog-sentry
 ```
 
-`--dry-run` still needs a live IPC socket and a key file. It picks a peer and
-writes metrics; it does not sign or send.
+`--dry-run` still opens IPC and reads the key. It picks a peer and writes
+metrics; it does not sign or send.
 
 ```bash
 POG_SENTRY_SELF_TEST=1 python3 scripts/pog_sentry.py
 ```
 
-That path runs the scheduler unit check and skips `--key-file`.
+That path runs `_self_test()` and skips `--key-file`.
 
-| Flag | Default | Role |
+| Flag | Default | Script use |
 |---|---|---|
-| `--ipc` | `/tmp/reth.ipc` | JSON-RPC socket |
-| `--key-file` | required | Canary signer |
-| `--state-dir` | `./pog-sentry` | `attempts.jsonl` and `metrics.prom` |
-| `--cooldown-secs` | `259200` (3 days) | Wait after `landed` or `timeout` before retesting that `peerId` |
-| `--strikes` | `3` | Distinct timeout hashes that skip-list a `peerId` |
-| `--health-window-secs` | `86400` (1 day) | A canary must have landed this recently before any ban goes out |
-| `--no-penalize` | off | Measure only; never call `pog_penalize` |
-| `--dry-run` | off | Choose peer, do not send |
+| `--ipc` | `/tmp/reth.ipc` | `cast rpc --ipcpath` |
+| `--key-file` | required | Hex key, `0x` optional. Empty file exits 1. |
+| `--state-dir` | `./pog-sentry` | Created if missing. Holds `attempts.jsonl` and `metrics.prom`. |
+| `--cooldown-secs` | `259200` | Seconds after `landed` or `timeout` before that `peerId` is eligible again. |
+| `--strikes` | `3` | Distinct timeout hashes that skip-list a `peerId`. |
+| `--health-window-secs` | `86400` | A `landed` row must be this recent or `pog_penalize` is held. |
+| `--no-penalize` | off | Skip the penalize sweep. |
+| `--dry-run` | off | Print `{pick, skipped}` JSON; no send. |
 
-## Schedule
+## Tick
 
-Only currently connected peers from `pog_peers` are candidates. Skip-listed ids
-are dropped. A peer with a completed test (`landed` or `timeout`) inside the
-cooldown window is dropped. Remaining peers sort never-tested first, then oldest
-`last_done_at`.
+`main()` does this, in order:
 
-Timeouts count as completed tests, so a black hole waits a full cooldown before
-another hash. Three timeout hashes for one `peerId` put it on a skip list derived
-from the JSONL.
+1. Read `--key-file`.
+2. Call `pog_nodeStatus`. Missing object or IPC/`cast` failure exits 1. `syncing`
+   writes metrics as `syncing` and exits 0.
+3. Load `attempts.jsonl`. For every latest row still `sent`, call `pog_sends` and
+   `eth_getTransactionReceipt`. Append a follow-up row (`reconciled: true`) if
+   the hash has `landed` or `timeout`.
+4. Unless `--no-penalize`, run `penalize_sweep`: every skip-listed `peerId` with
+   no `penalized` row yet. If no `landed` row sits inside
+   `--health-window-secs`, print a hold line to stderr and skip the RPC. Else
+   call `pog_penalize` once per due id. Success appends `status=penalized`;
+   RPC failure appends `penalize_error` and retries next tick.
+5. If `pog_sends` has `status=sent` for this signer, print `signer already
+   inflight on node`, outcome `idle`, exit 0.
+6. `pog_peers`. Normalize `peerId` (lowercase, strip `0x`). `pick_peer` drops
+   skip-listed ids and ids whose last `landed`/`timeout` is inside cooldown.
+   Remaining sort never-tested first (`last_done_at` missing), then oldest
+   `last_done_at`. Empty set: `no cold connected peer`, outcome `idle`.
+7. `--dry-run` prints the pick and skipped set, outcome `idle`.
+8. `eth_chainId`, `eth_getTransactionCount(from, latest)`, `cast mktx`: EIP-1559
+   1-wei self-transfer, 21_000 gas, 1 gwei tip, 2 gwei max fee.
+9. `pog_sendRawTransaction`. On RPC error, append `status=refused`, outcome
+   `refused`, exit 0.
+10. Append `status=sent`. Poll `pog_sends` every 2 seconds for up to 30 seconds
+    until that hash is `landed` or `timeout`. If the deadline wins, record
+    `timeout` locally. Print the final row as JSON. Exit 0.
 
-The node allows only one inflight send per recovered signer. The sentry aborts
-with outcome `idle` if `pog_sends` already has `status=sent` for this `from`.
-Parallel probes need more funded accounts, not a second process on the same key.
+## State files
 
-## Banning a useless peer
+`attempts.jsonl` is append-only. The latest row for a `txHash` wins. Send rows
+include `ts`, `peerId`, `enode`, `direction`, `client`, `txHash`, `nonce`,
+`from`, `status`, and optionally `blockNumber`, `error`, `reconciled`. Ban rows
+are `ts`, `peerId`, `status`, optionally `connected` or `error`.
 
-A peer that reaches the strike count is a peer we handed transactions to three
-separate times and never saw one land. The sweep runs before the send, on every
-tick, so a ban goes out even when this tick has nothing to probe.
+`status` values written by the script: `sent`, `landed`, `timeout`, `refused`,
+`penalized`, `penalize_error`.
 
-Each skip-listed `peerId` gets one `pog_penalize` call. The node applies
-`ReputationChangeKind::BadProtocol`, which puts the peer under Reth's ban
-threshold: disconnect now, no redial for `ban_duration` (12 hours by default,
-`--peers.ban-duration`). Trusted peers are exempt. The sentry's own skip list
-outlives the ban, so a peer that reconnects is never probed again.
+Skip list is derived: a `peerId` with `--strikes` distinct timeout hashes in
+the latest-by-tx map. It is not a separate file.
 
-The call is recorded as a `penalized` row and never repeats for that `peerId`.
-A failed call lands as `penalize_error` and retries next tick.
+`metrics.prom` is rewritten on every exit path that reaches `finish()`:
 
-**The health guard.** No ban goes out unless some canary landed within
-`--health-window-secs`. Without it, a raised tip floor or a stalled chain times
-out every probe, and strike counting would walk the node off the entire network
-one peer at a time. Held bans are counted in `pog_sentry_ban_pending` and go out
-on the first tick after something lands. Alert on that gauge staying above zero.
-
-Run with `--no-penalize` while establishing a baseline on a new node.
-
-## State
-
-`--state-dir` is created if missing.
-
-`attempts.jsonl` is append-only. The latest row for a `txHash` wins. Typical
-fields: `ts`, `peerId`, `enode`, `direction`, `client`, `txHash`, `nonce`,
-`from`, `status`, optional `blockNumber`, `error`, `reconciled`, `connected`.
-
-`status` is `sent`, `landed`, `timeout`, `refused`, `penalized`, or
-`penalize_error`. Ban rows carry `ts`, `peerId`, and `status` only.
-
-On start, every latest row still `sent` is checked against `pog_sends` and
-`eth_getTransactionReceipt`. A land or node timeout is appended (`reconciled:
-true`) so a killed job does not lose the nonce. A row that is still `sent` on
-both sides leaves the signer inflight; this run then idles.
-
-A `timeout` from the 30-second poll can still land later. Reconcile on the next
-start is what flips it. Do not bump nonce from `timeout` alone.
-
-`metrics.prom` is a node_exporter textfile. Point `--collector.textfile.directory`
-at `--state-dir` or copy the file there after each run.
-
-| Series | Meaning |
+| Series | Source |
 |---|---|
 | `pog_sentry_checked_total` | Distinct `txHash` values in the log |
-| `pog_sentry_first_day` | Peers whose first log row is today UTC |
-| `pog_sentry_skipped` | `peerId`s at the strike skip list |
-| `pog_sentry_penalized_total` | `peerId`s this sentry has sent to `pog_penalize` |
-| `pog_sentry_ban_pending` | Skip-listed peers held back by the health window |
-| `pog_sentry_last_outcome_info{result=...}` | `1` on the outcome of this process, `0` on the rest |
+| `pog_sentry_first_day` | Peers whose first log `ts` is today UTC |
+| `pog_sentry_skipped` | Size of the skip list |
+| `pog_sentry_penalized_total` | Distinct `peerId`s with a `penalized` row |
+| `pog_sentry_ban_pending` | Skip-listed peers held this tick by the health window |
+| `pog_sentry_last_outcome_info{result=...}` | `1` on this process outcome, `0` on the rest |
 
-`result` is one of `landed`, `timeout`, `idle`, `refused`, `syncing`, `error`.
+`result` is `landed`, `timeout`, `idle`, `refused`, `syncing`, or `error`.
 
-## Exit codes
+## Exit
 
-| Code | When |
+| Code | Outcome |
 |---|---|
-| 0 | Send finished (`landed` / `timeout`), or idle / syncing / refused |
-| 1 | IPC, `cast`, or empty key file |
-
-Stdout on a completed send is one JSON object (the final attempt row). Refused
-sends print the RPC error on stderr and append `status=refused`.
-
-The poll waits up to 30 seconds (`2s` interval). The node marks a send `timeout`
-after 25 seconds, so a live row usually resolves inside one process. If the poll
-deadline wins first, the sentry records `timeout` locally; reconcile can still
-see a later `landed`.
-
-## Not in this script
-
-First-hear provenance, a second signer, `/24` quotas, and more than one send per
-process.
+| 0 | `landed`, `timeout`, `idle`, `syncing`, `refused` |
+| 1 | Empty key file, IPC/`cast` failure, or unexpected send body (`error`) |
