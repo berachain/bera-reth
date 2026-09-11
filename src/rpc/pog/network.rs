@@ -3,7 +3,7 @@
 use crate::transaction::BerachainTxEnvelope;
 use reth_eth_wire_types::NetworkPrimitives;
 use reth_network::NetworkHandle;
-use reth_network_api::{NetworkError, NetworkInfo, PeerInfo, Peers};
+use reth_network_api::{NetworkError, NetworkInfo, PeerInfo, Peers, ReputationChangeKind};
 use reth_network_peers::PeerId;
 use std::sync::Arc;
 
@@ -15,6 +15,9 @@ pub trait PogNet: Clone + Send + Sync + 'static {
     ) -> impl std::future::Future<Output = Result<Vec<PeerInfo>, NetworkError>> + Send;
 
     fn send_raw(&self, peer_id: PeerId, tx: Arc<BerachainTxEnvelope>);
+
+    /// Drop the peer below the ban threshold. Trusted peers are exempt.
+    fn penalize(&self, peer_id: PeerId);
 }
 
 impl<N> PogNet for NetworkHandle<N>
@@ -33,5 +36,9 @@ where
 
     fn send_raw(&self, peer_id: PeerId, tx: Arc<BerachainTxEnvelope>) {
         self.send_transactions(peer_id, vec![tx]);
+    }
+
+    fn penalize(&self, peer_id: PeerId) {
+        Peers::reputation_change(self, peer_id, ReputationChangeKind::BadProtocol);
     }
 }

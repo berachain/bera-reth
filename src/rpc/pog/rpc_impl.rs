@@ -3,8 +3,9 @@
 use super::{PogApiServer, network::PogNet, types::*};
 use crate::{
     pog::{
-        self, SendMap, SendRecord, SendStatus, direction_label, record_send_result,
-        refresh_inflight_gauge, refresh_peer_subnet_gauges, session_enode, subnet_24,
+        self, SendMap, SendRecord, SendStatus, direction_label, record_penalize,
+        record_send_result, refresh_inflight_gauge, refresh_peer_subnet_gauges, session_enode,
+        subnet_24,
     },
     primitives::BerachainHeader,
     transaction::BerachainTxEnvelope,
@@ -133,6 +134,18 @@ where
         Ok(SendRawTransactionResponse { tx_hash, peer_id: peer_id_hex(info.remote_id), enode })
     }
 
+    pub async fn penalize_inner(&self, peer_id: String) -> RpcResult<PenalizeResponse> {
+        let target = parse_peer_id(&peer_id)?;
+        let peers = self.network.get_all_peers().await.map_err(|e| rpc_err(e.to_string()))?;
+        let session = peers.iter().find(|p| p.remote_id == target);
+        let subnet = session.map(|p| subnet_24(p.remote_addr)).unwrap_or_else(|| "unknown".into());
+
+        self.network.penalize(target);
+        record_penalize(&subnet);
+
+        Ok(PenalizeResponse { peer_id: peer_id_hex(target), connected: session.is_some() })
+    }
+
     pub fn sends_inner(&self) -> Vec<PogSend> {
         self.sends
             .snapshot()
@@ -167,6 +180,10 @@ where
         raw_tx: String,
     ) -> RpcResult<SendRawTransactionResponse> {
         self.send_raw_inner(peer_id, raw_tx).await
+    }
+
+    async fn penalize(&self, peer_id: String) -> RpcResult<PenalizeResponse> {
+        self.penalize_inner(peer_id).await
     }
 
     fn sends(&self) -> RpcResult<Vec<PogSend>> {

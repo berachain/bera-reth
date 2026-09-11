@@ -22,6 +22,14 @@ pub struct SendRawTransactionResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PenalizeResponse {
+    pub peer_id: String,
+    /// Whether the peer held a session when the penalty was applied.
+    pub connected: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PogSend {
     pub tx_hash: B256,
     pub peer_id: String,

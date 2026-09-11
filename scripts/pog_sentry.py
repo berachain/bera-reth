@@ -31,7 +31,12 @@ State dir (created if missing)
 Schedule
   Connected peers only. Never-tested first, then oldest completed test.
   Default cooldown is 3 days after landed or timeout (timeouts still count).
-  Three distinct timeout hashes for one peerId → local skip list. No p2p ban.
+  Three distinct timeout hashes for one peerId → local skip list.
+
+Ban
+  A skip-listed peer is penalized once via pog_penalize, which drops it below
+  Reth's ban threshold. Held back unless some canary landed inside the health
+  window, so a chain-wide stall cannot walk the node off the network.
 
 Canary
   EIP-1559 1 wei self-transfer, 21_000 gas, 1 gwei tip, 2 gwei max fee.
@@ -57,6 +62,7 @@ from typing import Any
 
 COOLDOWN_SECS = 3 * 24 * 60 * 60
 STRIKES = 3
+HEALTH_WINDOW_SECS = 24 * 60 * 60
 POLL_SECS = 30
 POLL_INTERVAL = 2
 CANARY_WEI = 1
@@ -126,6 +132,52 @@ def skipped_peers(stats: dict[str, dict[str, Any]], strikes: int) -> set[str]:
     return {pid for pid, st in stats.items() if int(st["timeouts"]) >= strikes}
 
 
+def penalized_peers(attempts: list[dict[str, Any]]) -> set[str]:
+    return {r["peerId"] for r in attempts if r.get("status") == "penalized" and r.get("peerId")}
+
+
+def landed_recently(attempts: list[dict[str, Any]], now: int, window_secs: int) -> bool:
+    """Did anything land lately? Guards against banning the whole peer set."""
+    for row in latest_by_tx(attempts).values():
+        if row.get("status") == "landed" and now - int(row.get("ts") or 0) <= window_secs:
+            return True
+    return False
+
+
+def penalize_sweep(
+    ipc: str,
+    log_path: Path,
+    attempts: list[dict[str, Any]],
+    stats: dict[str, dict[str, Any]],
+    now: int,
+    strikes: int,
+    window_secs: int,
+) -> tuple[list[dict[str, Any]], int]:
+    """Ban skip-listed peers the node has not been told about yet."""
+    due = sorted(skipped_peers(stats, strikes) - penalized_peers(attempts))
+    if not due:
+        return [], 0
+    if not landed_recently(attempts, now, window_secs):
+        print(f"no land inside health window; holding {len(due)} ban(s)", file=sys.stderr)
+        return [], len(due)
+
+    rows: list[dict[str, Any]] = []
+    for pid in due:
+        row: dict[str, Any] = {"ts": int(time.time()), "peerId": pid}
+        try:
+            resp = ipc_rpc(ipc, "pog_penalize", pid)
+            row["status"] = "penalized"
+            if isinstance(resp, dict):
+                row["connected"] = bool(resp.get("connected"))
+        except RuntimeError as e:
+            row["status"] = "penalize_error"
+            row["error"] = str(e)
+            print(e, file=sys.stderr)
+        append_attempt(log_path, row)
+        rows.append(row)
+    return rows, 0
+
+
 def pick_peer(
     peers: list[dict[str, Any]],
     stats: dict[str, dict[str, Any]],
@@ -170,6 +222,8 @@ def write_metrics(
     checked: int,
     first_day: int,
     skipped: int,
+    penalized: int,
+    ban_pending: int,
     last_outcome: str,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,6 +237,12 @@ def write_metrics(
         "# HELP pog_sentry_skipped Peers at the timeout strike skip list.\n"
         "# TYPE pog_sentry_skipped gauge\n"
         f"pog_sentry_skipped {skipped}\n"
+        "# HELP pog_sentry_penalized_total Peers this sentry sent to pog_penalize.\n"
+        "# TYPE pog_sentry_penalized_total counter\n"
+        f"pog_sentry_penalized_total {penalized}\n"
+        "# HELP pog_sentry_ban_pending Skip-listed peers held back by the health window.\n"
+        "# TYPE pog_sentry_ban_pending gauge\n"
+        f"pog_sentry_ban_pending {ban_pending}\n"
         "# HELP pog_sentry_last_outcome_info Last run outcome (1 = this result).\n"
         "# TYPE pog_sentry_last_outcome_info gauge\n"
     )
@@ -328,7 +388,8 @@ def parse_args() -> argparse.Namespace:
             "  %(prog)s --key-file /secret/pog.key --dry-run\n"
             "  POG_SENTRY_SELF_TEST=1 %(prog)s\n"
             "\n"
-            "Contract and claim boundary: docs/proof-of-gossip.md"
+            "Runbook: docs/pog-sentry.md\n"
+            "IPC contract: docs/proof-of-gossip.md"
         ),
     )
     p.add_argument(
@@ -364,6 +425,18 @@ def parse_args() -> argparse.Namespace:
         help="timeout hashes before skip-listing a peerId (default: %(default)s)",
     )
     p.add_argument(
+        "--health-window-secs",
+        type=int,
+        default=HEALTH_WINDOW_SECS,
+        metavar="N",
+        help="a canary must have landed this recently to allow a ban (default: %(default)s = 1d)",
+    )
+    p.add_argument(
+        "--no-penalize",
+        action="store_true",
+        help="never call pog_penalize; keep the skip list local to this sentry",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="print the chosen peer and skipped set; do not sign or send",
@@ -378,6 +451,8 @@ def main() -> int:
     metrics_path = state / "metrics.prom"
     now = int(time.time())
 
+    ban_pending = 0
+
     def finish(outcome: str, attempts: list[dict[str, Any]]) -> int:
         stats = peer_stats(attempts)
         write_metrics(
@@ -385,6 +460,8 @@ def main() -> int:
             checked=len({r.get("txHash") for r in attempts if r.get("txHash")}),
             first_day=first_day_count(stats, now),
             skipped=len(skipped_peers(stats, args.strikes)),
+            penalized=len(penalized_peers(attempts)),
+            ban_pending=ban_pending,
             last_outcome=outcome,
         )
         return 0 if outcome not in ("error",) else 1
@@ -408,6 +485,19 @@ def main() -> int:
         return finish("syncing", load_attempts(log_path))
 
     attempts = reconcile(load_attempts(log_path), args.ipc, log_path)
+
+    if not args.no_penalize:
+        banned_rows, ban_pending = penalize_sweep(
+            args.ipc,
+            log_path,
+            attempts,
+            peer_stats(attempts),
+            now,
+            args.strikes,
+            args.health_window_secs,
+        )
+        attempts += banned_rows
+
     from_addr = signer_address(key)
     sends = ipc_rpc(args.ipc, "pog_sends") or []
     for s in sends:
@@ -481,7 +571,8 @@ def main() -> int:
         row_done["ts"] = int(time.time())
     append_attempt(log_path, row_done)
     print(json.dumps(row_done))
-    return finish(outcome if outcome in ("landed", "timeout") else "error", attempts + [row, row_done])
+    final = outcome if outcome in ("landed", "timeout") else "error"
+    return finish(final, attempts + [row, row_done])
 
 
 def _self_test() -> None:
@@ -503,6 +594,23 @@ def _self_test() -> None:
     assert pick is not None and pick["peerId"] == "bb"
     pick2 = pick_peer(peers, stats, now + COOLDOWN_SECS + 1, COOLDOWN_SECS, 3)
     assert pick2 is not None and pick2["peerId"] in ("aa", "bb")
+
+    assert landed_recently(attempts, now, HEALTH_WINDOW_SECS)
+    assert not landed_recently(attempts, now + HEALTH_WINDOW_SECS + 1, HEALTH_WINDOW_SECS)
+
+    def sweep(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+        return penalize_sweep(
+            "/nonexistent", Path(os.devnull), rows, peer_stats(rows), now, 3, HEALTH_WINDOW_SECS
+        )
+
+    stalled = [r for r in attempts if r["peerId"] != "aa"]
+    held, pending = sweep(stalled)
+    assert held == [] and pending == 1, (held, pending)
+
+    penalized = attempts + [{"ts": now, "peerId": "cc", "status": "penalized"}]
+    assert penalized_peers(penalized) == {"cc"}
+    again, pending = sweep(penalized)
+    assert again == [] and pending == 0, (again, pending)
     print("self-test ok")
 
 

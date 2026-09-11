@@ -17,6 +17,7 @@ struct State {
     syncing: bool,
     peers: Vec<PeerInfo>,
     sent: Vec<(PeerId, B256)>,
+    penalized: Vec<PeerId>,
 }
 
 #[derive(Clone, Debug)]
@@ -41,6 +42,10 @@ impl MockPogNet {
 
     pub fn sent(&self) -> Vec<(PeerId, B256)> {
         self.state.lock().expect("lock").sent.clone()
+    }
+
+    pub fn penalized(&self) -> Vec<PeerId> {
+        self.state.lock().expect("lock").penalized.clone()
     }
 }
 
@@ -86,5 +91,9 @@ impl super::PogNet for MockPogNet {
     fn send_raw(&self, peer_id: PeerId, tx: Arc<BerachainTxEnvelope>) {
         let hash = *TxHashRef::tx_hash(tx.as_ref());
         self.state.lock().expect("lock").sent.push((peer_id, hash));
+    }
+
+    fn penalize(&self, peer_id: PeerId) {
+        self.state.lock().expect("lock").penalized.push(peer_id);
     }
 }

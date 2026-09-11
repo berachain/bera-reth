@@ -37,6 +37,7 @@ fn prometheus_metric_names_have_no_peer_id_label_in_source() {
     assert!(src.contains("pog_peers"));
     assert!(src.contains("pog_sends_total"));
     assert!(src.contains("pog_sends_inflight"));
+    assert!(src.contains("pog_penalized_total"));
     assert!(!src.contains("\"peer_id\""));
     assert!(!src.contains("\"peerId\""));
     assert!(!src.contains("pog_peer_sessions_total"));

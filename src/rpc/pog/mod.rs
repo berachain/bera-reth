@@ -27,6 +27,9 @@ pub trait PogApi {
         raw_tx: String,
     ) -> RpcResult<SendRawTransactionResponse>;
 
+    #[method(name = "penalize")]
+    async fn penalize(&self, peer_id: String) -> RpcResult<PenalizeResponse>;
+
     #[method(name = "sends")]
     fn sends(&self) -> RpcResult<Vec<PogSend>>;
 

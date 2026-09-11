@@ -115,6 +115,29 @@ async fn send_refuses_syncing_and_disconnected() {
 }
 
 #[tokio::test]
+async fn penalize_hits_the_network_handle() {
+    let peer = PeerId::repeat_byte(0x77);
+    let addr: SocketAddr = "51.68.187.101:30304".parse().unwrap();
+    let net = MockPogNet::new().with_peer(peer, addr, false);
+    let (api, _) = harness(net.clone());
+    let resp = api.penalize_inner(peer_hex(peer)).await.unwrap();
+    assert_eq!(resp.peer_id, peer_hex(peer));
+    assert!(resp.connected);
+    assert_eq!(net.penalized(), vec![peer]);
+}
+
+#[tokio::test]
+async fn penalize_disconnected_peer_still_applies() {
+    let peer = PeerId::repeat_byte(0x88);
+    let net = MockPogNet::new();
+    let (api, _) = harness(net.clone());
+    let resp = api.penalize_inner(peer_hex(peer)).await.unwrap();
+    assert!(!resp.connected);
+    assert_eq!(net.penalized(), vec![peer]);
+    assert!(err_msg(api.penalize_inner("nope".into()).await).contains("invalid peer_id"));
+}
+
+#[tokio::test]
 async fn land_flips_status() {
     let peer = PeerId::repeat_byte(0x55);
     let addr: SocketAddr = "1.2.3.4:5".parse().unwrap();

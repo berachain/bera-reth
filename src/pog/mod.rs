@@ -129,8 +129,8 @@ impl SendMap {
         let mut inner = self.lock();
         let mut landed_subnets = Vec::new();
         for hash in hashes {
-            if let Some(rec) = inner.by_hash.get_mut(hash)
-                && rec.status != SendStatus::Landed
+            if let Some(rec) = inner.by_hash.get_mut(hash) &&
+                rec.status != SendStatus::Landed
             {
                 rec.status = SendStatus::Landed;
                 rec.block_number = Some(block_number);
@@ -167,6 +167,10 @@ pub fn now_unix() -> u64 {
 pub fn record_send_result(subnet: &str, result: &str) {
     metrics::counter!("pog_sends_total", "subnet" => subnet.to_string(), "result" => result.to_string())
         .increment(1);
+}
+
+pub fn record_penalize(subnet: &str) {
+    metrics::counter!("pog_penalized_total", "subnet" => subnet.to_string()).increment(1);
 }
 
 pub fn refresh_inflight_gauge(count: usize) {
