@@ -5,6 +5,7 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 
 use bera_reth::{
     chainspec::{BerachainChainSpec, BerachainChainSpecParser},
+    cli_ext::BerachainExt,
     consensus::BerachainBeaconConsensus,
     evm::BerachainEvmFactory,
     node::{BerachainNode, evm::config::BerachainEvmConfig},
@@ -12,7 +13,6 @@ use bera_reth::{
 };
 use clap::Parser;
 use reth::CliRunner;
-use reth_cli_commands::node::NoArgs;
 use reth_ethereum_cli::Cli;
 use reth_node_builder::NodeHandle;
 use std::sync::Arc;
@@ -47,11 +47,13 @@ fn main() {
         )
     };
 
-    if let Err(err) = Cli::<BerachainChainSpecParser, NoArgs>::parse()
+    if let Err(err) = Cli::<BerachainChainSpecParser, BerachainExt>::parse()
         .with_runner_and_components::<BerachainNode>(
             CliRunner::try_default_runtime().expect("Failed to create default runtime"),
             cli_components_builder,
-            async move |builder, _| {
+            async move |builder, args: BerachainExt| {
+                bera_reth::pog::set_pog_cli_enabled(args.pog);
+
                 info!(target: "reth::cli", "Launching Berachain node");
                 let NodeHandle { node: _node, node_exit_future } =
                     builder.node(BerachainNode::default()).launch_with_debug_capabilities().await?;

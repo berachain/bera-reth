@@ -49,8 +49,11 @@ reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.
 reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
+reth-eth-wire-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
+reth-network = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
+reth-network-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 reth-network-peers = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
 reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.11.4" }
@@ -73,6 +76,8 @@ tokio = "1.46.0"
 tracing = "0.1.41"
 
 [dev-dependencies]
+alloy-chains = { version = "0.2.5", default-features = false }
+alloy-hardforks = "0.4"
 alloy-provider = "1.6.3"
 alloy-rpc-client = "1.6.3"
 alloy-rpc-types-trace = "1.6.3"
