@@ -8,6 +8,7 @@ use bera_reth::{
     consensus::BerachainBeaconConsensus,
     evm::BerachainEvmFactory,
     node::{BerachainNode, evm::config::BerachainEvmConfig},
+    pool::config::berachain_txpool_defaults,
     version::init_bera_version,
 };
 use clap::Parser;
@@ -34,6 +35,10 @@ fn main() {
         .with_persistence_threshold(BERACHAIN_DEFAULT_PERSISTENCE_THRESHOLD)
         .try_init()
         .expect("engine defaults must be set before CLI parsing");
+
+    berachain_txpool_defaults()
+        .try_init()
+        .expect("txpool defaults must be set before CLI parsing");
 
     // Enable backtraces unless a RUST_BACKTRACE value has already been explicitly provided.
     if std::env::var_os("RUST_BACKTRACE").is_none() {
