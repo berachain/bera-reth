@@ -575,7 +575,7 @@ where
         block_id: BlockId,
     ) -> impl Future<Output = Result<Option<usize>, Self::Error>> + Send {
         async move {
-            if (block_id.is_latest() || block_id.is_pending()) &&
+            if block_id.is_pending() &&
                 let Some(pending) = self.pending_flashblock()
             {
                 return Ok(Some(pending.block().body().transaction_count()));
@@ -625,8 +625,7 @@ where
         >,
     > + Send {
         async move {
-            // Serve flashblock for both "latest" and "pending" when available
-            if block_id.is_latest() || block_id.is_pending() {
+            if block_id.is_pending() {
                 if self.pending_flashblock().is_some() {
                     if let Some(pending) = self.local_pending_block().await? {
                         return Ok(Some(pending.block));
@@ -734,30 +733,6 @@ where
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
     Self: LoadPendingBlock,
 {
-    #[allow(clippy::manual_async_fn, clippy::collapsible_if)]
-    fn state_at_block_id_or_latest(
-        &self,
-        block_id: Option<BlockId>,
-    ) -> impl Future<Output = Result<StateProviderBox, Self::Error>> + Send
-    where
-        Self: SpawnBlocking,
-    {
-        async move {
-            let should_use_flashblock = block_id.is_none_or(|id| id.is_latest() || id.is_pending());
-
-            if should_use_flashblock {
-                if let Ok(Some(state)) = self.local_pending_state().await {
-                    return Ok(state);
-                }
-            }
-
-            if let Some(block_id) = block_id {
-                self.state_at_block_id(block_id).await
-            } else {
-                Ok(self.latest_state()?)
-            }
-        }
-    }
 }
 
 impl<N, Rpc> LoadFee for BerachainApi<N, Rpc>
