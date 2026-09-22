@@ -38,6 +38,11 @@ cargo build --release
 BEACON_KIT_PATH=/path/to/beacon-kit ./scripts/test-block-progression.sh
 ```
 
+### Proof of Gossip
+
+See [Proof of Gossip](docs/proof-of-gossip.md) for `--bera.pog` and the `pog`
+IPC namespace, and [`pog_sentry.py`](docs/pog-sentry.md) for the cron collector.
+
 ## Development
 
 ### Prerequisites
