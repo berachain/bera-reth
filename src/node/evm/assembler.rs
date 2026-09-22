@@ -4,7 +4,7 @@ use crate::{
     hardforks::BerachainHardforks,
     node::evm::{block_context::BerachainBlockExecutionCtx, error::BerachainExecutionError},
     primitives::{BerachainBlock, BerachainHeader},
-    transaction::{BerachainTxEnvelope, BerachainTxType, pol::create_pol_transaction},
+    transaction::{BerachainTxEnvelope, BerachainTxType},
 };
 use alloy_consensus::{Block, BlockBody, BlockHeader, EMPTY_OMMER_ROOT_HASH, TxReceipt, proofs};
 use alloy_eips::merge::BEACON_NONCE;
@@ -53,7 +53,7 @@ where
             evm_env,
             execution_ctx: ctx,
             parent,
-            mut transactions,
+            transactions,
             output: BlockExecutionResult { receipts, requests, gas_used, blob_gas_used },
             state_root,
             ..
@@ -64,27 +64,14 @@ where
         // Validate proposer pubkey presence for Prague1
         validate_proposer_pubkey_prague1(&*self.chain_spec, timestamp, ctx.prev_proposer_pubkey)?;
 
-        // Check if Prague1 is active and we need to inject POL transaction
+        // Post-Prague1, PoL is executed as tx #0, so the block must have a PoL
+        // transaction at index 0 and at least one receipt.
         if self.chain_spec.is_prague1_active_at_timestamp(timestamp) {
-            let prev_proposer_pubkey = ctx.prev_proposer_pubkey.unwrap();
-
-            // Synthesize POL transaction and prepend to transactions list
-            let base_fee = evm_env.block_env.basefee();
-            let pol_transaction = create_pol_transaction(
-                self.chain_spec.clone(),
-                prev_proposer_pubkey,
-                evm_env.block_env.number(),
-                base_fee,
-            )?;
-
-            transactions.insert(0, pol_transaction);
-
-            // Validate that we have receipts after POL transaction execution
             if receipts.is_empty() {
                 return Err(BerachainExecutionError::MissingPolReceipts.into());
             }
 
-            // Validate that the first transaction in the list is indeed a POL transaction
+            // Validate that the first transaction is a PoL transaction
             if let Some(first_tx) = transactions.first() {
                 if !matches!(first_tx, BerachainTxEnvelope::Berachain(_)) {
                     return Err(BerachainExecutionError::MissingPolTransactionAtIndex0.into());

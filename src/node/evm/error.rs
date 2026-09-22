@@ -10,9 +10,6 @@ pub enum BerachainExecutionError {
     /// Previous proposer public key is not allowed before Prague1 hardfork.
     #[error("Previous proposer public key is not allowed before Prague1 hardfork")]
     ProposerPubkeyNotAllowed,
-    /// Invalid POL transaction type.
-    #[error("Invalid POL transaction type, expected BerachainTxEnvelope::Berachain")]
-    InvalidPolTransactionType,
     /// POL transaction found before Prague1 hardfork activation.
     #[error("POL transaction found before Prague1 hardfork activation")]
     PolTransactionBeforePragueOne,
