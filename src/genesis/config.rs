@@ -48,3 +48,15 @@ pub struct Prague4Config {
     /// Unix timestamp when Prague4 activates (ending Prague3 restrictions)
     pub time: u64,
 }
+
+/// Configuration for Osaka1 hardfork activation
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Osaka1Config {
+    /// Unix timestamp when Osaka1 activates
+    pub time: u64,
+    /// Minimum base fee in wei enforced after activation
+    pub minimum_base_fee_wei: u64,
+    /// Minimum blob base fee in wei enforced after activation
+    pub minimum_blob_base_fee_wei: u64,
+}
