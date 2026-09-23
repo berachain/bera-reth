@@ -22,7 +22,8 @@ use reth::{
     },
 };
 use reth_chain_state::BlockState;
-use reth_evm::EvmEnvFor;
+use reth_errors::RethError;
+use reth_evm::ConfigureEvm;
 use reth_primitives_traits::{BlockBody, RecoveredBlock};
 use reth_rpc_eth_api::{
     EthApiTypes, FromEthApiError, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
@@ -34,7 +35,8 @@ use reth_rpc_eth_api::{
 };
 use reth_rpc_eth_types::{
     EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle, PendingBlock, PendingBlockEnv,
-    block::BlockAndReceipts, builder::config::PendingBlockKind, error::FromEvmError,
+    PendingBlockEnvOrigin, block::BlockAndReceipts, builder::config::PendingBlockKind,
+    error::FromEvmError,
 };
 use reth_storage_api::{BlockIdReader, BlockReader, StateProviderBox, StateProviderFactory};
 use reth_transaction_pool::{
@@ -734,36 +736,6 @@ where
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
     Self: LoadPendingBlock,
 {
-    // Reth resolves a `pending` call to the parent block id for its state (see
-    // `evm_env_at`), so eth_call/estimateGas would read canonical state and miss the
-    // executed flashblock overlay that getBalance/getNonce serve. When a flashblock is
-    // present, keep the `pending` tag as the state block id so `state_at_block_id` reads
-    // `local_pending_state()`; the evm env (number, base fee) is unchanged.
-    #[allow(clippy::manual_async_fn)]
-    fn evm_env_at(
-        &self,
-        at: BlockId,
-    ) -> impl Future<Output = Result<(EvmEnvFor<Self::Evm>, BlockId), Self::Error>> + Send
-    where
-        Self: SpawnBlocking,
-    {
-        async move {
-            if at.is_pending() {
-                let PendingBlockEnv { evm_env, origin } = self.pending_block_env_and_cfg()?;
-                let state_at =
-                    if self.pending_flashblock().is_some() { at } else { origin.state_block_id() };
-                Ok((evm_env, state_at))
-            } else {
-                let header = self
-                    .provider()
-                    .sealed_header_by_id(at)
-                    .map_err(Self::Error::from_eth_err)?
-                    .ok_or_else(|| EthApiError::HeaderNotFound(at))?;
-                let evm_env = self.evm_env_for_header(&header)?;
-                Ok((evm_env, header.hash().into()))
-            }
-        }
-    }
 }
 
 impl<N, Rpc> LoadFee for BerachainApi<N, Rpc>
@@ -821,6 +793,26 @@ where
     #[inline]
     fn pending_block_kind(&self) -> PendingBlockKind {
         self.inner.pending_block_kind()
+    }
+
+    /// Builds the pending EVM env from the flashblock header so it matches the flashblock state
+    /// served for the `pending` tag. Falls back to the upstream default when no flashblock is
+    /// available.
+    fn pending_block_env_and_cfg(&self) -> Result<PendingBlockEnv<Self::Evm>, Self::Error> {
+        if let Some(pending) = self.pending_flashblock() {
+            let evm_env =
+                self.evm_config().evm_env(pending.block().header()).map_err(RethError::other)?;
+
+            return Ok(PendingBlockEnv::new(
+                evm_env,
+                PendingBlockEnvOrigin::ActualPending(
+                    pending.block().clone(),
+                    pending.receipts.clone(),
+                ),
+            ));
+        }
+
+        self.inner.pending_block_env_and_cfg()
     }
 
     /// Returns the pending state built on top of the latest flashblock.
