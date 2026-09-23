@@ -795,9 +795,9 @@ where
         self.inner.pending_block_kind()
     }
 
-    /// Serves the flashblock as the actual pending block; `evm_env_at` pairs its header env
-    /// (timestamp, coinbase, prev_randao, gas limit) with the flashblock state that
-    /// `local_pending_state` provides.
+    /// Builds the pending EVM env from the flashblock header so it matches the flashblock state
+    /// served for the `pending` tag. Falls back to the upstream default when no flashblock is
+    /// available.
     fn pending_block_env_and_cfg(&self) -> Result<PendingBlockEnv<Self::Evm>, Self::Error> {
         if let Some(pending) = self.pending_flashblock() {
             let evm_env =
@@ -812,7 +812,6 @@ where
             ));
         }
 
-        // Without a flashblock, delegates to the upstream default.
         self.inner.pending_block_env_and_cfg()
     }
 

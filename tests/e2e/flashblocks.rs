@@ -222,7 +222,8 @@ async fn test_rpc_returns_flashblock_pending_receipt() -> eyre::Result<()> {
     Ok(())
 }
 
-/// Tests that the pending EVM env is built from the flashblock header instead of guessed from latest.
+/// Tests that the pending EVM env is built from the flashblock header instead of guessed from
+/// latest.
 #[tokio::test]
 async fn test_pending_evm_env_uses_flashblock_header() -> eyre::Result<()> {
     let (executor, chain_spec) = setup_test_boilerplate().await?;
