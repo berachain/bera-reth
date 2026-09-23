@@ -5,7 +5,7 @@
 
 use crate::e2e::{setup_test_boilerplate, test_signer};
 use alloy_consensus::BlockHeader;
-use alloy_eips::eip2718::Encodable2718;
+use alloy_eips::{BlockNumberOrTag, eip2718::Encodable2718};
 use alloy_primitives::{Address, B256, Bytes, U256};
 use alloy_provider::Provider;
 use bera_reth::{
@@ -24,6 +24,7 @@ use reth_chainspec::EthChainSpec;
 use reth_e2e_test_utils::transaction::TransactionTestContext;
 use reth_node_builder::{Node, NodeBuilder, NodeHandle};
 use reth_node_core::{args::RpcServerArgs, node_config::NodeConfig};
+use reth_rpc_eth_api::helpers::LoadState;
 use std::{pin::Pin, sync::Arc, task::Poll, time::Duration};
 use tokio::sync::{broadcast, watch};
 
@@ -217,6 +218,87 @@ async fn test_rpc_returns_flashblock_pending_receipt() -> eyre::Result<()> {
         "Transaction receipt should be available from flashblock pending state"
     );
     assert_eq!(receipt.unwrap().transaction_hash, tx_hash);
+
+    Ok(())
+}
+
+/// Tests that the pending EVM env is built from the flashblock header instead of guessed from latest.
+#[tokio::test]
+async fn test_pending_evm_env_uses_flashblock_header() -> eyre::Result<()> {
+    let (executor, chain_spec) = setup_test_boilerplate().await?;
+
+    let (pending_tx, pending_rx) = watch::channel(None);
+    let (_in_progress_tx, in_progress_rx) = watch::channel(None);
+    let (unused_sequence_tx, _) =
+        broadcast::channel::<FlashBlockCompleteSequence<BerachainFlashblockPayload>>(1);
+    let (unused_received_tx, _) = broadcast::channel::<Arc<BerachainFlashblockPayload>>(1);
+
+    let listeners: FlashblocksListeners<BerachainPrimitives, BerachainFlashblockPayload> =
+        FlashblocksListeners::new(
+            pending_rx,
+            unused_sequence_tx,
+            in_progress_rx,
+            unused_received_tx,
+        );
+
+    let eth_api_builder = BerachainEthApiBuilder::default().with_flashblocks_listeners(listeners);
+    let add_ons = BerachainAddOns::<_, _, BerachainEngineValidatorBuilder>::new(eth_api_builder);
+
+    let node_config = NodeConfig::new(chain_spec)
+        .with_unused_ports()
+        .with_rpc(RpcServerArgs::default().with_unused_ports().with_http());
+
+    let NodeHandle { node, node_exit_future: _ } = NodeBuilder::new(node_config)
+        .testing_node(executor.clone())
+        .with_types::<BerachainNode>()
+        .with_components(BerachainNode::default().components_builder())
+        .with_add_ons(add_ons)
+        .launch()
+        .await?;
+
+    let (fb_tx, fb_rx) = tokio::sync::mpsc::channel::<BerachainFlashblockPayload>(128);
+    let service = FlashBlockService::new(
+        MockFlashblockStream { rx: fb_rx },
+        node.evm_config.clone(),
+        node.provider().clone(),
+        executor.clone(),
+        false,
+    );
+    executor.spawn_critical_task(
+        "flashblock-service",
+        Box::pin(async move {
+            service.run(pending_tx).await;
+        }),
+    );
+
+    let latest = node.provider().latest_header()?.expect("should have genesis");
+    // Two slots ahead so the timestamp cannot match a guess derived from the latest header.
+    let fb = create_test_flashblock(
+        0,
+        latest.number() + 1,
+        PayloadId::new([2u8; 8]),
+        latest.hash(),
+        latest.timestamp() + 4,
+    );
+    let base = fb.base.clone().expect("index 0 flashblock has a base");
+
+    fb_tx.send(fb).await?;
+
+    let eth_api = node.rpc_registry.eth_api();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while eth_api.pending_flashblock().is_none() {
+        assert!(tokio::time::Instant::now() < deadline, "pending flashblock never appeared");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+
+    let (evm_env, state_at) = eth_api.evm_env_at(BlockNumberOrTag::Pending.into()).await?;
+
+    assert!(state_at.is_pending(), "state block id should stay the pending tag");
+    assert_eq!(evm_env.block_env.number, U256::from(base.block_number));
+    assert_eq!(evm_env.block_env.timestamp, U256::from(base.timestamp));
+    assert_eq!(evm_env.block_env.beneficiary, base.fee_recipient);
+    assert_eq!(evm_env.block_env.prevrandao, Some(base.prev_randao));
+    assert_eq!(evm_env.block_env.gas_limit, base.gas_limit);
 
     Ok(())
 }
