@@ -356,6 +356,12 @@ where
 
     let mut tracker = FlashblockExecutionTracker::new();
     let mut blob_sidecars = BlobSidecars::Empty;
+    // Per-block blob cap for the active fork to be enforced in flashblock loop
+    let max_blob_count = chain_spec
+        .blob_params_at_timestamp(attributes.timestamp())
+        .map(|params| params.max_blob_count)
+        .unwrap_or_default();
+    let mut block_blob_count = 0u64;
     let mut flashblock_index = 0u64;
     let mut last_emitted_cumulative_gas: u64 = 0;
     let mut last_flashblock_time = Instant::now();
@@ -465,6 +471,20 @@ where
         let tx = pool_tx.to_consensus();
         let tx_hash = *tx.hash();
 
+        let tx_blob_count = tx.blob_versioned_hashes().map(|h| h.len() as u64).unwrap_or(0);
+        if tx_blob_count > 0 && block_blob_count + tx_blob_count > max_blob_count {
+            best_txs.mark_invalid(
+                &pool_tx,
+                &InvalidPoolTransactionError::Eip4844(
+                    Eip4844PoolTransactionError::TooManyEip4844Blobs {
+                        have: block_blob_count + tx_blob_count,
+                        permitted: max_blob_count,
+                    },
+                ),
+            );
+            continue;
+        }
+
         // Fetch blob sidecar before execution so we can skip the tx if it's missing
         let mut blob_tx_sidecar = None;
         if tx.as_eip4844().is_some() {
@@ -529,6 +549,12 @@ where
 
         if let Some(sidecar) = blob_tx_sidecar {
             blob_sidecars.push_sidecar_variant(sidecar.as_ref().clone());
+        }
+        if tx_blob_count > 0 {
+            block_blob_count += tx_blob_count;
+            if block_blob_count == max_blob_count {
+                best_txs.skip_blobs();
+            }
         }
 
         // Encode transaction
