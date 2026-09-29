@@ -549,8 +549,6 @@ where
 
         if let Some(sidecar) = blob_tx_sidecar {
             blob_sidecars.push_sidecar_variant(sidecar.as_ref().clone());
-        }
-        if tx_blob_count > 0 {
             block_blob_count += tx_blob_count;
             if block_blob_count == max_blob_count {
                 best_txs.skip_blobs();
