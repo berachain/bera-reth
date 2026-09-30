@@ -18,6 +18,11 @@ COPY --from=planner /app/recipe.json recipe.json
 ARG BUILD_PROFILE=release
 ENV BUILD_PROFILE=$BUILD_PROFILE
 
+# Build flags for profiling-friendly binaries.
+# Defaults enable call-stack unwinding and symbol data for better eBPF flamegraphs.
+ARG RUSTFLAGS="-C force-frame-pointers=yes -C debuginfo=1 -C symbol-mangling-version=v0"
+ENV RUSTFLAGS=$RUSTFLAGS
+
 # Builds dependencies with debug profile (faster linking, keeps symbols)
 RUN cargo chef cook --profile $BUILD_PROFILE --recipe-path recipe.json
 
@@ -31,9 +36,20 @@ RUN cp /app/target/release/bera-reth /app/bera-reth
 # Use Ubuntu as the release image
 FROM ubuntu:24.04 AS runtime
 
-# Install runtime dependencies
+# Install runtime dependencies and eBPF observability tooling.
+# Note: eBPF tooling requires extra container privileges at runtime
+# (for example: --privileged, or CAP_BPF + CAP_PERFMON + CAP_SYS_ADMIN,
+# and usually --pid=host with host /sys mounted).
 RUN apt-get update && \
-    apt-get install -y ca-certificates libssl-dev && \
+    apt-get install -y \
+    ca-certificates \
+    libssl-dev \
+    linux-tools-common \
+    bpftrace \
+    bpfcc-tools \
+    procps \
+    psmisc \
+    strace && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy bera-reth over from the build stage
@@ -49,5 +65,6 @@ EXPOSE 30303 30303/udp 9001 8545 8546 8551
 # Set environment to show we're in debug mode
 ENV RUST_LOG=debug
 ENV BUILD_TYPE=release
+ENV BPFTRACE_CACHE_USER_SYMBOLS=1
 
 ENTRYPOINT ["/usr/local/bin/bera-reth"]
