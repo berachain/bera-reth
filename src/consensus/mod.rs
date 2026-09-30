@@ -117,7 +117,34 @@ impl FullConsensus<BerachainPrimitives> for BerachainBeaconConsensus {
         // First run the standard validation
         <EthBeaconConsensus<BerachainChainSpec> as FullConsensus<BerachainPrimitives>>::validate_block_post_execution(&self.inner, block, result, receipt_root_bloom)?;
 
-        // Check for Prague3 blocked address transfers if the hardfork is active
+        // ============================================================================
+        // Prague3 historical-window validation
+        // ----------------------------------------------------------------------------
+        // The block below enforces the Prague3 emergency rules that were live on
+        // Berachain mainnet for the timestamp window [1762164459, 1762963200) — from
+        // 2025-11-03 to 2025-11-12, when Prague4 ended the restrictions.
+        //
+        // This code is NOT dead. It is gated on `is_prague3_active_at_timestamp`,
+        // which returns true only inside that historical window. Outside the window
+        // (i.e. on the live tip post-Prague4, and pre-Prague3) the gate short-circuits
+        // and none of the loops run. The path remains a hard requirement for any node
+        // re-executing the chain from genesis.
+        //
+        // Note on the three log checks in this module and `deposits.rs`:
+        //   * Deposit parser (deposits.rs)        — filters by `log.address` because authority over
+        //     `Deposit(...)` is contract-scoped to the deposit contract.
+        //   * InternalBalanceChanged (below)      — filters by `log.address` because the event's
+        //     semantic meaning is BEX-vault-internal accounting; another contract emitting the same
+        //     topic is a hash-shape coincidence, not the same event.
+        //   * Transfer (below)                    — intentionally does NOT filter by `log.address`.
+        //     The rule blocks any ERC20 transfer involving a blocked address; ERC20 Transfer events
+        //     are authored by each token contract, so scoping to a single address would defeat the
+        //     rule.
+        //
+        // For bug-bounty triage: findings against this block targeting the live tip
+        // are out of scope — Prague4 made the gate inactive on all production
+        // timestamps.
+        // ============================================================================
         let timestamp = block.header().timestamp();
         if let Some(blocked_addresses) =
             self.chain_spec.prague3_blocked_addresses_at_timestamp(timestamp)
@@ -412,9 +439,8 @@ mod tests {
     }
 
     /// Build a header that satisfies upstream `EthBeaconConsensus::validate_header`
-    /// for the given timestamp on the bepolia chainspec, so any failure in
-    /// `BerachainBeaconConsensus::validate_header` is attributable to the
-    /// Berachain-specific gate.
+    /// for the given timestamp, so any failure in `BerachainBeaconConsensus::validate_header`
+    /// is attributable to the Berachain-specific gate.
     fn upstream_valid_header(timestamp: u64, post_prague: bool) -> BerachainHeader {
         BerachainHeader {
             number: 1,
@@ -488,5 +514,22 @@ mod tests {
         consensus
             .validate_header(&sealed)
             .expect("pre-Prague1 header without prev_proposer_pubkey should validate");
+    }
+
+    #[test]
+    fn test_validate_header_accepts_post_prague1_proposer_pubkey() {
+        let chain_spec = bepolia_chainspec();
+        let consensus = BerachainBeaconConsensus::new(chain_spec.clone());
+
+        let timestamp = 1_754_496_000;
+        let mut header = upstream_valid_header(timestamp, true);
+        header.prev_proposer_pubkey = Some(mock_bls_pubkey());
+
+        assert!(chain_spec.is_prague1_active_at_timestamp(header.timestamp));
+
+        let sealed = SealedHeader::new(header, BlockHash::ZERO);
+        consensus
+            .validate_header(&sealed)
+            .expect("post-Prague1 header with prev_proposer_pubkey should validate");
     }
 }

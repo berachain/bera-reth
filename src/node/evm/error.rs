@@ -28,15 +28,21 @@ pub enum BerachainExecutionError {
     /// Missing POL transaction at index 0 in Prague1 block
     #[error("First transaction in Prague1 block must be a POL transaction")]
     MissingPolTransactionAtIndex0,
-    /// Prague3: Block contains invalid ERC20 transfer from/to blocked address
+    /// Prague3: Block contains invalid ERC20 transfer from/to blocked address.
+    /// Only reachable inside the historical Prague3 window
+    /// `[1762164459, 1762963200)` on mainnet; see `consensus/mod.rs`.
     #[error(
         "Prague3 violation: Blocked address {blocked_address} can only send to rescue address or cannot receive transfers"
     )]
     Prague3BlockedAddressTransfer { blocked_address: Address },
-    /// Prague3: Block contains InternalBalanceChanged event from BEX vault
+    /// Prague3: Block contains InternalBalanceChanged event from BEX vault.
+    /// Only reachable inside the historical Prague3 window
+    /// `[1762164459, 1762963200)` on mainnet; see `consensus/mod.rs`.
     #[error("Prague3 violation: InternalBalanceChanged event from BEX vault {vault_address}")]
     Prague3BexVaultEvent { vault_address: Address },
-    /// Prague3: Block contains ERC20 transfer from/to BEX vault
+    /// Prague3: Block contains ERC20 transfer from/to BEX vault.
+    /// Only reachable inside the historical Prague3 window
+    /// `[1762164459, 1762963200)` on mainnet; see `consensus/mod.rs`.
     #[error("Prague3 violation: ERC20 transfer from/to BEX vault {vault_address}")]
     Prague3BexVaultTransfer { vault_address: Address },
 }
