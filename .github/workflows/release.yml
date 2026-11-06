@@ -78,7 +78,7 @@ jobs:
             profile: maxperf
             allow_fail: false
           - target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
             profile: maxperf
             allow_fail: false
     steps:
