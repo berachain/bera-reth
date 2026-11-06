@@ -1,9 +1,10 @@
 pub mod min_priority_fee;
+pub mod config;
 pub mod transaction;
 
 use crate::{
     chainspec::BerachainChainSpec,
-    pool::{min_priority_fee::MinPriorityFeeValidator, transaction::BerachainPooledTransaction},
+    pool::{min_priority_fee::MinPriorityFeeValidator, transaction::BerachainPooledTransaction, config::BERACHAIN_ACCEPTS_EIP7594,},
     primitives::BerachainPrimitives,
 };
 use alloy_consensus::BlockHeader;
@@ -72,9 +73,7 @@ where
         let validator =
             TransactionValidationTaskExecutor::eth_builder(ctx.provider().clone(), evm_config)
                 .set_eip4844(!blobs_disabled)
-                // BRIP-0010 Osaka does not adopt EIP-7594 (PeerDAS); keep EIP-4844 sidecars
-                // accepted across forks and reject EIP-7594 v1 sidecars.
-                .no_eip7594()
+                .set_eip7594(BERACHAIN_ACCEPTS_EIP7594)
                 .with_max_tx_input_bytes(ctx.config().txpool.max_tx_input_bytes)
                 .kzg_settings(ctx.kzg_settings()?)
                 .with_local_transactions_config(pool_config.local_transactions_config.clone())
