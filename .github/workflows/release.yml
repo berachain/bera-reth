@@ -121,7 +121,8 @@ jobs:
           fi
           cd artifacts
           tar -czf bera-reth-${{ needs.extract-version.outputs.VERSION }}-${{ matrix.configs.target }}.tar.gz bera-reth*
-          echo "$GPG_PASSPHRASE" | gpg --passphrase-fd 0 --pinentry-mode loopback --batch -ab bera-reth-${{ needs.extract-version.outputs.VERSION }}-${{ matrix.configs.target }}.tar.gz
+          fpr=$(gpg --with-colons --with-fingerprint --list-secret-keys | awk -F: '/^fpr:/ {print $10; exit}')
+          echo "$GPG_PASSPHRASE" | gpg --passphrase-fd 0 --pinentry-mode loopback --batch --local-user "$fpr" -ab bera-reth-${{ needs.extract-version.outputs.VERSION }}-${{ matrix.configs.target }}.tar.gz
           mv *tar.gz* ..
         shell: bash
 
@@ -184,6 +185,17 @@ jobs:
             exit 1
           fi
           formatted=$(echo "$raw" | sed -E 's/(.{4})/\1 /g; s/ $//')
+          pubkey=.github/workflows/bera-reth_release.asc
+          if [[ ! -f "$pubkey" ]]; then
+            echo "ERROR: $pubkey is missing; commit the public key: gpg --armor --export $raw > $pubkey" >&2
+            exit 1
+          fi
+          committed=$(gpg --with-colons --with-fingerprint --show-keys "$pubkey" | awk -F: '/^fpr:/ {print $10; exit}')
+          if [[ "$committed" != "$raw" ]]; then
+            echo "ERROR: $pubkey fingerprint $committed does not match the signing key $raw; update the committed public key" >&2
+            exit 1
+          fi
+          cp "$pubkey" bera-reth_release.asc
           echo "fingerprint=$formatted" >> "$GITHUB_OUTPUT"
           echo "Release signing key fingerprint: $formatted"
       - name: Create release draft
@@ -238,6 +250,8 @@ jobs:
 
           The binaries are signed with the PGP key: `${{ steps.gpg.outputs.fingerprint }}`
 
+          The public key is attached to this release as [bera-reth_release.asc](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth_release.asc) and committed at [.github/workflows/bera-reth_release.asc](https://github.com/${{ env.REPO_NAME }}/blob/${{ env.VERSION }}/.github/workflows/bera-reth_release.asc).
+
           ### Bera-Reth
 
           | System | Architecture | Binary | PGP Signature |
@@ -246,6 +260,18 @@ jobs:
           | <img src="https://simpleicons.org/icons/linux.svg" width="50"/> | aarch64 | [bera-reth-${{ env.VERSION }}-aarch64-unknown-linux-gnu.tar.gz](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-aarch64-unknown-linux-gnu.tar.gz) | [PGP Signature](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-aarch64-unknown-linux-gnu.tar.gz.asc) |
           | <img src="https://simpleicons.org/icons/apple.svg" width="50"/> | aarch64 | [bera-reth-${{ env.VERSION }}-aarch64-apple-darwin.tar.gz](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-aarch64-apple-darwin.tar.gz) | [PGP Signature](https://github.com/${{ env.REPO_NAME }}/releases/download/${{ env.VERSION }}/bera-reth-${{ env.VERSION }}-aarch64-apple-darwin.tar.gz.asc) |
           | <img src="https://simpleicons.org/icons/docker.svg" width="50"/> | Docker | [${{ env.IMAGE_NAME }}](${{ env.DOCKER_IMAGE_NAME_URL }}) | - |
+
+          ### Verifying signatures
+
+          Check that the key fingerprint matches the one above, import the key, then verify each archive against its `.asc` file:
+
+          ```
+          gpg --show-keys --with-fingerprint bera-reth_release.asc
+          gpg --import bera-reth_release.asc
+          gpg --verify bera-reth-${{ env.VERSION }}-x86_64-unknown-linux-gnu.tar.gz.asc bera-reth-${{ env.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          ```
+
+          `WARNING: This key is not certified with a trusted signature!` is expected unless you have signed the key yourself (`gpg --lsign-key`).
           ENDBODY
           )
           assets=()
@@ -260,6 +286,7 @@ jobs:
               echo "ERROR: No assets found!"
               exit 1
           fi
+          assets+=("bera-reth_release.asc")
 
           echo "Found ${#assets[@]} assets to upload"
           tag_name="${{ env.VERSION }}"

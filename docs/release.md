@@ -9,26 +9,39 @@ To create signed releases, you need to set up GPG signing keys in your GitHub re
    gpg --full-generate-key
    ```
 
-2. **Export your GPG signing key**:
+2. **Export the signing key, pinned by fingerprint** (the workflow refuses a secret holding more than one key):
    ```bash
-   gpg --export-secret-keys --armor YOUR_EMAIL > private_key.asc
+   gpg --armor --export-secret-keys <FINGERPRINT> | base64 -w 0 > private_key.b64
    ```
 
-3. **Add GitHub Secrets**:
-   - Go to your repository Settings → Secrets and variables → Actions
-   - Add `GPG_SIGNING_KEY`: The base64-encoded private key
-     ```bash
-     cat private_key.asc | base64 -w 0
-     ```
-   - Add `GPG_PASSPHRASE`: The passphrase for your GPG key
+3. **Add GitHub Secrets** (Settings → Secrets and variables → Actions):
+   - `GPG_SIGNING_KEY`: the contents of `private_key.b64`
+   - `GPG_PASSPHRASE`: the passphrase for the key
 
-## Creating a Release
-
-1. **Update version in Cargo.toml** to match your release tag
-2. **Create and push a git tag**:
+4. **Publish the public key**. The release workflow fails if `.github/workflows/bera-reth_release.asc` is missing or does not match the signing key, and attaches that file to every release so validators can verify the signatures.
    ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
+   gpg --armor --export <FINGERPRINT> > .github/workflows/bera-reth_release.asc
+   gpg --keyserver keyserver.ubuntu.com --send-keys <FINGERPRINT>
+   ```
+   Commit the file and update the secrets together. Do not push a release tag while they disagree, the workflow fails on the mismatch.
+
+## Rotating or Retiring the Key
+
+Rotate when the key is about to expire or when its holder leaves. Treat a key whose holder left as leaked. Do the steps in this ord## Rotating or Retiring the Key
+
+Rotate when the key is about to expire or when its holder leaves. Treat a key whose holder left as leaked.
+
+1. **Generate the new key** and store the private key, its passphrase and the revocation certificate gpg wrote to `~/.gnupg/openpgp-revocs.d/<FINGERPRINT>.rev` in the team vault, with a named owner and the expiry date on a calendar.
+2. **Re-sign the current release** with the new key if its signatures must stay verifiable. The archives do not change, only the `.asc` files:
+   ```bash
+   gpg --armor --detach-sign --local-user <FINGERPRINT> bera-reth-<tag>-<target>.tar.gz
+   gh release upload <tag> bera-reth-<tag>-*.tar.gz.asc bera-reth_release.asc --clobber
+   ```
+   Then update the fingerprint in the release notes and say the signatures were re-issued.
+3. **Commit the new public key and replace the secrets** (steps 2 to 4 under Prerequisites).
+4. **Revoke the old key** if you still hold it, with `gpg --gen-revoke <OLD FINGERPRINT>`, then import the certificate and send the key to the keyserver. Overwriting the secret discards the old private key, so do this first if it matters.
+
+in v0.1.0
    ```
 3. **The GitHub Actions workflow will automatically**:
    - Build binaries for multiple platforms
