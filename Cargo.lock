@@ -1523,7 +1523,7 @@ checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
 
 [[package]]
 name = "bera-reth"
-version = "1.4.5"
+version = "1.4.6"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
