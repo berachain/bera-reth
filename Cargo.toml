@@ -114,6 +114,24 @@ lto = "thin"
 [package.metadata.cargo-machete]
 ignored = ["modular-bitfield"]
 
+# revm 34.0.0 (tag v103) with bluealloy/revm#3805 backported (false SELFDESTRUCT trace
+# entries). Upstream fixed it in revm 42.0.1. Remove once reth is on revm >= 42.0.1.
+# All revm crates are patched together so they resolve from one source.
+[patch.crates-io]
+op-revm = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-bytecode = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-context = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-context-interface = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-database = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-database-interface = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-handler = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-inspector = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-interpreter = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-precompile = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-primitives = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+revm-state = { git = "https://github.com/berachain/revm", rev = "e8bdc9bd149317c6709de2e3ff7345849d5832eb" }
+
 # [patch."https://github.com/paradigmxyz/reth"]
 # reth = { path = "../reth/bin/reth" }
 # reth-rpc = { path = "../reth/crates/rpc/rpc" }

@@ -430,6 +430,85 @@ mod tests {
         assert_eq!(trace_result.to, Some(recipient));
         assert!(!trace_result.calls.is_empty() || trace_result.gas > 0);
     }
+
+    #[test]
+    fn test_noop_selfdestruct_does_not_repeat_prior_transfer() {
+        // Regression for bluealloy/revm#3805. A SELFDESTRUCT to self is a no-op since EIP-6780
+        // and used to be traced as a repeat of the previous value transfer.
+
+        use alloy_rpc_types_trace::geth::{CallConfig, CallFrame};
+        use reth::revm::{
+            bytecode::opcode::{ADDRESS, CALL, GAS, POP, PUSH0, PUSH1, PUSH20, SELFDESTRUCT},
+            db::CacheDB,
+            state::{AccountInfo, Bytecode},
+        };
+        use revm_inspectors::tracing::{TracingInspector, TracingInspectorConfig};
+
+        const CALLER: Address = address!("0x1000000000000000000000000000000000000001");
+        const DRIVER: Address = address!("0x2000000000000000000000000000000000000002");
+        const HELPER: Address = address!("0x3000000000000000000000000000000000000003");
+        const RECIPIENT: Address = address!("0x4000000000000000000000000000000000000004");
+        const TRANSFER_WEI: u8 = 7;
+
+        fn push_call(code: &mut Vec<u8>, to: Address, value: u8) {
+            code.extend([PUSH0, PUSH0, PUSH0, PUSH0, PUSH1, value, PUSH20]);
+            code.extend(to.as_slice());
+            code.extend([GAS, CALL, POP]);
+        }
+
+        fn contract(code: Vec<u8>, balance: U256) -> AccountInfo {
+            let bytecode = Bytecode::new_legacy(code.into());
+            AccountInfo {
+                balance,
+                nonce: 1,
+                code_hash: bytecode.hash_slow(),
+                code: Some(bytecode),
+                ..AccountInfo::default()
+            }
+        }
+
+        fn value_sent_to(frame: &CallFrame, to: Address) -> U256 {
+            let own =
+                if frame.to == Some(to) { frame.value.unwrap_or_default() } else { U256::ZERO };
+            frame.calls.iter().fold(own, |sum, call| sum + value_sent_to(call, to))
+        }
+
+        let mut driver_code = Vec::new();
+        push_call(&mut driver_code, HELPER, 0);
+        push_call(&mut driver_code, RECIPIENT, TRANSFER_WEI);
+        push_call(&mut driver_code, HELPER, 0);
+        push_call(&mut driver_code, HELPER, 0);
+
+        let mut db = CacheDB::new(EmptyDB::default());
+        db.insert_account_info(DRIVER, contract(driver_code, U256::from(u64::MAX)));
+        db.insert_account_info(HELPER, contract(vec![ADDRESS, SELFDESTRUCT], U256::ZERO));
+
+        let mut cfg_env = CfgEnv::default();
+        cfg_env.spec = SpecId::PRAGUE;
+        cfg_env.chain_id = 1;
+        let evm_env = EvmEnv { cfg_env, block_env: BlockEnv::default() };
+
+        let call_config = CallConfig::default();
+        let inspector =
+            TracingInspector::new(TracingInspectorConfig::from_geth_call_config(&call_config));
+        let mut evm = BerachainEvmFactory.create_evm_with_inspector(db, evm_env, inspector);
+
+        let tx = TxEnv {
+            caller: CALLER,
+            gas_limit: 200_000,
+            kind: TxKind::Call(DRIVER),
+            chain_id: Some(1),
+            ..Default::default()
+        };
+        let result = evm.transact_raw(tx).expect("transact_raw failed");
+        assert!(result.result.is_success());
+
+        let (_, tracer, _) = evm.components_mut();
+        let trace = tracer.clone().into_geth_builder().geth_call_traces(call_config, 0);
+
+        assert_eq!(trace.calls.len(), 4);
+        assert_eq!(value_sent_to(&trace, RECIPIENT), U256::from(TRANSFER_WEI));
+    }
 }
 
 // End-to-end tests verifying each EIP bundled in BRIP-0010 actually takes effect

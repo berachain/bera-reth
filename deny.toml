@@ -252,6 +252,7 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
   "https://github.com/berachain/evm",
   "https://github.com/berachain/reth",
+  "https://github.com/berachain/revm",
   "https://github.com/paradigmxyz/reth",
 ]
 
