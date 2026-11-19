@@ -66,7 +66,9 @@ jobs:
     needs: extract-version
     continue-on-error: ${{ matrix.configs.allow_fail }}
     strategy:
-      fail-fast: true
+      # Keep sibling targets running so a flaky target can be re-run on its own
+      # instead of forcing a rebuild of the whole matrix.
+      fail-fast: false
       matrix:
         configs:
           - target: x86_64-unknown-linux-gnu
@@ -83,20 +85,21 @@ jobs:
             allow_fail: false
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-      - uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # staging
-        if: runner.os == 'Linux'
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
           target: ${{ matrix.configs.target }}
+      # Must stay ahead of `cargo install` so CARGO_HOME/bin and the .crates
+      # manifests are restored before cross is resolved, otherwise cross is
+      # rebuilt from source on every run.
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-on-failure: true
       - name: Install cross
         if: runner.os == 'Linux'
         # Pinned to a cross main commit (last release v0.2.5 is too stale); bump deliberately.
         run: |
           cargo install cross --locked --git https://github.com/cross-rs/cross --rev 29d00c7803f221f1b3f35e561b03792368fb8339 # main @ 2026-06-06
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          cache-on-failure: true
 
       - name: Build Bera-Reth
         run: make PROFILE=${{ matrix.configs.profile }} build-${{ matrix.configs.target }}
