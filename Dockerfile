@@ -49,8 +49,9 @@ RUN TARGET=$(cat /tmp/target.txt) && \
     cargo chef cook --profile $BUILD_PROFILE --features "$FEATURES" --target $TARGET --recipe-path recipe.json
 
 # Build application
-COPY --exclude=target . .
-RUN TARGET=$(cat /tmp/target.txt) && \
+COPY --exclude=.git --exclude=target . .
+RUN --mount=type=bind,source=.git,target=/app/.git \
+    TARGET=$(cat /tmp/target.txt) && \
     cargo build --profile $BUILD_PROFILE --features "$FEATURES" --target $TARGET --locked --bin bera-reth
 
 # ARG is not resolved in COPY so we have to hack around it by copying the
