@@ -14,6 +14,7 @@
 
 # include for vergen constants
 !/.git
+/.git/config
 
 # include licenses
 !LICENSE
