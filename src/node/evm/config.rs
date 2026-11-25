@@ -4,7 +4,7 @@ use crate::{
     evm::BerachainEvmFactory,
     node::evm::{
         assembler::BerachainBlockAssembler, block_context::BerachainBlockExecutionCtx,
-        builder::BerachainBlockBuilder, receipt::BerachainReceiptBuilder,
+        receipt::BerachainReceiptBuilder,
     },
     primitives::{BerachainHeader, BerachainPrimitives, header::BlsPublicKey},
 };
@@ -272,7 +272,7 @@ impl ConfigureEvm for BerachainEvmConfig {
         DB: Database,
         I: InspectorFor<Self, &'a mut State<DB>> + 'a,
     {
-        let inner: BasicBlockBuilder<'a, Self, _, BerachainBlockAssembler, BerachainPrimitives> =
+        let builder: BasicBlockBuilder<'a, Self, _, BerachainBlockAssembler, BerachainPrimitives> =
             BasicBlockBuilder {
                 executor: BlockExecutorFactory::create_executor(self, evm, ctx.clone()),
                 ctx,
@@ -280,7 +280,7 @@ impl ConfigureEvm for BerachainEvmConfig {
                 parent,
                 transactions: Vec::new(),
             };
-        BerachainBlockBuilder::new(inner, self.spec.clone())
+        builder
     }
 }
 
